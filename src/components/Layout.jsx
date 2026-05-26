@@ -1,16 +1,17 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { 
   LayoutDashboard, Cctv, Activity, Users, FileBarChart, LogOut, 
   Shield, Home, Clock, MessageSquare, Gift, Settings, 
-  Sun, Moon, Zap, Menu, X, PlusCircle, Layers, Database, Fingerprint,
-  Radio, ChevronLeft, ChevronRight, MapPin, Search, RefreshCw, FileText
+  Sun, Moon, Droplets, Zap, Menu, X, PlusCircle, Layers, Database, Fingerprint,
+  Radio, ChevronLeft, ChevronRight, MapPin, Search, RefreshCw, FileText, Server, Sunrise, Waves, Building
 } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import logo from '../image/logo.png';
 
 export default function Layout() {
   const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light'); // Default to light
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -29,35 +30,67 @@ export default function Layout() {
   }, [theme]);
 
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
+    const themes = ['light', 'dark', 'ocean', 'sunset', 'blue'];
+    const currentIndex = themes.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    setTheme(themes[nextIndex]);
   };
 
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState({});
 
   const menuItems = useMemo(() => [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'Dashboard' },
-    { name: 'CCTV', path: '/cameras', icon: Cctv, permission: 'Assets' },
-    { name: 'NVR', path: '/nvr', icon: Database, permission: 'Storage' },
-    { name: 'Biometric', path: '/biometrics', icon: Fingerprint, permission: 'Identity' },
-    { name: 'Switches', path: '/network-switches', icon: Zap, permission: 'Network' },
-    { name: 'Tickets', path: '/tickets', icon: FileBarChart, permission: 'Maintenance' },
-    { name: 'Projects', path: '/projects', icon: Home, permission: 'Projects' },
     { 
-      name: 'System Tools', 
+      name: 'Devices', 
+      isGroup: true,
+      icon: Server, 
+      permission: 'Assets', // This permission will be checked in the filter, but Super Admin bypasses it. Sub-items have their own.
+      items: [
+        { name: 'Camera', path: '/cameras', icon: Cctv, permission: 'Assets' },
+        { name: 'NVR', path: '/nvr', icon: Database, permission: 'Storage' },
+        { name: 'Biometric', path: '/biometrics', icon: Fingerprint, permission: 'Identity' },
+        { name: 'Switches', path: '/network-switches', icon: Zap, permission: 'Network' },
+        { name: 'Racks', path: '/racks', icon: Layers, permission: 'Network' },
+      ]
+    },
+    { 
+      name: 'Tickets', 
+      isGroup: true,
+      icon: FileBarChart, 
+      permission: 'Maintenance',
+      items: [
+        { name: 'Ticket', path: '/tickets', icon: FileBarChart, permission: 'Maintenance' },
+        { name: 'Upgrades', path: '/upgrades', icon: Shield, permission: 'Maintenance' },
+        { name: 'Projects', path: '/projects', icon: Home, permission: 'Projects' },
+        { name: 'Billing & PO', path: '/billing', icon: FileText, permission: 'Maintenance' },
+      ]
+    },
+    { 
+      name: 'Settings', 
       isGroup: true,
       icon: Settings, 
       permission: 'Logs',
       items: [
-        { name: 'Audit Logs', path: '/activity-logs', icon: Activity, permission: 'Logs' },
-        { name: 'Intelligence Reports', path: '/reports', icon: FileText, permission: 'Logs' },
-        { name: 'Site Onboarding', path: '/onboarding', icon: PlusCircle, permission: 'Users' },
-        { name: 'Admin Control', path: '/users', icon: Users, permission: 'Users' },
+        { name: 'Activity Logs', path: '/activity-logs', icon: Activity, permission: 'Logs' },
+        { name: 'Reports', path: '/reports', icon: FileText, permission: 'Logs' },
+        { name: 'Occupation', path: '/occupation', icon: Building, permission: 'Logs' },
+        { name: 'Add New Site', path: '/onboarding', icon: PlusCircle, permission: 'Users' },
+        { name: 'User Management', path: '/users', icon: Users, permission: 'Users' },
       ]
     },
-  ].filter(item => {
+  ].map(item => {
+    if (user?.role === 'Super Admin') return item;
+    if (item.isGroup) {
+      return {
+        ...item,
+        items: item.items.filter(sub => Array.isArray(user?.permissions) && user.permissions.includes(`${sub.permission}:VIEW`))
+      };
+    }
+    return item;
+  }).filter(item => {
     if (user?.role === 'Super Admin') return true;
-    return user?.permissions?.includes(`${item.permission}:VIEW`);
+    if (item.isGroup) return item.items.length > 0;
+    return Array.isArray(user?.permissions) && user.permissions.includes(`${item.permission}:VIEW`);
   }), [user]);
 
   return (
@@ -69,16 +102,22 @@ export default function Layout() {
         } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} bg-card border-r border-main shadow-sm`}
       >
         <div className={`h-24 flex items-center px-4 border-b border-main relative ${collapsed ? 'justify-center' : 'justify-start'}`}>
-          <div className={`flex items-center space-x-3 overflow-hidden ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-10 h-10 bg-card rounded-xl flex items-center justify-center shadow-sm border border-main shrink-0 p-1.5">
-              <img src={logo} alt="Rathinam Logo" className="h-full w-full object-contain" />
+          <div className={`flex items-center w-full ${collapsed ? 'justify-center' : 'pr-4'}`}>
+            <div className={`flex items-center justify-center shrink-0 transition-all ${
+              collapsed 
+                ? 'bg-white rounded-xl shadow-sm border border-slate-200 w-12 h-12 overflow-hidden' 
+                : theme === 'dark' 
+                  ? 'bg-white/95 rounded-xl w-full h-16 py-1.5 px-2 shadow-sm' 
+                  : 'w-full h-16'
+            }`}>
+              <img src={logo} alt="Rathinam Logo" className={`object-contain ${
+                collapsed 
+                  ? 'w-auto h-[80%]' 
+                  : theme === 'dark' 
+                    ? 'w-full h-full' 
+                    : 'w-full h-full mix-blend-multiply drop-shadow-sm'
+              }`} />
             </div>
-            {!collapsed && (
-              <div className="leading-tight truncate">
-                <span className="text-lg font-black tracking-tight text-main block uppercase">Rathinam</span>
-                <span className="text-[10px] font-bold text-teal-600 uppercase tracking-widest">cctv control</span>
-              </div>
-            )}
           </div>
           
           {/* Edge Toggle / Mobile Close Button */}
@@ -97,25 +136,30 @@ export default function Layout() {
         <div className="flex-1 overflow-y-auto py-6 px-3 custom-scrollbar space-y-1">
           {menuItems.map((item) => {
             if (item.isGroup) {
+              const isOpen = openGroups[item.name];
               return (
                 <div key={item.name} className="space-y-1">
                   <button
                     onClick={() => {
                       if (collapsed) setCollapsed(false);
-                      setToolsOpen(!toolsOpen);
+                      // Close all other groups and toggle the current one
+                      setOpenGroups(prev => ({ [item.name]: !prev[item.name] }));
+                      if (item.items && item.items.length > 0 && !openGroups[item.name]) {
+                        navigate(item.items[0].path);
+                      }
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 group ${
-                      toolsOpen ? 'bg-panel text-teal-600' : 'text-secondary hover:bg-panel hover:text-teal-600'
+                      isOpen ? 'bg-panel text-teal-600' : 'text-secondary hover:bg-panel hover:text-teal-600'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <item.icon size={18} strokeWidth={2} className={toolsOpen ? 'text-teal-600' : 'text-secondary group-hover:text-teal-600'} />
+                      <item.icon size={18} strokeWidth={2} className={isOpen ? 'text-teal-600' : 'text-secondary group-hover:text-teal-600'} />
                       {!collapsed && <span className="text-sm font-semibold tracking-tight">{item.name}</span>}
                     </div>
-                    {!collapsed && <ChevronRight size={14} className={`transition-transform duration-300 ${toolsOpen ? 'rotate-90 text-teal-600' : 'text-dim'}`} />}
+                    {!collapsed && <ChevronRight size={14} className={`transition-transform duration-300 ${isOpen ? 'rotate-90 text-teal-600' : 'text-dim'}`} />}
                   </button>
                   
-                  {toolsOpen && !collapsed && (
+                  {isOpen && !collapsed && (
                     <div className="pl-4 space-y-1 animate-slide-down">
                       {item.items.map((subItem) => (
                         <NavLink
@@ -174,7 +218,7 @@ export default function Layout() {
             className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-all duration-200 font-bold text-xs uppercase tracking-widest"
           >
             <LogOut size={18} />
-            {!collapsed && <span>Purge Session</span>}
+            {!collapsed && <span>Logout</span>}
           </button>
         </div>
       </div>
@@ -192,7 +236,7 @@ export default function Layout() {
               <Menu size={20} />
             </button>
             <div className="hidden md:flex items-center space-x-2 text-[10px] font-black text-secondary uppercase tracking-[0.2em]">
-              <span className="text-dim">RATHINAM COMMAND</span>
+              <span className="text-dim">DASHBOARD</span>
               <span className="opacity-20">/</span>
               <span className="text-teal-600 font-black">
                 {(menuItems.find(i => location.pathname.includes(i.path))?.name || 
@@ -207,7 +251,11 @@ export default function Layout() {
               onClick={toggleTheme}
               className="w-10 h-10 flex items-center justify-center bg-panel border border-main rounded-xl text-secondary hover:text-teal-600 transition-all shadow-sm group"
             >
-              {theme === 'light' ? <Moon size={20} className="group-hover:rotate-12 transition-transform" /> : <Sun size={20} className="group-hover:rotate-45 transition-transform" />}
+              {theme === 'light' ? <Moon size={20} className="group-hover:rotate-12 transition-transform" /> : 
+               theme === 'dark' ? <Droplets size={20} className="group-hover:translate-y-1 transition-transform text-cyan-400" /> : 
+               theme === 'ocean' ? <Sunrise size={20} className="group-hover:scale-110 transition-transform text-emerald-500" /> : 
+               theme === 'sunset' ? <Waves size={20} className="group-hover:translate-x-1 transition-transform text-blue-500" /> :
+               <Sun size={20} className="group-hover:rotate-45 transition-transform text-orange-500" />}
             </button>
             <div className="flex items-center space-x-3 pl-6 border-l border-main">
               <div className="text-right hidden sm:block">

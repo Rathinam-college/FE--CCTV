@@ -43,10 +43,10 @@ export default function Dashboard() {
         </div>
         <h2 className="text-4xl font-black text-white tracking-tight mb-3">Access Restricted</h2>
         <p className="text-secondary font-medium max-w-md leading-relaxed">
-          Your account has been verified, but no security modules have been assigned to your profile yet.
+          Your account has been verified, but no access rights have been assigned to your profile yet.
         </p>
         <div className="mt-8 p-6 bg-panel border border-main rounded-2xl flex flex-col items-center">
-           <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-2">Protocol Required</span>
+           <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-2">Access Required</span>
            <p className="text-teal-500 font-black uppercase tracking-widest text-sm">Please contact the CCTV Admin for access.</p>
         </div>
       </div>
@@ -109,10 +109,6 @@ export default function Dashboard() {
         <div className="p-4 rounded-3xl bg-panel border border-main text-secondary group-hover:text-teal-500 transition-colors shadow-inner">
           <Icon size={24} />
         </div>
-        <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${trend > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-          {trend > 0 ? <TrendingUp size={14} /> : <TrendingUp size={14} className="rotate-180" />}
-          <span>{Math.abs(trend)}%</span>
-        </div>
       </div>
 
       <div className="space-y-1">
@@ -125,7 +121,7 @@ export default function Dashboard() {
 
       <div className="mt-8 space-y-3">
         <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-secondary">
-          <span>System Stability</span>
+          <span>Online Status</span>
           <span style={{ color }}>{Math.round((value/total)*100) || 0}%</span>
         </div>
         <div className="h-2 bg-panel rounded-full overflow-hidden border border-main shadow-inner p-0.5">
@@ -151,26 +147,26 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center space-x-3 mb-2">
             <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></div>
-            <span className="text-[10px] font-black text-teal-500 uppercase tracking-[0.4em]">Strategic Control Node</span>
+            <span className="text-[10px] font-black text-teal-500 uppercase tracking-[0.4em]">Dashboard Overview</span>
           </div>
           <h1 className="text-5xl font-black text-main tracking-tighter flex items-center">
             <LayoutGrid className="mr-5 text-teal-600" size={48} />
-            CCTV Dashboard
+            CCTV DASHBOARD
           </h1>
           <p className="text-xs text-secondary mt-3 font-bold uppercase tracking-[0.2em]">
-            Infrastructure Oversight • <span className="text-teal-600">Rathinam Group of Institutions</span>
+            System Overview • <span className="text-teal-600">Rathinam Global University</span>
           </p>
         </div>
         <div className="mt-8 md:mt-0 flex items-center space-x-6">
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-black text-secondary uppercase tracking-widest mb-1">System Health</span>
+            <span className="text-[9px] font-black text-secondary uppercase tracking-widest mb-1">System Status</span>
             <div className="flex items-center space-x-2 px-6 py-2.5 bg-panel rounded-2xl border border-main">
               <Shield size={14} className="text-teal-500" />
-              <span className="text-xs font-black text-main uppercase tracking-widest">Protocol Verified</span>
+              <span className="text-xs font-black text-main uppercase tracking-widest">All Systems Normal</span>
             </div>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-black text-secondary uppercase tracking-widest mb-1">Current Session</span>
+            <span className="text-[9px] font-black text-secondary uppercase tracking-widest mb-1">Date</span>
             <div className="flex items-center space-x-3 px-6 py-2.5 bg-panel rounded-2xl border border-main font-mono text-xs font-black text-main">
               <Clock size={14} className="text-teal-500" />
               {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
@@ -182,10 +178,10 @@ export default function Dashboard() {
       <div className="space-y-4">
         <h2 className="text-sm font-black text-main uppercase tracking-[0.4em] flex items-center">
           <Zap size={18} className="mr-3 text-teal-500" />
-          Critical Infrastructure
+          Key Devices
         </h2>
         <div className="dashboard-grid">
-          <StatCard title="CCTV" value={stats.cameras.online} total={stats.cameras.total} icon={Cctv} color="#3b82f6" trend={12} path="/cameras" />
+          <StatCard title="CAMERA" value={stats.cameras.online} total={stats.cameras.total} icon={Cctv} color="#3b82f6" trend={12} path="/cameras" />
           <StatCard title="NVR" value={stats.nvrs.online} total={stats.nvrs.total} icon={Database} color="#10b981" trend={4} path="/nvr" />
           <StatCard title="Biometric" value={stats.biometrics.online} total={stats.biometrics.total} icon={Fingerprint} color="#8b5cf6" trend={-2} path="/biometrics" />
           <StatCard title="Switches" value={stats.switches.online} total={stats.switches.total} icon={Zap} color="#f59e0b" trend={8} path="/network-switches" />
@@ -229,7 +225,7 @@ export default function Dashboard() {
               <Shield size={18} className="mr-3 text-violet-400" />
               Ticket Analytics
             </h3>
-            <p className="text-[10px] text-secondary font-black uppercase tracking-widest mt-1">Resolution Protocol State</p>
+            <p className="text-[10px] text-secondary font-black uppercase tracking-widest mt-1">Ticket Progress</p>
           </div>
           
           <div className="flex-1 min-h-[220px]">
@@ -285,9 +281,9 @@ export default function Dashboard() {
           <div className="mb-8">
             <h3 className="text-lg font-black uppercase tracking-widest flex items-center">
               <Briefcase size={18} className="mr-3 text-blue-400" />
-              Project Momentum
+              Projects Status
             </h3>
-            <p className="text-[10px] text-secondary font-black uppercase tracking-widest mt-1">Strategic Lifecycle Distribution</p>
+            <p className="text-[10px] text-secondary font-black uppercase tracking-widest mt-1">Project Progress</p>
           </div>
           
           <div className="flex-1 min-h-[220px]">

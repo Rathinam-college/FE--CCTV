@@ -162,7 +162,7 @@ export default function Launcher() {
         </div>
 
         <p className="mt-12 text-[10px] font-bold text-dim uppercase tracking-[0.5em] opacity-40">
-          Powered by Rathinam Group of Institutions &copy; 2026
+          Powered by Rathinam Global University &copy; 2026
         </p>
       </div>
     </div>

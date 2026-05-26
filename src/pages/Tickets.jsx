@@ -27,7 +27,7 @@ export default function Tickets() {
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [projects, setProjects] = useState([]);
   const [showSidePanel, setShowSidePanel] = useState(false);
@@ -163,7 +163,22 @@ export default function Tickets() {
         api.get('/users/'),
         api.get('/tickets/projects/')
       ]);
-      setTickets((ticketRes.data || []).filter(t => !t.projectId && !t.project));
+      setTickets((ticketRes.data || []).filter(t => {
+        if (t.projectId || t.project) return false;
+        
+        let isUpgrade = false;
+        try {
+          const meta = JSON.parse(t.remarks || '{}');
+          if (t.category === 'Upgrade' || meta.category === 'Upgrade' || t.issueDescription?.toLowerCase().includes('upgrade')) {
+            isUpgrade = true;
+          }
+        } catch(e) {
+          if (t.category === 'Upgrade' || t.issueDescription?.toLowerCase().includes('upgrade')) {
+            isUpgrade = true;
+          }
+        }
+        return !isUpgrade;
+      }));
       setUsers(userRes.data);
       setProjects(projectRes.data);
     } catch (err) {
@@ -418,8 +433,8 @@ export default function Tickets() {
     const meta = parseMetadata(ticket.remarks);
     const ticketDate = meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : '');
     
-    // Month filter
-    if (selectedMonth && !ticketDate.startsWith(selectedMonth)) return false;
+    // Date filter
+    if (selectedDate && !ticketDate.startsWith(selectedDate)) return false;
 
     // Status filter
     if (statusFilter !== 'ALL' && ticket.status !== statusFilter) return false;
@@ -504,21 +519,15 @@ export default function Tickets() {
           <p className="text-sm text-dim mt-1">Operational maintenance logging and tracking system</p>
         </div>
         <div className="flex items-center space-x-3 w-full md:w-auto">
-          <button 
-            onClick={() => navigate('/maintenance')}
-            className="px-4 py-2 text-xs font-bold text-dim hover:text-main transition-colors flex items-center bg-white/5 rounded-xl border border-white/10"
-          >
-            <LayoutGrid size={16} className="mr-2" />
-            Board View
-          </button>
+
           <div className="flex items-center space-x-2">
             <Calendar size={16} className="text-dim" />
             <input 
-              type="month" 
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              type="date" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
               className="glass-input px-3 py-2 text-xs w-40 cursor-pointer"
-              title="Filter by Month"
+              title="Filter by Date"
             />
           </div>
           <div className="relative flex-1 md:w-64">
@@ -557,14 +566,14 @@ export default function Tickets() {
           <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Active Pipeline</p>
             <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-main leading-none">{summaryStats.open + summaryStats.inProgress}</span>
+              <span className="text-3xl font-black text-amber-500 leading-none">{summaryStats.open + summaryStats.inProgress}</span>
               <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Requires Action</span>
             </div>
           </div>
           <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Resolution Rate</p>
             <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-main leading-none">
+              <span className="text-3xl font-black text-emerald-500 leading-none">
                 {summaryStats.total > 0 ? Math.round((summaryStats.completed / summaryStats.total) * 100) : 0}%
               </span>
               <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Efficiency</span>
@@ -573,7 +582,7 @@ export default function Tickets() {
           <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Total Managed</p>
             <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-main leading-none">{summaryStats.total}</span>
+              <span className="text-3xl font-black text-blue-500 leading-none">{summaryStats.total}</span>
               <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Log Entries</span>
             </div>
           </div>
@@ -680,18 +689,14 @@ export default function Tickets() {
                   const assignedUser = users.find(u => (u.id || u._id) === assignedId);
                   
                   return (
-                    <tr 
-                      key={ticket.id || ticket._id} 
-                      className="hover:bg-white/5 transition-colors group cursor-pointer"
-                      onClick={(e) => {
-                        if (e.target.closest('button') || e.target.closest('select')) return;
-                        setSelectedTicket(ticket);
-                        setShowSidePanel(true);
-                        if (ticket.status === 'Completed' && user?.role !== 'Super Admin') {
-                          showNotification('Viewing completed ticket (Read-only)', 'info');
-                        }
-                      }}
-                    >
+                      <tr 
+                        key={ticket.id || ticket._id} 
+                        className="hover:bg-white/5 transition-colors group cursor-pointer"
+                        onClick={(e) => {
+                          if (e.target.closest('button') || e.target.closest('select')) return;
+                          navigate(`/tickets/${ticket.id || ticket._id}`);
+                        }}
+                      >
                       <td className="p-4">
                         <div className="flex items-center text-dim font-mono text-xs">
                           <Calendar size={12} className="mr-2 text-dim/50" />
@@ -1069,18 +1074,10 @@ export default function Tickets() {
                     <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Timeline & Status</h3>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-6 bg-panel p-6 rounded-[2.5rem] border border-main">
+                  <div className="bg-panel p-6 rounded-[2.5rem] border border-main">
                     <div className="space-y-2">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest">Received</label>
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest">Time Received / Logged</label>
                       <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main font-mono" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest">End Time</label>
-                      <input type="time" name="endTime" value={formData.endTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main font-mono" />
-                    </div>
-                    <div className="col-span-2 p-4 bg-blue-500/5 rounded-2xl border border-blue-500/20 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Calculated Duration</span>
-                      <span className="text-lg font-black text-blue-500">{calculateTotalTime(formData.receivedTime, formData.endTime) || '0h 0m'}</span>
                     </div>
                   </div>
 
@@ -1138,256 +1135,7 @@ export default function Tickets() {
           </div>
         </div>
       )}
-      {/* Side Details Panel */}
-      {showSidePanel && selectedTicket && (
-        <>
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] transition-all" onClick={() => setShowSidePanel(false)}></div>
-          <div className={`fixed right-0 top-0 h-full bg-main border-l border-main z-[70] shadow-[0_0_80px_rgba(0,0,0,0.4)] flex flex-col transition-all duration-500 ease-in-out ${
-            expandedSidePanel ? 'w-full max-w-7xl' : 'w-full max-w-lg'
-          }`}>
-            <div className="p-8 border-b border-main bg-card/80 backdrop-blur-md flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-blue-500/10 rounded-2xl">
-                  <Info size={24} className="text-blue-500" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black text-main tracking-tight uppercase">Ticket Overview</h3>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-[10px] font-black text-dim uppercase tracking-[0.3em] bg-panel px-2 py-0.5 rounded">Trace: #{selectedTicket.id || selectedTicket._id}</span>
-                    <div className="w-1 h-1 rounded-full bg-dim/30"></div>
-                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{selectedTicket.status}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => setExpandedSidePanel(!expandedSidePanel)}
-                  className="p-3 hover:bg-panel rounded-2xl text-dim hover:text-blue-500 transition-all border border-transparent hover:border-blue-500/20"
-                  title={expandedSidePanel ? "Collapse" : "Expand to Full View"}
-                >
-                  {expandedSidePanel ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-                </button>
-                <button onClick={() => setShowSidePanel(false)} className="p-3 hover:bg-red-500/10 rounded-2xl text-dim hover:text-red-500 transition-all border border-transparent hover:border-red-500/20">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
 
-            <div className={`flex-1 overflow-y-auto p-8 custom-scrollbar ${expandedSidePanel ? 'grid grid-cols-1 lg:grid-cols-12 gap-10' : 'space-y-10'}`}>
-              <div className={`${expandedSidePanel ? 'lg:col-span-4 space-y-8' : 'space-y-8'}`}>
-                <div className="glass-panel p-6 space-y-6 bg-gradient-to-br from-blue-500/[0.03] to-indigo-500/[0.03] border-blue-500/10">
-                  <div className="flex justify-between items-center">
-                    <div className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.2em] shadow-sm border ${
-                      selectedTicket.status === 'Completed' ? 'bg-emerald-500 text-white border-emerald-400' :
-                      selectedTicket.status === 'In Progress' ? 'bg-orange-500 text-white border-orange-400' :
-                      'bg-red-500 text-white border-red-400'
-                    }`}>
-                      {selectedTicket.status}
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[9px] font-black text-dim uppercase tracking-widest">Received Date</span>
-                      <span className="text-xs font-bold text-main">{new Date(selectedTicket.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-
-                  <div className="h-px bg-gradient-to-r from-transparent via-main to-transparent opacity-10"></div>
-
-                  <div className="space-y-3">
-                    <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Issue Description</h4>
-                    <div className="bg-panel/50 p-5 rounded-2xl border border-main shadow-inner">
-                      <p className="text-sm text-main leading-relaxed font-bold italic opacity-90">
-                        "{selectedTicket.issueDescription}"
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-card rounded-2xl border border-main">
-                      <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Module</span>
-                      <p className="text-sm text-main font-black uppercase tracking-wider">{selectedTicket.category || parseMetadata(selectedTicket.remarks).category || 'N/A'}</p>
-                    </div>
-                    <div className="p-4 bg-card rounded-2xl border border-main">
-                      <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Point</span>
-                      <p className="text-sm text-main font-black uppercase tracking-wider">{selectedTicket.location || parseMetadata(selectedTicket.remarks).location || 'N/A'}</p>
-                    </div>
-                  </div>
-
-                  {(selectedTicket.workImage || selectedTicket.serviceImage) && (
-                    <div className="space-y-4 animate-slide-up">
-                       <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] pl-2">Service Artifacts (Evidence)</h4>
-                       <div className="grid grid-cols-2 gap-4">
-                          {selectedTicket.workImage && (
-                            <div className="group relative">
-                              <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">Before Work</span>
-                              <div className="aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner">
-                                <img src={`${api.defaults.baseURL}${selectedTicket.workImage}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Before" />
-                              </div>
-                            </div>
-                          )}
-                          {selectedTicket.serviceImage && (
-                            <div className="group relative">
-                              <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-emerald-500/80 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">After Work</span>
-                              <div className="aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner">
-                                <img src={`${api.defaults.baseURL}${selectedTicket.serviceImage}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="After" />
-                              </div>
-                            </div>
-                          )}
-                       </div>
-                    </div>
-                  )}
-                </div>
-
-                  {parseMetadata(selectedTicket.remarks).workStartTime && (
-                    <div className="space-y-4 animate-slide-up">
-                       <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] pl-2">Service Timeline</h4>
-                       <div className="bg-card p-4 rounded-2xl border border-main space-y-4">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-dim font-bold uppercase tracking-widest">Execution Start</span>
-                            <span className="text-main font-black">
-                              {parseMetadata(selectedTicket.remarks).workStartDate} <span className="text-blue-500 font-mono ml-2">{parseMetadata(selectedTicket.remarks).workStartTime}</span>
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-dim font-bold uppercase tracking-widest">Completion</span>
-                            <span className="text-main font-black">
-                              {parseMetadata(selectedTicket.remarks).manualDate} <span className="text-emerald-500 font-mono ml-2">{parseMetadata(selectedTicket.remarks).endTime}</span>
-                            </span>
-                          </div>
-                       </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                     <h4 className="text-[10px] font-black text-dim uppercase tracking-[0.3em] pl-2">System Metadata</h4>
-                     <div className="bg-card p-4 rounded-2xl border border-main space-y-4">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-dim font-bold uppercase tracking-widest">Raised By</span>
-                          <span className="text-main font-black">{selectedTicket.raisedByName || 'Authorized Staff'}</span>
-                        </div>
-                        <div className="h-px bg-main opacity-5"></div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-dim font-bold uppercase tracking-widest">Last Update</span>
-                          <span className="text-main font-black">{selectedTicket.message_history?.[0]?.date || 'Today'}</span>
-                        </div>
-                     </div>
-                  </div>
-                </div>
-
-              <div className={`${expandedSidePanel ? 'lg:col-span-8 space-y-6' : 'space-y-6'}`}>
-                <div className="flex items-center justify-between border-b border-main pb-4">
-                  <h4 className="text-sm font-black text-main uppercase tracking-[0.3em] flex items-center">
-                    <MessageSquare size={18} className="mr-3 text-teal-500" />
-                    Operational Activity Log
-                  </h4>
-                  <div className="bg-teal-500/10 text-teal-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                    {(selectedTicket.message_history || []).length} Points Recorded
-                  </div>
-                </div>
-                
-                <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[2px] before:bg-main before:opacity-10">
-                  {(selectedTicket.message_history || []).length === 0 ? (
-                    <div className="text-center py-20 bg-panel/30 rounded-[2.5rem] border-2 border-dashed border-main">
-                      <div className="w-16 h-16 bg-panel rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                        <MessageSquare size={28} className="text-dim opacity-20" />
-                      </div>
-                      <p className="text-sm text-dim font-black uppercase tracking-[0.2em]">Zero Activity Logs Detected</p>
-                      <p className="text-[10px] text-dim/50 uppercase tracking-widest mt-2">Initialize communication below</p>
-                    </div>
-                  ) : (
-                    selectedTicket.message_history.map((msg, idx) => {
-                      const isSystem = msg.remark?.toLowerCase().includes('ticket updated') || msg.remark?.toLowerCase().includes('initial ticket');
-                      return (
-                        <div key={idx} className="relative pl-12 animate-fade-in group" style={{ animationDelay: `${idx * 50}ms` }}>
-                          <div className={`absolute left-0 top-1 w-8 h-8 rounded-2xl border-4 border-main z-10 flex items-center justify-center transition-transform group-hover:scale-110 ${
-                            isSystem ? 'bg-slate-700 shadow-lg' : 'bg-blue-600 shadow-lg'
-                          }`}>
-                            {isSystem ? <Activity size={12} className="text-white" /> : <Shield size={12} className="text-white" />}
-                          </div>
-                          
-                          <div className={`rounded-3xl p-6 border transition-all duration-300 ${
-                            isSystem 
-                              ? 'bg-slate-500/[0.03] border-slate-500/10 hover:bg-slate-500/[0.06]' 
-                              : 'bg-blue-600/[0.04] border-blue-600/10 shadow-sm hover:bg-blue-600/[0.08] hover:border-blue-600/20'
-                          }`}>
-                            <div className="flex justify-between items-start mb-4">
-                              <div className="flex flex-col">
-                                <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isSystem ? 'text-slate-500' : 'text-blue-600'}`}>
-                                  {isSystem ? 'Protocol System' : (msg.user_name || 'Admin Technician')}
-                                </span>
-                                <div className="flex items-center text-[10px] text-dim font-bold mt-1 uppercase tracking-wider">
-                                  <Clock size={12} className="mr-1.5 opacity-50" />
-                                  {msg.date} <span className="mx-2 opacity-30">|</span> {msg.time}
-                                </div>
-                              </div>
-                              {msg.device_status && (
-                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border-2 ${
-                                  msg.device_status === 'Completed' ? 'bg-emerald-500/5 text-emerald-600 border-emerald-500/10' :
-                                  msg.device_status === 'In Progress' ? 'bg-orange-500/5 text-orange-600 border-orange-400/10' :
-                                  'bg-red-500/5 text-red-600 border-red-500/10'
-                                }`}>
-                                  {msg.device_status}
-                                </span>
-                              )}
-                            </div>
-                            <div className="h-px bg-main opacity-5 mb-4"></div>
-                            <p className={`text-sm leading-relaxed ${isSystem ? 'text-dim italic font-bold opacity-80' : 'text-main font-black'}`}>
-                              {msg.remark}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className={`p-8 border-t border-main bg-card/80 backdrop-blur-md ${expandedSidePanel ? 'flex justify-center' : ''}`}>
-              <div className={`w-full ${expandedSidePanel ? 'max-w-4xl' : ''}`}>
-              {selectedTicket.status === 'Completed' && user?.role !== 'Super Admin' ? (
-                <div className="flex flex-col space-y-4">
-                  <div className="flex items-center justify-center py-10 bg-emerald-500/[0.03] border-2 border-dashed border-emerald-500/20 rounded-[2.5rem]">
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-emerald-500/20 shadow-lg">
-                        <CheckCircle size={32} className="text-emerald-500" />
-                      </div>
-                      <p className="text-lg font-black text-emerald-600 uppercase tracking-tight">Maintenance Cycle Complete</p>
-                      <p className="text-[10px] text-dim font-black uppercase tracking-[0.3em] mt-1 opacity-60">Verified Operational Integrity</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <form onSubmit={addRemark} className="relative group">
-                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 rounded-[2rem] blur opacity-0 group-hover:opacity-100 transition duration-500"></div>
-                    <textarea
-                      value={newRemark}
-                      onChange={(e) => setNewRemark(e.target.value)}
-                      placeholder="Add technical update or observation..."
-                      className="glass-input relative w-full p-6 pr-16 text-sm min-h-[120px] resize-none focus:ring-4 focus:ring-blue-500/10 border-main transition-all placeholder:text-dim/40 font-bold rounded-[2rem] bg-panel/50 shadow-inner"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newRemark.trim()}
-                      className="absolute right-4 bottom-4 p-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 disabled:grayscale text-white rounded-2xl transition-all shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 group/btn"
-                    >
-                      <Send size={22} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-                    </button>
-                  </form>
-                  <div className="flex items-center justify-center space-x-3">
-                    <div className="h-px w-8 bg-main opacity-10"></div>
-                    <p className="text-[10px] text-dim font-black uppercase tracking-[0.4em] opacity-40">
-                      Enterprise Audit Logging Active
-                    </p>
-                    <div className="h-px w-8 bg-main opacity-10"></div>
-                  </div>
-                </div>
-              )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">

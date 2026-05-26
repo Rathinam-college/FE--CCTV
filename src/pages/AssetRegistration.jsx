@@ -353,7 +353,7 @@ export default function AssetRegistration() {
                   <button onClick={() => setIsAddingNewCollege(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
                 </div>
               ) : (
-                <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Existing College</option>
                   {existingColleges.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -373,7 +373,7 @@ export default function AssetRegistration() {
                   <button onClick={() => setIsAddingNewBlock(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
                 </div>
               ) : (
-                <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Existing Block</option>
                   {existingBlocks.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
@@ -392,7 +392,7 @@ export default function AssetRegistration() {
                   <button onClick={() => setIsAddingNewFloor(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
                 </div>
               ) : (
-                <select required name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                <select required name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Existing Floor</option>
                   {existingFloors.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
@@ -412,7 +412,7 @@ export default function AssetRegistration() {
                   <button onClick={() => setIsAddingNewRoom(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
                 </div>
               ) : (
-                <select name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                <select name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Existing Room</option>
                   {existingRooms.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
@@ -437,7 +437,7 @@ export default function AssetRegistration() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Camera Type</label>
-                  <select name="deviceType" value={formData.deviceType} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                  <select name="deviceType" value={formData.deviceType} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                     <option value="Bullet">Bullet Camera</option>
                     <option value="Dome">Dome Camera</option>
                     <option value="PTZ">PTZ Camera</option>
@@ -445,7 +445,7 @@ export default function AssetRegistration() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Campus Zone</label>
-                  <select name="campusZone" value={formData.campusZone} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                  <select name="campusZone" value={formData.campusZone} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                     <option value="INSIDE">Inside Campus</option>
                     <option value="OUTSIDE">Outside Campus</option>
                   </select>
@@ -478,7 +478,7 @@ export default function AssetRegistration() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Device Type</label>
-                  <select name="bioType" value={formData.bioType} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                  <select name="bioType" value={formData.bioType} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                     <option value="Fingerprint">Fingerprint</option>
                     <option value="Face Recognition">Face Recognition</option>
                     <option value="Card Reader">Card Reader</option>
@@ -513,7 +513,7 @@ export default function AssetRegistration() {
                   <button type="button" onClick={() => setIsAddingNewBrand(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
                 </div>
               ) : (
-                <select name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                <select name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Brand</option>
                   {uniqueBrands.map(b => (
                     <option key={b} value={b}>{b}</option>

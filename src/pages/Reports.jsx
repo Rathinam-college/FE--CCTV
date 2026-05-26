@@ -17,7 +17,7 @@ export default function Reports() {
   const [switches, setSwitches] = useState([]);
   const [biometrics, setBiometrics] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [reportType, setReportType] = useState('Ticket'); // Ticket, Camera, NVR, Switch, Biometric
 
   useEffect(() => {
@@ -120,8 +120,8 @@ export default function Reports() {
     const safeBiometrics = Array.isArray(biometrics) ? biometrics : [];
 
     if (reportType === 'Ticket') {
-      const filtered = selectedMonth
-        ? safeTickets.filter(t => (t.operationDate || t.createdAt || '').startsWith(selectedMonth))
+      const filtered = selectedDate
+        ? safeTickets.filter(t => (t.operationDate || t.createdAt || '').startsWith(selectedDate))
         : safeTickets;
 
       if (filtered.length === 0) return showNotification('No data for selected period', 'info');
@@ -189,7 +189,7 @@ export default function Reports() {
 
     switch (reportType) {
       case 'Ticket':
-        return selectedMonth ? safeTickets.filter(t => (t.operationDate || t.createdAt || '').startsWith(selectedMonth)) : safeTickets;
+        return selectedDate ? safeTickets.filter(t => (t.operationDate || t.createdAt || '').startsWith(selectedDate)) : safeTickets;
       case 'Camera': return safeCameras;
       case 'NVR': return safeNvrs;
       case 'Switch': return safeSwitches;
@@ -235,9 +235,9 @@ export default function Reports() {
             <div className="space-y-1">
               <label className="text-[9px] font-black text-secondary uppercase tracking-widest block ml-1">Period Filter</label>
               <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
                 className="glass-input px-4 py-3 text-xs bg-panel border-white/10 text-white cursor-pointer"
               />
             </div>
@@ -253,7 +253,7 @@ export default function Reports() {
       </div>
 
       {/* Category Selection Bar */}
-      <div className="flex flex-wrap items-center gap-3 p-2 bg-white rounded-2xl border border-slate-100 shadow-sm no-print">
+      <div className="flex flex-wrap items-center gap-3 p-2 bg-panel rounded-2xl border border-white/10 shadow-sm no-print">
         {[
           { id: 'Ticket', label: 'Maintenance Logs', icon: FileText },
           { id: 'Camera', label: 'Camera Registry', icon: Cctv },
@@ -265,8 +265,8 @@ export default function Reports() {
             key={type.id}
             onClick={() => setReportType(type.id)}
             className={`flex items-center space-x-3 px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${reportType === type.id
-                ? 'bg-slate-900 text-white shadow-lg shadow-slate-200'
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                : 'text-dim hover:bg-white/5 hover:text-white'
               }`}
           >
             <type.icon size={16} />
@@ -279,27 +279,27 @@ export default function Reports() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {dynamicStats.map((stat, idx) => {
           const colors = {
-            blue: 'bg-blue-50 border-blue-100 text-blue-500',
-            red: 'bg-red-50 border-red-100 text-red-500',
-            amber: 'bg-amber-50 border-amber-100 text-amber-500',
-            emerald: 'bg-emerald-50 border-emerald-100 text-emerald-500',
-            indigo: 'bg-indigo-50 border-indigo-100 text-indigo-500'
+            blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
+            red: 'bg-red-500/10 border-red-500/20 text-red-400',
+            amber: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+            emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+            indigo: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
           };
           const colorClass = colors[stat.color] || colors.blue;
 
           return (
-            <div key={idx} className="bg-white rounded-3xl p-8 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] relative group transition-all hover:translate-y-[-4px]">
+            <div key={idx} className="bg-panel rounded-3xl p-8 border border-white/10 shadow-2xl relative group transition-all hover:translate-y-[-4px]">
               <div className="flex items-center space-x-4 mb-8">
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border shadow-sm ${colorClass.split(' ').slice(0, 2).join(' ')}`}>
                   <stat.icon size={24} className={colorClass.split(' ').pop()} />
                 </div>
-                <span className="text-[11px] font-black text-slate-500 uppercase tracking-[0.1em]">{stat.label}</span>
+                <span className="text-[11px] font-black text-secondary uppercase tracking-[0.1em]">{stat.label}</span>
               </div>
               <div className="flex flex-col items-center justify-center py-4">
-                <span className="text-6xl font-black text-slate-900 tracking-tighter">{stat.value}</span>
+                <span className={`text-6xl font-black tracking-tighter ${colorClass.split(' ').pop()}`}>{stat.value}</span>
               </div>
               <div className="flex justify-end mt-4">
-                <span className={`text-[11px] font-black italic tracking-widest uppercase ${stat.color === 'blue' ? 'text-slate-400' : colorClass.split(' ').pop()}`}>{stat.sub}</span>
+                <span className={`text-[11px] font-black italic tracking-widest uppercase ${stat.color === 'blue' ? 'text-dim' : colorClass.split(' ').pop()}`}>{stat.sub}</span>
               </div>
             </div>
           );
@@ -307,43 +307,43 @@ export default function Reports() {
       </div>
 
       {/* Dynamic Data Preview Table */}
-      <div className="glass-panel overflow-hidden border-main shadow-2xl animate-slide-up bg-white rounded-[2rem]">
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+      <div className="glass-panel overflow-hidden border-main shadow-2xl animate-slide-up bg-panel rounded-[2rem]">
+        <div className="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-slate-900 text-white">
+            <div className="p-2 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
               <Database size={18} />
             </div>
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Live Registry Preview</h3>
+            <h3 className="text-sm font-black text-white uppercase tracking-widest">Live Registry Preview</h3>
           </div>
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3 py-1 bg-white rounded-full border border-slate-200">
+          <span className="text-[10px] font-black text-secondary uppercase tracking-widest px-3 py-1 bg-white/5 rounded-full border border-white/10">
             {filteredData.length} Records Found
           </span>
         </div>
         <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
           <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 z-20 bg-white border-b border-slate-200">
+            <thead className="sticky top-0 z-20 bg-panel border-b border-white/10">
               <tr>
                 {reportType === 'Ticket' ? (
                   <>
-                    <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ticket ID</th>
-                    <th className="p-5 text-[10px] font-black text-slate-900 uppercase tracking-widest">Subject</th>
-                    <th className="p-5 text-[10px] font-black text-slate-900 uppercase tracking-widest text-center">Status</th>
-                    <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Registered</th>
+                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest">Ticket ID</th>
+                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest">Subject</th>
+                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest text-center">Status</th>
+                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest text-right">Registered</th>
                   </>
                 ) : (
                   <>
-                    <th className="p-5 text-[10px] font-black text-slate-900 uppercase tracking-widest">Device Name</th>
-                    <th className="p-5 text-[10px] font-black text-slate-900 uppercase tracking-widest">IP Address</th>
-                    <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Identity / Brand</th>
-                    <th className="p-5 text-[10px] font-black text-slate-900 uppercase tracking-widest text-center">Operational State</th>
+                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest">Device Name</th>
+                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest">IP Address</th>
+                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest">Identity / Brand</th>
+                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest text-center">Operational State</th>
                   </>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-white/5">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest italic">
+                  <td colSpan={4} className="p-20 text-center text-dim text-xs font-bold uppercase tracking-widest italic">
                     No matching records found in this category.
                   </td>
                 </tr>
@@ -352,19 +352,19 @@ export default function Reports() {
                   const id = item?._id || item?.id || Math.random().toString(36).substr(2, 9);
                   if (reportType === 'Ticket') {
                     return (
-                      <tr key={id} className="hover:bg-slate-50 transition-all group">
-                        <td className="p-5 text-xs font-mono text-slate-400">#{ String(id).slice(-6).toUpperCase() }</td>
-                        <td className="p-5 text-xs font-bold text-slate-900">{item.issueDescription || 'No Description'}</td>
+                      <tr key={id} className="hover:bg-white/5 transition-all group">
+                        <td className="p-5 text-xs font-mono text-dim">#{ String(id).slice(-6).toUpperCase() }</td>
+                        <td className="p-5 text-xs font-bold text-white">{item.issueDescription || 'No Description'}</td>
                         <td className="p-5 text-center">
                           <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${
-                            item.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                            item.status === 'In Progress' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                            'bg-rose-50 text-rose-600 border-rose-100'
+                            item.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                            item.status === 'In Progress' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                            'bg-rose-500/10 text-rose-400 border-rose-500/20'
                           }`}>
                             {item.status || 'Open'}
                           </span>
                         </td>
-                        <td className="p-5 text-right text-[10px] font-bold text-slate-400">
+                        <td className="p-5 text-right text-[10px] font-bold text-dim">
                           {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
                         </td>
                       </tr>
@@ -380,13 +380,13 @@ export default function Reports() {
                     const isActive = item.status === 'Active' || item.status === 'Online' || !item.status;
 
                     return (
-                      <tr key={id} className="hover:bg-slate-50 transition-all group">
-                        <td className="p-5 text-xs font-bold text-slate-900">{name}</td>
-                        <td className="p-5 text-xs font-mono text-blue-600">{item.ipAddress || '0.0.0.0'}</td>
-                        <td className="p-5 text-xs font-bold text-slate-500 uppercase">{sub}</td>
+                      <tr key={id} className="hover:bg-white/5 transition-all group">
+                        <td className="p-5 text-xs font-bold text-white">{name}</td>
+                        <td className="p-5 text-xs font-mono text-blue-400">{item.ipAddress || '0.0.0.0'}</td>
+                        <td className="p-5 text-xs font-bold text-secondary uppercase">{sub}</td>
                         <td className="p-5 text-center">
                           <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${
-                            isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+                            isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                           }`}>
                             {item.status || (reportType === 'Camera' ? 'Active' : 'Online')}
                           </span>
@@ -403,7 +403,7 @@ export default function Reports() {
 
       {/* Official Footer (Visible in PDF only) */}
       <div className="hidden print-only-footer">
-        <p>© 2026 STARLIGHT CYBER | RATHINAM GROUP OF INSTITUTIONS | INFRASTRUCTURE AUDIT DIVISION</p>
+        <p>© 2026 STARLIGHT CYBER | RATHINAM GLOBAL UNIVERSITY | INFRASTRUCTURE AUDIT DIVISION</p>
         <p className="mt-1">This is a system-generated document. Unauthorized alteration is prohibited.</p>
       </div>
 

@@ -144,8 +144,6 @@ export default function DeviceManagement() {
         room: formData.room,
         ipAddress: formData.ipAddress,
         status: formData.status,
-        block: formData.block,
-        floor: formData.floor,
         deviceType: formData.deviceType,
         gateway: formData.ipv4Gateway,
         serialNumber: formData.deviceSerialNumber,

@@ -327,7 +327,7 @@ export default function UnifiedEditor() {
                 <>
                   <div>
                     <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Camera Type</label>
-                    <select name="deviceType" value={formData.deviceType} onChange={handleInputChange} className="glass-input w-full p-4 text-sm [&>option]:bg-[#1a1d27]">
+                    <select name="deviceType" value={formData.deviceType} onChange={handleInputChange} className="glass-input w-full p-4 text-sm">
                       <option value="Bullet">Bullet</option>
                       <option value="Dome">Dome</option>
                       <option value="PTZ">PTZ</option>
@@ -360,7 +360,7 @@ export default function UnifiedEditor() {
               {formData.type === 'BIOMETRIC' && (
                 <div>
                   <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Device Type</label>
-                  <select name="bioType" value={formData.bioType} onChange={handleInputChange} className="glass-input w-full p-4 text-sm [&>option]:bg-[#1a1d27]">
+                  <select name="bioType" value={formData.bioType} onChange={handleInputChange} className="glass-input w-full p-4 text-sm">
                     <option value="Fingerprint">Fingerprint</option>
                     <option value="Face Recognition">Face Recognition</option>
                     <option value="RFID Card">RFID Card</option>

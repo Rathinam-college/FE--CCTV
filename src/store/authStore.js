@@ -3,8 +3,13 @@ import api from '../services/api';
 
 const getInitialUser = () => {
   try {
-    const user = localStorage.getItem('user');
-    return user ? JSON.parse(user) : null;
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    const user = JSON.parse(userStr);
+    if (user && !Array.isArray(user.permissions)) {
+      user.permissions = [];
+    }
+    return user;
   } catch (err) {
     console.error("Auth initialization failed:", err);
     localStorage.removeItem('user');
@@ -21,9 +26,12 @@ export const useAuthStore = create((set) => ({
   login: async (email, password) => {
     try {
       const res = await api.post('/auth/login', { email, password });
-      // The backend returns { _id, name, email, role, token, ... }
-      localStorage.setItem('user', JSON.stringify(res.data));
-      set({ user: res.data, isAuthenticated: true });
+      const userData = res.data;
+      if (userData && !Array.isArray(userData.permissions)) {
+        userData.permissions = [];
+      }
+      localStorage.setItem('user', JSON.stringify(userData));
+      set({ user: userData, isAuthenticated: true });
       return true;
     } catch (error) {
       console.error('Login error:', error);
@@ -34,15 +42,22 @@ export const useAuthStore = create((set) => ({
   logout: () => {
     localStorage.removeItem('user');
     set({ user: null, isAuthenticated: false });
-    window.location.href = '/login';
+    window.location.href = '/cctv/login';
   },
 
   checkAuth: () => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user) {
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (!user) {
+        set({ user: null, isAuthenticated: false });
+      } else {
+        if (user && !Array.isArray(user.permissions)) {
+          user.permissions = [];
+        }
+        set({ user, isAuthenticated: true });
+      }
+    } catch (e) {
       set({ user: null, isAuthenticated: false });
-    } else {
-      set({ user, isAuthenticated: true });
     }
   }
 }));

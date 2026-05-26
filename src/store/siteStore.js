@@ -10,7 +10,17 @@ export const useSiteStore = create((set, get) => ({
     brand: ''
   },
   allLocations: [],
+  occupations: [],
   loading: false,
+
+  fetchOccupations: async () => {
+    try {
+      const res = await api.get('/cameras/occupations/');
+      set({ occupations: res.data });
+    } catch (err) {
+      console.error('Failed to fetch occupations:', err);
+    }
+  },
 
   fetchSite: async () => {
     set({ loading: true });
@@ -56,6 +66,35 @@ export const useSiteStore = create((set, get) => ({
     } catch (err) {
       console.error('Failed to update location:', err);
       return false;
+    }
+  },
+
+  addLocation: async (data) => {
+    try {
+      const res = await api.post('/cameras/master_locations/', data);
+      set((state) => ({ allLocations: [...state.allLocations, res.data] }));
+      return res.data;
+    } catch (err) {
+      console.error('Failed to add location:', err);
+      return null;
+    }
+  },
+
+  ensureLocationExists: async (data) => {
+    const { collegeName, block, floor, room, brand } = data;
+    
+    // Only check if we actually have some location data
+    if (!collegeName && !block && !floor && !room) return;
+
+    const exists = get().allLocations.find(loc => 
+      (loc.collegeName || '') === (collegeName || '') &&
+      (loc.block || '') === (block || '') &&
+      (loc.floor || '') === (floor || '') &&
+      (loc.room || '') === (room || '')
+    );
+    
+    if (!exists) {
+      await get().addLocation({ collegeName, block, floor, room, brand });
     }
   },
 

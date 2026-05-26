@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../services/api';
 import { 
   Folder, Plus, Search, Filter, MoreHorizontal, 
@@ -235,7 +236,7 @@ export default function Projects() {
         <div>
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
             <Briefcase className="mr-3 text-teal-500" size={28} />
-            Project Management
+            Project
           </h1>
           <p className="text-sm text-secondary mt-1">Organize maintenance tasks into specific contracts and initiatives</p>
         </div>
@@ -311,6 +312,14 @@ export default function Projects() {
                 <span className="text-main">{project.client_name || 'N/A'}</span>
               </div>
               <button 
+                onClick={() => navigate(`/projects/${project.id || project._id}`)}
+                className="w-full flex items-center justify-between text-xs font-bold hover:bg-teal-500/10 text-teal-600 p-2 rounded-lg transition-colors border border-teal-500/20 mt-2"
+              >
+                <span className="uppercase tracking-wider">View Full Details</span>
+                <ChevronRight size={14} />
+              </button>
+              
+              <button 
                 onClick={() => handleViewTickets(project)}
                 className="w-full flex items-center justify-between text-xs font-medium hover:bg-panel p-2 rounded-lg transition-colors"
               >
@@ -345,12 +354,12 @@ export default function Projects() {
       </div>
 
       {/* Modal Overlay */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setShowModal(false)}></div>
           
-          <div className="bg-card rounded-[2.5rem] w-full max-w-xl overflow-hidden border border-main shadow-2xl animate-scale-in my-8 relative z-10">
-            <div className="p-8 border-b border-main bg-panel flex justify-between items-center">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden border border-main shadow-2xl animate-scale-in my-8 relative z-10">
+            <div className="p-8 border-b border-main bg-panel flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-2xl font-black text-main tracking-tight uppercase">
                   {editingId ? 'Modify Project' : 'Initialize Project'}
@@ -362,7 +371,7 @@ export default function Projects() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-2 gap-6">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-secondary uppercase tracking-widest mb-2">Project Designation (Name)</label>
@@ -450,7 +459,8 @@ export default function Projects() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

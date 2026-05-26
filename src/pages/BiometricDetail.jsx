@@ -548,8 +548,8 @@ export default function BiometricDetail() {
               </div>
               <h3 className="text-sm font-bold text-main tracking-wide uppercase">Status Transition</h3>
             </div>
-            <div className="p-5 grid grid-cols-3 gap-2">
-              {['Online', 'Offline', 'Maintenance'].map((s) => (
+            <div className="p-5 grid grid-cols-2 gap-2">
+              {['Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
                 <button
                   key={s}
                   onClick={() => handleStatusChange(s)}
@@ -726,7 +726,7 @@ export default function BiometricDetail() {
 
       {/* Official Footer (Visible in PDF only) */}
       <div className="hidden print-only-footer">
-        <p>© 2026 STARLIGHT CYBER | RATHINAM GROUP OF INSTITUTIONS | INFRASTRUCTURE AUDIT DIVISION</p>
+        <p>© 2026 STARLIGHT CYBER | RATHINAM GLOBAL UNIVERSITY | INFRASTRUCTURE AUDIT DIVISION</p>
         <p className="mt-1">This is a system-generated document. Unauthorized alteration is prohibited.</p>
       </div>
     </div>

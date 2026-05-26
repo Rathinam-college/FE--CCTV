@@ -10,12 +10,21 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useSiteStore } from '../store/siteStore';
+import ComboInput from '../components/ComboInput';
+
+const getImageUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return path.startsWith('/') ? path : `/${path}`;
+};
 
 export default function ProjectTickets() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { projectId, projectName } = useParams();
   const { showNotification } = useNotificationStore();
+  const { occupations, fetchOccupations } = useSiteStore();
   const [tickets, setTickets] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,11 +33,7 @@ export default function ProjectTickets() {
   const [editingId, setEditingId] = useState(null);
   const [currentTicket, setCurrentTicket] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
-  const [showSidePanel, setShowSidePanel] = useState(false);
-  const [expandedSidePanel, setExpandedSidePanel] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState(null);
-  const [newRemark, setNewRemark] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionTicket, setCompletionTicket] = useState(null);
   const [completionData, setCompletionData] = useState({
@@ -41,7 +46,6 @@ export default function ProjectTickets() {
     beforeDate: new Date().toISOString().split('T')[0],
     beforeTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   });
-  const [completionStep, setCompletionStep] = useState(1);
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Projects:EDIT');
 
   const summaryStats = useMemo(() => ({
@@ -70,10 +74,11 @@ export default function ProjectTickets() {
     receivedTime: '',
     endTime: '',
     totalTime: '0h 0m',
-    assignedTo: '', // For Site Administrator
-    assignedStaff: [], // For Technicians (ManyToMany)
+    assignedTo: '',
+    assignedStaff: [],
     projectId: projectId,
-    status: 'Open'
+    status: 'Open',
+    workImage: null
   });
 
   const [allLocations, setAllLocations] = useState([]);
@@ -83,9 +88,8 @@ export default function ProjectTickets() {
 
   useEffect(() => {
     fetchData();
+    fetchOccupations();
   }, [projectId]);
-
-
 
   const fetchData = async () => {
     try {
@@ -190,7 +194,7 @@ export default function ProjectTickets() {
       const [sH, sM] = start.split(':').map(Number);
       const [eH, eM] = end.split(':').map(Number);
       let diff = (eH * 60 + eM) - (sH * 60 + sM);
-      if (diff < 0) diff += 24 * 60; // Handle overnight
+      if (diff < 0) diff += 24 * 60;
       const h = Math.floor(diff / 60);
       const m = diff % 60;
       return `${h}h ${m}m`;
@@ -260,50 +264,41 @@ export default function ProjectTickets() {
       if (editingId) {
         payload.cameraId = currentTicket?.cameraId?.id || currentTicket?.cameraId;
         payload.raisedBy = currentTicket?.raisedBy?.id || currentTicket?.raisedBy || user._id || user.id;
-        await api.put(`/tickets/${editingId}/`, payload);
-        showNotification('Ticket updated successfully');
       } else {
-        // cameraId is optional
         payload.cameraId = null;
-        await api.post('/tickets/', payload);
-        showNotification('New ticket created successfully');
+      }
+      
+      const formToSend = new FormData();
+      Object.keys(payload).forEach(key => {
+        if (key === 'assignedStaff' && Array.isArray(payload[key])) {
+          payload[key].forEach(val => formToSend.append('assignedStaff', val));
+        } else if (payload[key] !== null && payload[key] !== undefined) {
+          formToSend.append(key, payload[key]);
+        }
+      });
+
+      if (formData.workImage) {
+        formToSend.append('workImage', formData.workImage);
+      }
+
+      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+
+      if (editingId) {
+        await api.patch(`/tickets/${editingId}/`, formToSend, config);
+        showNotification('Log updated successfully');
+      } else {
+        await api.post('/tickets/', formToSend, config);
+        showNotification('New log created successfully');
       }
 
       setShowModal(false);
       resetForm();
       fetchData();
-      if (selectedTicket) {
-        // Refresh selected ticket to show new message if panel is open
-        const updatedTickets = await api.get('/tickets/');
-        const fresh = updatedTickets.data.find(t => (t.id || t._id) === (selectedTicket.id || selectedTicket._id));
-        if (fresh) setSelectedTicket(fresh);
-      }
     } catch (err) {
       console.error('Error saving ticket:', err);
       showNotification('Failed to save ticket', 'error');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const addRemark = async (e) => {
-    e.preventDefault();
-    if (!newRemark.trim() || !selectedTicket) return;
-
-    try {
-      await api.post(`/tickets/${selectedTicket.id || selectedTicket._id}/add_remark/`, {
-        remark: newRemark
-      });
-      
-      setNewRemark('');
-      // Refresh ticket data
-      const res = await api.get(`/tickets/${selectedTicket.id || selectedTicket._id}/`);
-      setSelectedTicket(res.data);
-      fetchData();
-      showNotification('Remark added successfully');
-    } catch (err) {
-      console.error('Error adding remark:', err);
-      showNotification('Failed to add remark', 'error');
     }
   };
 
@@ -324,7 +319,8 @@ export default function ProjectTickets() {
       assignedTo: '',
       assignedStaff: [],
       projectId: projectId,
-      status: 'Open'
+      status: 'Open',
+      workImage: null
     });
     setEditingId(null);
     setCurrentTicket(null);
@@ -335,7 +331,6 @@ export default function ProjectTickets() {
       showNotification('Only Super Admin can edit completed tickets', 'error');
       return;
     }
-    const meta = parseMetadata(ticket.remarks);
     setFormData({
       date: ticket.operationDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
       collegeName: ticket.collegeName || '',
@@ -352,7 +347,8 @@ export default function ProjectTickets() {
       assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
       assignedStaff: (ticket.assignedStaff || []).map(s => s.id || s._id || s),
       projectId: projectId,
-      status: ticket.status || 'Open'
+      status: ticket.status || 'Open',
+      workImage: null
     });
     setEditingId(ticket.id || ticket._id);
     setCurrentTicket(ticket);
@@ -375,7 +371,7 @@ export default function ProjectTickets() {
   const filteredTickets = Array.isArray(tickets) ? tickets.filter(ticket => {
     const meta = parseMetadata(ticket.remarks);
     const ticketDate = meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : '');
-    if (selectedMonth && !ticketDate.startsWith(selectedMonth)) return false;
+    if (selectedDate && !ticketDate.startsWith(selectedDate)) return false;
     const searchStr = `${ticket.issueDescription} ${meta.location} ${meta.category}`.toLowerCase();
     return searchStr.includes(searchQuery.toLowerCase());
   }) : [];
@@ -416,7 +412,7 @@ export default function ProjectTickets() {
           </button>
           <div className="flex items-center space-x-2">
             <Calendar size={16} className="text-dim" />
-            <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="glass-input px-3 py-2 text-xs w-40 cursor-pointer" />
+            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="glass-input px-3 py-2 text-xs w-40 cursor-pointer" />
           </div>
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
@@ -428,26 +424,25 @@ export default function ProjectTickets() {
           {canEdit && (
             <button onClick={() => { resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2 text-sm shrink-0">
               <Plus size={18} className="mr-2" />
-              New Project Ticket
+              New Daily Log
             </button>
           )}
         </div>
       </div>
 
-      {/* Project Summary Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Project Pipeline</p>
             <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-main leading-none">{summaryStats.open + summaryStats.inProgress}</span>
+              <span className="text-3xl font-black text-amber-500 leading-none">{summaryStats.open + summaryStats.inProgress}</span>
               <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Open Issues</span>
             </div>
           </div>
           <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Site Resolution</p>
             <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-main leading-none">
+              <span className="text-3xl font-black text-emerald-500 leading-none">
                 {summaryStats.total > 0 ? Math.round((summaryStats.completed / summaryStats.total) * 100) : 0}%
               </span>
               <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Completed</span>
@@ -456,7 +451,7 @@ export default function ProjectTickets() {
           <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Total Activity</p>
             <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-main leading-none">{summaryStats.total}</span>
+              <span className="text-3xl font-black text-blue-500 leading-none">{summaryStats.total}</span>
               <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Logs Recorded</span>
             </div>
           </div>
@@ -502,12 +497,10 @@ export default function ProjectTickets() {
             <thead>
               <tr className="bg-panel border-b border-main">
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Date</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Location</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Category</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest w-1/3">Issue Description</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Instruction By</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center">Time (R/E/T)</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Responsibility</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Type of Work</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest w-[40%]">Working Details / Progress</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center">Time (Start/End/Total)</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Done By</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Status</th>
                 {canEdit && <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-right">Actions</th>}
               </tr>
@@ -525,47 +518,36 @@ export default function ProjectTickets() {
                   <tr 
                     key={ticket.id || ticket._id} 
                     className="hover:bg-panel transition-colors group cursor-pointer"
-                    onClick={(e) => {
-                      if (e.target.closest('button') || e.target.closest('select')) return;
-                      setSelectedTicket(ticket);
-                      setShowSidePanel(true);
-                      if (ticket.status === 'Completed' && user?.role !== 'Super Admin') {
-                        showNotification('Viewing completed ticket (Read-only)', 'info');
-                      }
-                    }}
+                    onClick={() => navigate(`/tickets/${ticket.id || ticket._id}`)}
                   >
                     <td className="p-4 text-[11px] text-secondary font-mono">
                       {ticket.operationDate || meta.manualDate || ticket.createdAt?.split('T')[0]}
                     </td>
-                    <td className="p-4 text-[11px] text-main font-semibold">
-                      {ticket.collegeName} {ticket.block} {ticket.floor} {ticket.room}
-                    </td>
                     <td className="p-4">
                       <span className="px-2 py-0.5 rounded bg-teal-500/10 text-teal-600 border border-teal-500/20 text-[9px] font-bold uppercase tracking-wider">
-                        {ticket.category || 'CCTV'}
+                        {ticket.category || 'Installation'}
                       </span>
                     </td>
                     <td className="p-4">
-                      <p className="text-[11px] text-secondary line-clamp-2 italic">{ticket.issueDescription}</p>
+                      <p className="text-[12px] text-white line-clamp-3 leading-relaxed">{ticket.issueDescription}</p>
                     </td>
-                    <td className="p-4 text-[11px] text-main font-medium">{ticket.instructionBy || meta.instructionBy || 'N/A'}</td>
                     <td className="p-4">
                       <div className="flex flex-col items-center space-y-0.5">
-                        <span className="text-[9px] text-emerald-500 font-mono">{ticket.receivedTime || meta.receivedTime || '--:--'}</span>
-                        <span className="text-[9px] text-red-500 font-mono">{ticket.endTime || meta.endTime || '--:--'}</span>
+                        <span className="text-[9px] text-emerald-500 font-mono" title="Start Time">{ticket.receivedTime || meta.receivedTime || '--:--'}</span>
+                        <span className="text-[9px] text-red-500 font-mono" title="End Time">{ticket.endTime || meta.endTime || '--:--'}</span>
                         <div className="h-[1px] w-6 bg-main"></div>
-                        <span className="text-[9px] text-main font-bold">{ticket.totalTime || meta.totalTime || '0h 0m'}</span>
+                        <span className="text-[9px] text-main font-bold" title="Total Duration">{ticket.totalTime || meta.totalTime || '0h 0m'}</span>
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2 text-[11px] text-secondary">
-                        <div className="w-5 h-5 rounded-full bg-teal-500/10 flex items-center justify-center text-[8px] font-bold text-teal-600">
+                        <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[8px] font-bold text-blue-400">
                           {(assignedUser?.name || 'U').charAt(0).toUpperCase()}
                         </div>
-                        <span>{assignedUser?.name || 'Unassigned'}</span>
+                        <span className="font-bold text-white">{assignedUser?.name || 'Unassigned'}</span>
                       </div>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
                       {canEdit && (ticket.status !== 'Completed' || user?.role === 'Super Admin') ? (
                         <select
                           value={ticket.status}
@@ -577,13 +559,8 @@ export default function ProjectTickets() {
                                 remark: '',
                                 endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
                                 date: new Date().toISOString().split('T')[0],
-                                beforeImage: null,
-                                afterImage: null,
-                                beforeRemark: '',
-                                beforeDate: new Date().toISOString().split('T')[0],
-                                beforeTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                                afterImage: null
                               });
-                              setCompletionStep(1);
                               setShowCompletionModal(true);
                               return;
                             }
@@ -600,9 +577,9 @@ export default function ProjectTickets() {
                             'text-red-400 border-red-500/20 hover:bg-red-500/10'
                           }`}
                         >
-                          <option value="Open" className="bg-[#1a1d27]">Open</option>
-                          <option value="In Progress" className="bg-[#1a1d27]">In Progress</option>
-                          <option value="Completed" className="bg-[#1a1d27]">Completed</option>
+                          <option value="Open">Open</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Completed">Completed</option>
                         </select>
                       ) : (
                         <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border ${
@@ -615,7 +592,7 @@ export default function ProjectTickets() {
                       )}
                     </td>
                     {canEdit && (
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end space-x-1">
                           {(ticket.status !== 'Completed' || user?.role === 'Super Admin') && (
                             <button onClick={() => handleEdit(ticket)} className="p-1 hover:text-blue-400 transition-all"><Edit2 size={12} /></button>
@@ -641,7 +618,6 @@ export default function ProjectTickets() {
               <h2 className="text-2xl font-black text-main uppercase tracking-tight">
                 {editingId ? 'Modify Project Log' : `New Log for ${projectName}`}
               </h2>
-              <p className="text-xs text-secondary mt-1 uppercase tracking-widest font-black">Project Maintenance Protocol</p>
               <button onClick={() => setShowModal(false)} className="text-dim hover:text-main p-2 hover:bg-card rounded-xl transition-all"><X size={24} /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-8 space-y-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
@@ -657,13 +633,13 @@ export default function ProjectTickets() {
                   <input required type="date" name="date" value={formData.date} onChange={handleInputChange} className="glass-input w-full p-4 text-xs bg-panel border-main font-bold" />
                 </div>
                 <div className="md:col-span-1 space-y-2">
-                  <label className="text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Category</label>
+                  <label className="text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Type of Work</label>
                   <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-4 text-xs bg-panel border-main cursor-pointer font-bold">
-                    <option value="CCTV">CCTV Surveillance</option>
-                    <option value="NVR">NVR / Storage</option>
-                    <option value="Biometric">Biometric Access</option>
-                    <option value="Network">Network / Switches</option>
-                    <option value="Other">Other Hardware</option>
+                    <option value="Installation">Installation</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Testing">Testing</option>
+                    <option value="Cabling">Cabling</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
                 <div className="md:col-span-1 space-y-2">
@@ -676,61 +652,101 @@ export default function ProjectTickets() {
                 </div>
               </div>
 
-              {/* Location Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-white/[0.02] border border-white/5 rounded-[2rem]">
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-secondary uppercase tracking-widest ml-1">College</label>
-                   <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-3 text-[10px] bg-panel border-main font-bold">
-                     <option value="">Select College</option>
-                     {[...new Set(allLocations.map(l => l.collegeName))].map(c => <option key={c} value={c}>{c}</option>)}
-                   </select>
-                 </div>
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Block</label>
-                   <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-3 text-[10px] bg-panel border-main font-bold">
-                     <option value="">Select Block</option>
-                     {[...new Set(allLocations.filter(l => l.collegeName === formData.collegeName).map(l => l.block))].map(b => <option key={b} value={b}>{b}</option>)}
-                   </select>
-                 </div>
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Floor</label>
-                   <select name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-3 text-[10px] bg-panel border-main font-bold">
-                     <option value="">Select Floor</option>
-                     {[...new Set(allLocations.filter(l => l.collegeName === formData.collegeName && l.block === formData.block).map(l => l.floor))].map(f => <option key={f} value={f}>{f}</option>)}
-                   </select>
-                 </div>
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Room</label>
-                   <select name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-3 text-[10px] bg-panel border-main font-bold">
-                     <option value="">Select Room</option>
-                     {[...new Set(allLocations.filter(l => l.collegeName === formData.collegeName && l.block === formData.block && l.floor === formData.floor).map(l => l.room))].map(r => <option key={r} value={r}>{r}</option>)}
-                   </select>
-                 </div>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3 mb-2">
+                  <MapPin size={16} className="text-teal-500" />
+                  <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Location Intelligence</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-panel/30 rounded-3xl border border-main">
+                  <div>
+                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">College</label>
+                    <ComboInput 
+                      required 
+                      name="collegeName" 
+                      value={formData.collegeName} 
+                      onChange={(e) => {
+                        handleInputChange(e);
+                        setFormData(prev => ({ ...prev, block: '', floor: '', room: '' }));
+                      }}
+                      options={Array.from(new Set([
+                        ...(occupations ? occupations.map(o => o.name) : []),
+                        ...allLocations.map(l => l.collegeName)
+                      ])).filter(Boolean).sort()}
+                      placeholder="Select or Type College..." 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Block</label>
+                    <ComboInput 
+                      required 
+                      name="block" 
+                      value={formData.block} 
+                      onChange={(e) => {
+                        handleInputChange(e);
+                        setFormData(prev => ({ ...prev, floor: '', room: '' }));
+                      }}
+                      options={Array.from(new Set(
+                        allLocations
+                          .filter(l => !formData.collegeName || l.collegeName === formData.collegeName)
+                          .map(l => l.block)
+                      )).filter(Boolean).sort()}
+                      placeholder="Block name..." 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Floor</label>
+                    <ComboInput 
+                      required 
+                      name="floor" 
+                      value={formData.floor} 
+                      onChange={(e) => {
+                        handleInputChange(e);
+                        setFormData(prev => ({ ...prev, room: '' }));
+                      }}
+                      options={Array.from(new Set(
+                        allLocations
+                          .filter(l => !formData.block || l.block === formData.block)
+                          .map(l => l.floor)
+                      )).filter(Boolean).sort()}
+                      placeholder="Floor..." 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Room</label>
+                    <ComboInput 
+                      name="room" 
+                      value={formData.room} 
+                      onChange={handleInputChange} 
+                      options={Array.from(new Set(
+                        allLocations
+                          .filter(l => !formData.floor || l.floor === formData.floor)
+                          .map(l => l.room)
+                      )).filter(Boolean).sort()}
+                      placeholder="Select or Type Room..." 
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="space-y-6">
                   <div className="flex items-center space-x-2 text-teal-500 mb-4">
                     <Activity size={16} />
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Incident Details</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Work Log Details</span>
                   </div>
                   
                   <div className="space-y-4">
+
                     <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Site Administrator (Responsible)</label>
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Done By (Responsible Manager)</label>
                       <select name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer">
-                        <option value="">No Administrator Linked</option>
+                        <option value="">Select Manager / Admin</option>
                         {users.map(u => <option key={u.id || u._id} value={u.id || u._id}>{u.name} ({u.role})</option>)}
                       </select>
-                      {formData.assignedTo && <p className="text-[8px] text-teal-500 font-bold mt-1 uppercase tracking-widest">Linked from Registry</p>}
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Nature of Problem</label>
-                      <textarea required name="issueDescription" value={formData.issueDescription} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[90px] resize-none bg-panel border-main" placeholder="Describe the failure..." />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Action Taken</label>
-                      <textarea name="actionTaken" value={formData.actionTaken} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[90px] resize-none bg-panel border-main" placeholder="Resolution details..." />
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Working Details / Progress</label>
+                      <textarea required name="issueDescription" value={formData.issueDescription} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[140px] resize-none bg-panel border-main text-white" placeholder="Describe the work done today..." />
                     </div>
                   </div>
                 </div>
@@ -769,19 +785,11 @@ export default function ProjectTickets() {
                     </div>
 
                     <div className="p-6 bg-white/[0.02] border border-white/5 rounded-[2rem] space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4">
                         <div className="space-y-2">
-                          <label className="text-[9px] font-black text-dim uppercase tracking-widest">Received</label>
+                          <label className="text-[9px] font-black text-dim uppercase tracking-widest">Start Time</label>
                           <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-2 text-xs font-mono bg-panel border-main" />
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-[9px] font-black text-dim uppercase tracking-widest">End Time</label>
-                          <input type="time" name="endTime" value={formData.endTime} onChange={handleInputChange} className="glass-input w-full p-2 text-xs font-mono bg-panel border-main" />
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center pt-2">
-                        <span className="text-[10px] font-black text-dim uppercase tracking-widest">Total Duration</span>
-                        <span className="text-sm font-black text-main bg-white/5 px-4 py-1 rounded-full border border-white/5">{formData.totalTime}</span>
                       </div>
                     </div>
                   </div>
@@ -798,258 +806,7 @@ export default function ProjectTickets() {
           </div>
         </div>
       )}
-      {/* Side Details Panel */}
-      {showSidePanel && selectedTicket && (
-        <>
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] transition-all" onClick={() => setShowSidePanel(false)}></div>
-          <div className={`fixed right-0 top-0 h-full bg-main border-l border-main z-[70] shadow-[0_0_80px_rgba(0,0,0,0.4)] flex flex-col transition-all duration-500 ease-in-out ${
-            expandedSidePanel ? 'w-full max-w-7xl' : 'w-full max-w-lg'
-          }`}>
-            <div className="p-8 border-b border-main bg-card/80 backdrop-blur-md flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-blue-500/10 rounded-2xl">
-                  <Info size={24} className="text-blue-500" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black text-main tracking-tight uppercase">Log Analysis</h3>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-[10px] font-black text-dim uppercase tracking-[0.3em] bg-panel px-2 py-0.5 rounded">Trace: #{selectedTicket.id || selectedTicket._id}</span>
-                    <div className="w-1 h-1 rounded-full bg-dim/30"></div>
-                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{selectedTicket.status}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => setExpandedSidePanel(!expandedSidePanel)}
-                  className="p-3 hover:bg-panel rounded-2xl text-dim hover:text-blue-500 transition-all border border-transparent hover:border-blue-500/20"
-                  title={expandedSidePanel ? "Collapse" : "Expand to Full View"}
-                >
-                  {expandedSidePanel ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-                </button>
-                <button onClick={() => setShowSidePanel(false)} className="p-3 hover:bg-red-500/10 rounded-2xl text-dim hover:text-red-500 transition-all border border-transparent hover:border-red-500/20">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
 
-            <div className={`flex-1 overflow-y-auto p-8 custom-scrollbar ${expandedSidePanel ? 'grid grid-cols-1 lg:grid-cols-12 gap-10' : 'space-y-10'}`}>
-              <div className={`${expandedSidePanel ? 'lg:col-span-4 space-y-8' : 'space-y-8'}`}>
-                <div className="glass-panel p-6 space-y-6 bg-gradient-to-br from-blue-500/[0.03] to-indigo-500/[0.03] border-blue-500/10">
-                  <div className="flex justify-between items-center">
-                    <div className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.2em] shadow-sm border ${
-                      selectedTicket.status === 'Completed' ? 'bg-emerald-500 text-white border-emerald-400' :
-                      selectedTicket.status === 'In Progress' ? 'bg-orange-500 text-white border-orange-400' :
-                      'bg-red-500 text-white border-red-400'
-                    }`}>
-                      {selectedTicket.status}
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[9px] font-black text-dim uppercase tracking-widest">Logged On</span>
-                      <span className="text-xs font-bold text-main">{new Date(selectedTicket.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-
-                  <div className="h-px bg-gradient-to-r from-transparent via-main to-transparent opacity-10"></div>
-
-                  <div className="space-y-3">
-                    <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Issue Description</h4>
-                    <div className="bg-panel/50 p-5 rounded-2xl border border-main shadow-inner">
-                      <p className="text-sm text-main leading-relaxed font-bold italic opacity-90">
-                        "{selectedTicket.issueDescription}"
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-card rounded-2xl border border-main">
-                      <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Module</span>
-                      <p className="text-sm text-main font-black uppercase tracking-wider">{selectedTicket.category || parseMetadata(selectedTicket.remarks).category || 'N/A'}</p>
-                    </div>
-                    <div className="p-4 bg-card rounded-2xl border border-main">
-                      <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Point</span>
-                      <p className="text-sm text-main font-black uppercase tracking-wider">{selectedTicket.location || parseMetadata(selectedTicket.remarks).location || 'N/A'}</p>
-                    </div>
-                  </div>
-
-                  {(selectedTicket.workImage || selectedTicket.serviceImage) && (
-                    <div className="space-y-4 animate-slide-up">
-                       <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] pl-2">Service Artifacts (Evidence)</h4>
-                       <div className="grid grid-cols-2 gap-4">
-                          {selectedTicket.workImage && (
-                            <div className="group relative">
-                              <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">Before Work</span>
-                              <div className="aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner">
-                                <img src={`${api.defaults.baseURL}${selectedTicket.workImage}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Before" />
-                              </div>
-                            </div>
-                          )}
-                          {selectedTicket.serviceImage && (
-                            <div className="group relative">
-                              <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-emerald-500/80 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">After Work</span>
-                              <div className="aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner">
-                                <img src={`${api.defaults.baseURL}${selectedTicket.serviceImage}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="After" />
-                              </div>
-                            </div>
-                          )}
-                       </div>
-                    </div>
-                  )}
-
-                  {parseMetadata(selectedTicket.remarks).workStartTime && (
-                    <div className="space-y-4 animate-slide-up">
-                       <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] pl-2">Service Timeline</h4>
-                       <div className="bg-card p-4 rounded-2xl border border-main space-y-4">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-dim font-bold uppercase tracking-widest">Execution Start</span>
-                            <span className="text-main font-black">
-                              {parseMetadata(selectedTicket.remarks).workStartDate} <span className="text-blue-500 font-mono ml-2">{parseMetadata(selectedTicket.remarks).workStartTime}</span>
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-dim font-bold uppercase tracking-widest">Completion</span>
-                            <span className="text-main font-black">
-                              {parseMetadata(selectedTicket.remarks).manualDate} <span className="text-emerald-500 font-mono ml-2">{parseMetadata(selectedTicket.remarks).endTime}</span>
-                            </span>
-                          </div>
-                       </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                   <h4 className="text-[10px] font-black text-dim uppercase tracking-[0.3em] pl-2">System Metadata</h4>
-                   <div className="bg-card p-4 rounded-2xl border border-main space-y-4">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-dim font-bold uppercase tracking-widest">Project</span>
-                        <span className="text-main font-black truncate max-w-[150px]">{projectName}</span>
-                      </div>
-                      <div className="h-px bg-main opacity-5"></div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-dim font-bold uppercase tracking-widest">Raised By</span>
-                        <span className="text-main font-black">{selectedTicket.raisedByName || 'Technician'}</span>
-                      </div>
-                   </div>
-                </div>
-              </div>
-
-              <div className={`${expandedSidePanel ? 'lg:col-span-8 space-y-6' : 'space-y-6'}`}>
-                <div className="flex items-center justify-between border-b border-main pb-4">
-                  <h4 className="text-sm font-black text-main uppercase tracking-[0.3em] flex items-center">
-                    <MessageSquare size={18} className="mr-3 text-teal-500" />
-                    Operational Activity Log
-                  </h4>
-                  <div className="bg-teal-500/10 text-teal-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                    {(selectedTicket.message_history || []).length} Points Recorded
-                  </div>
-                </div>
-                
-                <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[2px] before:bg-main before:opacity-10">
-                  {(selectedTicket.message_history || []).length === 0 ? (
-                    <div className="text-center py-20 bg-panel/30 rounded-[2.5rem] border-2 border-dashed border-main">
-                      <div className="w-16 h-16 bg-panel rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                        <MessageSquare size={28} className="text-dim opacity-20" />
-                      </div>
-                      <p className="text-sm text-dim font-black uppercase tracking-[0.2em]">Zero Activity Logs Detected</p>
-                      <p className="text-[10px] text-dim/50 uppercase tracking-widest mt-2">Initialize communication below</p>
-                    </div>
-                  ) : (
-                    selectedTicket.message_history.map((msg, idx) => {
-                      const isSystem = msg.remark?.toLowerCase().includes('ticket updated') || msg.remark?.toLowerCase().includes('initial ticket');
-                      return (
-                        <div key={idx} className="relative pl-12 animate-fade-in group" style={{ animationDelay: `${idx * 50}ms` }}>
-                          <div className={`absolute left-0 top-1 w-8 h-8 rounded-2xl border-4 border-main z-10 flex items-center justify-center transition-transform group-hover:scale-110 ${
-                            isSystem ? 'bg-slate-700 shadow-lg' : 'bg-blue-600 shadow-lg'
-                          }`}>
-                            {isSystem ? <Activity size={12} className="text-white" /> : <Shield size={12} className="text-white" />}
-                          </div>
-                          
-                          <div className={`rounded-3xl p-6 border transition-all duration-300 ${
-                            isSystem 
-                              ? 'bg-slate-500/[0.03] border-slate-500/10 hover:bg-slate-500/[0.06]' 
-                              : 'bg-blue-600/[0.04] border-blue-600/10 shadow-sm hover:bg-blue-600/[0.08] hover:border-blue-600/20'
-                          }`}>
-                            <div className="flex justify-between items-start mb-4">
-                              <div className="flex flex-col">
-                                <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isSystem ? 'text-slate-500' : 'text-blue-600'}`}>
-                                  {isSystem ? 'Protocol System' : (msg.user_name || 'Admin Technician')}
-                                </span>
-                                <div className="flex items-center text-[10px] text-dim font-bold mt-1 uppercase tracking-wider">
-                                  <Clock size={12} className="mr-1.5 opacity-50" />
-                                  {msg.date} <span className="mx-2 opacity-30">|</span> {msg.time}
-                                </div>
-                              </div>
-                              {msg.device_status && (
-                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border-2 ${
-                                  msg.device_status === 'Completed' ? 'bg-emerald-500/5 text-emerald-600 border-emerald-500/10' :
-                                  msg.device_status === 'In Progress' ? 'bg-orange-500/5 text-orange-600 border-orange-400/10' :
-                                  'bg-red-500/5 text-red-600 border-red-500/10'
-                                }`}>
-                                  {msg.device_status}
-                                </span>
-                              )}
-                            </div>
-                            <div className="h-px bg-main opacity-5 mb-4"></div>
-                            <p className={`text-sm leading-relaxed ${isSystem ? 'text-dim italic font-bold opacity-80' : 'text-main font-black'}`}>
-                              {msg.remark}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className={`p-8 border-t border-main bg-card/80 backdrop-blur-md ${expandedSidePanel ? 'flex justify-center' : ''}`}>
-              <div className={`w-full ${expandedSidePanel ? 'max-w-4xl' : ''}`}>
-              {selectedTicket.status === 'Completed' && user?.role !== 'Super Admin' ? (
-                <div className="flex flex-col space-y-4">
-                  <div className="flex items-center justify-center py-10 bg-emerald-500/[0.03] border-2 border-dashed border-emerald-500/20 rounded-[2.5rem]">
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-emerald-500/20 shadow-lg">
-                        <CheckCircle size={32} className="text-emerald-500" />
-                      </div>
-                      <p className="text-lg font-black text-emerald-600 uppercase tracking-tight">Maintenance Cycle Complete</p>
-                      <p className="text-[10px] text-dim font-black uppercase tracking-[0.3em] mt-1 opacity-60">Verified Operational Integrity</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <form onSubmit={addRemark} className="relative group">
-                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 rounded-[2rem] blur opacity-0 group-hover:opacity-100 transition duration-500"></div>
-                    <textarea
-                      value={newRemark}
-                      onChange={(e) => setNewRemark(e.target.value)}
-                      placeholder="Add technical update or observation..."
-                      className="glass-input relative w-full p-6 pr-16 text-sm min-h-[120px] resize-none focus:ring-4 focus:ring-blue-500/10 border-main transition-all placeholder:text-dim/40 font-bold rounded-[2rem] bg-panel/50 shadow-inner"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newRemark.trim()}
-                      className="absolute right-4 bottom-4 p-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 disabled:grayscale text-white rounded-2xl transition-all shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 group/btn"
-                    >
-                      <Send size={22} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-                    </button>
-                  </form>
-                  <div className="flex items-center justify-center space-x-3">
-                    <div className="h-px w-8 bg-main opacity-10"></div>
-                    <p className="text-[10px] text-dim font-black uppercase tracking-[0.4em] opacity-40">
-                      Enterprise Audit Logging Active
-                    </p>
-                    <div className="h-px w-8 bg-main opacity-10"></div>
-                  </div>
-                </div>
-              )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Completion Details Modal */}
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
           <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
@@ -1065,218 +822,122 @@ export default function ProjectTickets() {
             </div>
             
             <div className="p-8 space-y-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className={`flex-1 h-1.5 rounded-full transition-all ${completionStep >= 1 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
-                <div className={`flex-1 h-1.5 rounded-full transition-all ${completionStep >= 2 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
-              </div>
-
-              {completionStep === 1 ? (
-                <div className="space-y-6 animate-slide-up">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work Start Date</label>
-                      <input 
-                        type="date" 
-                        value={completionData.beforeDate}
-                        onChange={(e) => setCompletionData({...completionData, beforeDate: e.target.value})}
-                        className="glass-input w-full p-3 text-sm bg-panel border-main"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work Start Time</label>
-                      <input 
-                        type="time" 
-                        value={completionData.beforeTime}
-                        onChange={(e) => setCompletionData({...completionData, beforeTime: e.target.value})}
-                        className="glass-input w-full p-3 text-sm font-mono bg-panel border-main"
-                      />
-                    </div>
-                  </div>
-
+              <div className="space-y-6 animate-slide-up">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work In-Progress Details</label>
-                    <textarea 
-                      required
-                      value={completionData.beforeRemark}
-                      onChange={(e) => setCompletionData({...completionData, beforeRemark: e.target.value})}
-                      placeholder="Describe the initial work details or observations..."
-                      className="glass-input w-full p-4 text-sm min-h-[120px] resize-none bg-panel border-main"
+                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Date</label>
+                    <input 
+                      type="date" 
+                      value={completionData.date}
+                      onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
+                      className="glass-input w-full p-3 text-sm bg-panel border-main"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Before Work Image</label>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload size={24} className="text-dim mb-2" />
-                            <p className="mb-2 text-xs text-dim font-bold uppercase tracking-widest">Upload Before Image</p>
-                          </div>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file && file.size <= 2 * 1024 * 1024) {
-                                setCompletionData({...completionData, beforeImage: file});
-                              } else if (file) {
-                                showNotification('Image exceeds 2MB', 'error');
-                              }
-                            }}
-                          />
-                        </label>
-                      </div>
-                      {completionData.beforeImage && (
-                        <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                          <span className="text-[10px] text-blue-400 font-bold truncate">{completionData.beforeImage.name}</span>
-                          <button onClick={() => setCompletionData({...completionData, beforeImage: null})} className="text-blue-400"><X size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex space-x-4">
-                    <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
-                    <button 
-                      onClick={() => {
-                        if (!completionData.beforeRemark.trim()) {
-                          showNotification('Please provide work details', 'error');
-                          return;
-                        }
-                        setCompletionStep(2);
-                      }} 
-                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg"
-                    >
-                      NEXT: FINALIZATION
-                    </button>
+                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Time</label>
+                    <input 
+                      type="time" 
+                      value={completionData.endTime}
+                      onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
+                      className="glass-input w-full p-3 text-sm font-mono bg-panel border-main"
+                    />
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-6 animate-slide-up">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Date</label>
-                      <input 
-                        type="date" 
-                        value={completionData.date}
-                        onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
-                        className="glass-input w-full p-3 text-sm bg-panel border-main"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Time</label>
-                      <input 
-                        type="time" 
-                        value={completionData.endTime}
-                        onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
-                        className="glass-input w-full p-3 text-sm font-mono bg-panel border-main"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Resolution Remark</label>
-                    <textarea 
-                      required
-                      value={completionData.remark}
-                      onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
-                      placeholder="Describe the final action taken to resolve this ticket..."
-                      className="glass-input w-full p-4 text-sm min-h-[120px] resize-none bg-panel border-main"
-                    />
-                  </div>
+                
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Resolution Remark</label>
+                  <textarea 
+                    required
+                    value={completionData.remark}
+                    onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
+                    placeholder="Describe the final action taken to resolve this log..."
+                    className="glass-input w-full p-4 text-sm min-h-[120px] resize-none bg-panel border-main"
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (After Work)</label>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload size={24} className="text-dim mb-2" />
-                            <p className="mb-2 text-xs text-dim font-bold uppercase tracking-widest">Upload After Image</p>
-                          </div>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file && file.size <= 2 * 1024 * 1024) {
-                                setCompletionData({...completionData, afterImage: file});
-                              } else if (file) {
-                                showNotification('Image exceeds 2MB', 'error');
-                              }
-                            }}
-                          />
-                        </label>
-                      </div>
-                      {completionData.afterImage && (
-                        <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                          <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.afterImage.name}</span>
-                          <button onClick={() => setCompletionData({...completionData, afterImage: null})} className="text-emerald-400"><X size={14} /></button>
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (After Work)</label>
+                  <div className="mt-2">
+                    <div className="flex items-center justify-center w-full">
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <Upload size={24} className="text-dim mb-2" />
+                          <p className="mb-2 text-xs text-dim font-bold uppercase tracking-widest">Upload After Image</p>
                         </div>
-                      )}
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file && file.size <= 2 * 1024 * 1024) {
+                              setCompletionData({...completionData, afterImage: file});
+                            } else if (file) {
+                              showNotification('Image exceeds 2MB', 'error');
+                            }
+                          }}
+                        />
+                      </label>
                     </div>
+                    {completionData.afterImage && (
+                      <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                        <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.afterImage.name}</span>
+                        <button onClick={() => setCompletionData({...completionData, afterImage: null})} className="text-emerald-400"><X size={14} /></button>
+                      </div>
+                    )}
                   </div>
+                </div>
 
-                  <div className="flex space-x-4 pt-4">
-                    <button onClick={() => setCompletionStep(1)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Back</button>
-                    <button 
-                      onClick={async () => {
-                        if (!completionData.remark.trim()) {
-                          showNotification('Please provide a completion remark', 'error');
-                          return;
-                        }
-                        try {
-                          setSubmitting(true);
-                          const id = completionTicket.id || completionTicket._id;
-                          const meta = parseMetadata(completionTicket.remarks);
-                          
-                          const updatedMeta = {
-                            ...meta,
-                            endTime: completionData.endTime,
-                            manualDate: completionData.date,
-                            totalTime: calculateTotalTime(completionData.beforeTime, completionData.endTime),
-                            workRemarks: completionData.beforeRemark,
-                            workStartTime: completionData.beforeTime,
-                            workStartDate: completionData.beforeDate
-                          };
-
-                        const formDataToSend = new FormData();
-                        formDataToSend.append('status', 'Completed');
-                        formDataToSend.append('remarks', JSON.stringify(updatedMeta));
-                        formDataToSend.append('remark', `Final: ${completionData.remark} | Before: ${completionData.beforeRemark}`);
+                <div className="flex space-x-4 pt-4">
+                  <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+                  <button 
+                    onClick={async () => {
+                      if (!completionData.remark.trim()) {
+                        showNotification('Please provide a completion remark', 'error');
+                        return;
+                      }
+                      try {
+                        setSubmitting(true);
+                        const id = completionTicket.id || completionTicket._id;
+                        const meta = parseMetadata(completionTicket.remarks);
                         
-                        if (completionData.beforeImage) {
-                          formDataToSend.append('workImage', completionData.beforeImage);
-                        }
-                        if (completionData.afterImage) {
-                          formDataToSend.append('serviceImage', completionData.afterImage);
-                        }
+                        const updatedMeta = {
+                          ...meta,
+                          endTime: completionData.endTime,
+                          manualDate: completionData.date,
+                          totalTime: calculateTotalTime(completionTicket.receivedTime || meta.receivedTime, completionData.endTime)
+                        };
 
-                        await api.patch(`/tickets/${id}/`, formDataToSend, {
-                          headers: { 'Content-Type': 'multipart/form-data' },
-                        });
+                      const formDataToSend = new FormData();
+                      formDataToSend.append('status', 'Completed');
+                      formDataToSend.append('remarks', JSON.stringify(updatedMeta));
+                      formDataToSend.append('remark', `Final Resolution: ${completionData.remark}`);
+                      
+                      if (completionData.afterImage) {
+                        formDataToSend.append('serviceImage', completionData.afterImage);
+                      }
 
-                        showNotification('Ticket finalized and completed', 'success');
-                        setShowCompletionModal(false);
-                        if (showModal) setShowModal(false);
-                        fetchData();
-                        } catch (err) {
-                          console.error(err);
-                          showNotification('Failed to finalize ticket', 'error');
-                        } finally {
-                          setSubmitting(false);
-                        }
-                      }}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
-                    >
-                      {submitting ? 'PROCESSING...' : 'COMPLETE TICKET'}
-                    </button>
-                  </div>
+                      await api.patch(`/tickets/${id}/`, formDataToSend, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      });
+
+                      showNotification('Log finalized and completed', 'success');
+                      setShowCompletionModal(false);
+                      if (showModal) setShowModal(false);
+                      fetchData();
+                      } catch (err) {
+                        console.error(err);
+                        showNotification('Failed to finalize log', 'error');
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                  >
+                    {submitting ? 'PROCESSING...' : 'COMPLETE WORK LOG'}
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

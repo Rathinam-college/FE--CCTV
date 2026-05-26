@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../services/api';
 import { Plus, Edit2, Trash2, Users as UsersIcon, ShieldAlert, Upload } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -298,10 +299,10 @@ export default function Users() {
       </div>
 
       {/* Modal Overlay */}
-      {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
-          <div className="bg-card rounded-3xl w-full max-w-2xl overflow-hidden border border-main shadow-2xl my-8">
-            <div className="p-8 border-b border-main bg-panel flex justify-between items-center">
+      {showModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-3xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-main shadow-2xl my-8">
+            <div className="p-8 border-b border-main bg-panel flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-2xl font-black text-main tracking-tight uppercase">
                   {editingId ? 'Modify Personnel' : 'Initialize Identity'}
@@ -312,7 +313,7 @@ export default function Users() {
                 <Plus className="rotate-45" size={24} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Full Designation (Name)</label>
@@ -471,7 +472,8 @@ export default function Users() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

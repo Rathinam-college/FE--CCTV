@@ -40,7 +40,7 @@ export default function Network() {
           </div>
           <div>
             <p className="text-xs text-dim font-semibold uppercase tracking-wider mb-1">Total Nodes</p>
-            <h3 className="text-3xl font-bold text-main">{stats.total}</h3>
+            <h3 className="text-3xl font-bold text-blue-400">{stats.total}</h3>
           </div>
         </div>
         

@@ -420,7 +420,7 @@ export default function Maintenance() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Asset Category</label>
-                      <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                      <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                         <option value="Assets">Assets / Infrastructure</option>
                         <option value="Storage">Storage Units</option>
                         <option value="Identity">Identity Access</option>
@@ -448,7 +448,7 @@ export default function Maintenance() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Responsibility</label>
-                      <select name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer [&>option]:bg-[#1a1d27]">
+                      <select name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                         <option value="">Select Technician</option>
                         {users.map(u => (
                           <option key={u.id || u._id} value={u.id || u._id}>{u.name}</option>

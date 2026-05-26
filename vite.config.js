@@ -7,7 +7,8 @@ export default defineConfig({
   base: '/cctv/',
   server: {
     proxy: {
-      '/cctv/api': 'http://localhost:5000'
+      '/cctv/api': 'http://localhost:5000',
+      '/cctv/media': 'http://localhost:5000'
     }
   }
 })

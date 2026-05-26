@@ -2,19 +2,20 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
-import { Search, Filter, Plus, Cctv as CctvIcon, Map, Building, Shield, X, Edit2, Trash2, Download, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, Plus, Cctv as CctvIcon, Map, Building, Shield, X, Edit2, Trash2, Download, Upload, ChevronLeft, ChevronRight, Server } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useActivityLogger } from '../hooks/useActivityLogger';
 import { useSiteStore } from '../store/siteStore';
+import ComboInput from '../components/ComboInput';
 
 export default function Cameras() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { showNotification } = useNotificationStore();
-  const { currentSite, fetchSite, allLocations, fetchAllLocations } = useSiteStore();
+  const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   useActivityLogger('Assets');
   const [submitting, setSubmitting] = useState(false);
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Assets:EDIT');
@@ -58,6 +59,7 @@ export default function Cameras() {
   };
 
   const [cameras, setCameras] = useState([]);
+  const [nvrs, setNvrs] = useState([]);
   const [filterType, setFilterType] = useState('ALL'); // 'ALL', 'INSIDE', 'OUTSIDE'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,6 +70,31 @@ export default function Cameras() {
   const [collegeFilter, setCollegeFilter] = useState('ALL');
   const [roomFilter, setRoomFilter] = useState('ALL');
 
+  // Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [showNvrDropdown, setShowNvrDropdown] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    block: '',
+    floor: '',
+    room: '',
+    deviceType: '',
+    ipAddress: '',
+    ipv4Gateway: '',
+    deviceSerialNumber: '', // This is the auto-generated ID (cameraId)
+    serialNumber: '', // This is the actual hardware manufacturer serial
+    subnetMask: '',
+    macAddress: '',
+    status: 'Online',
+    campusZone: 'INSIDE',
+    collegeName: '',
+    brand: '',
+    dvrNvrDetails: '',
+    remarks: ''
+  });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
   // Group cameras by site for the Locations view
   const camerasByLocation = useMemo(() => {
     let filtered = cameras;
@@ -134,11 +161,12 @@ export default function Cameras() {
 
   const uniqueColleges = useMemo(() => {
     const colleges = new Set();
+    if (occupations) occupations.forEach(o => colleges.add(o.name));
     cameras.forEach(c => { if (c.collegeName) colleges.add(c.collegeName); });
     allLocations.forEach(loc => { if (loc.collegeName) colleges.add(loc.collegeName); });
     if (currentSite?.collegeName) colleges.add(currentSite.collegeName);
     return Array.from(colleges).sort();
-  }, [cameras, currentSite, allLocations]);
+  }, [occupations, cameras, currentSite, allLocations]);
 
   const uniqueBlocks = useMemo(() => {
     const blocks = new Set();
@@ -150,19 +178,34 @@ export default function Cameras() {
 
   const uniqueFloors = useMemo(() => {
     const floors = new Set();
-    cameras.forEach(c => { if (c.floor) floors.add(c.floor); });
-    allLocations.forEach(loc => { if (loc.floor) floors.add(loc.floor); });
-    if (currentSite?.floor) floors.add(currentSite.floor);
+    const targetBlock = String(formData.block || '');
+    if (targetBlock) {
+      cameras.forEach(c => { if (String(c.block || '') === targetBlock && c.floor) floors.add(String(c.floor)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && loc.floor) floors.add(String(loc.floor)); });
+      if (String(currentSite?.block || '') === targetBlock && currentSite?.floor) floors.add(String(currentSite.floor));
+    } else {
+      cameras.forEach(c => { if (c.floor) floors.add(String(c.floor)); });
+      allLocations.forEach(loc => { if (loc.floor) floors.add(String(loc.floor)); });
+      if (currentSite?.floor) floors.add(String(currentSite.floor));
+    }
     return Array.from(floors).sort();
-  }, [cameras, currentSite, allLocations]);
+  }, [cameras, currentSite, allLocations, formData.block]);
 
   const uniqueRooms = useMemo(() => {
     const rooms = new Set();
-    cameras.forEach(c => { if (c.room) rooms.add(c.room); });
-    allLocations.forEach(loc => { if (loc.room) rooms.add(loc.room); });
-    if (currentSite?.room) rooms.add(currentSite.room);
+    const targetBlock = String(formData.block || '');
+    const targetFloor = String(formData.floor || '');
+    if (targetBlock && targetFloor) {
+      cameras.forEach(c => { if (String(c.block || '') === targetBlock && String(c.floor || '') === targetFloor && c.room) rooms.add(String(c.room)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && String(loc.floor || '') === targetFloor && loc.room) rooms.add(String(loc.room)); });
+      if (String(currentSite?.block || '') === targetBlock && String(currentSite?.floor || '') === targetFloor && currentSite?.room) rooms.add(String(currentSite.room));
+    } else {
+      cameras.forEach(c => { if (c.room) rooms.add(String(c.room)); });
+      allLocations.forEach(loc => { if (loc.room) rooms.add(String(loc.room)); });
+      if (currentSite?.room) rooms.add(String(currentSite.room));
+    }
     return Array.from(rooms).sort();
-  }, [cameras, currentSite, allLocations]);
+  }, [cameras, currentSite, allLocations, formData.block, formData.floor]);
 
   const uniqueBrands = useMemo(() => {
     const brands = new Set();
@@ -174,40 +217,13 @@ export default function Cameras() {
     return Array.from(brands).sort();
   }, [cameras, currentSite, allLocations]);
   
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({
-    block: '',
-    floor: '',
-    room: '',
-    deviceType: '',
-    ipAddress: '',
-    ipv4Gateway: '',
-    deviceSerialNumber: '', // This is the auto-generated ID (cameraId)
-    serialNumber: '', // This is the actual hardware manufacturer serial
-    subnetMask: '',
-    macAddress: '',
-    status: 'Online',
-    campusZone: 'INSIDE',
-    collegeName: '',
-    brand: '',
-    remarks: ''
-  });
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(15);
-
-  const [isAddingNewCollege, setIsAddingNewCollege] = useState(false);
-  const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
-  const [isAddingNewFloor, setIsAddingNewFloor] = useState(false);
-  const [isAddingNewRoom, setIsAddingNewRoom] = useState(false);
-  const [isAddingNewBrand, setIsAddingNewBrand] = useState(false);
 
   useEffect(() => {
     fetchCameras();
+    fetchNvrs();
     fetchSite();
     fetchAllLocations();
+    fetchOccupations();
     
     // Check for college filter in URL
     const collegeParam = searchParams.get('college');
@@ -224,9 +240,9 @@ export default function Cameras() {
       const prefix = type === 'Dome' ? 'CCTV/DE/' : 'CCTV/BT/';
       
       const existingNumbers = cameras
-        .filter(c => (c.cameraId || '').startsWith(prefix))
+        .filter(c => String(c.cameraId || '').startsWith(prefix))
         .map(c => {
-          const parts = (c.cameraId || '').split('/');
+          const parts = String(c.cameraId || '').split('/');
           const numStr = parts[parts.length - 1];
           return parseInt(numStr) || 0;
         });
@@ -247,15 +263,17 @@ export default function Cameras() {
     }
   };
 
+  const fetchNvrs = async () => {
+    try {
+      const res = await api.get('/cameras/nvrs/');
+      setNvrs(res.data);
+    } catch (err) {
+      console.error('Failed to fetch NVRs', err);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
-    if (name === 'brand' && value === 'NEW') {
-      setIsAddingNewBrand(true);
-      setFormData(prev => ({ ...prev, brand: '' }));
-      return;
-    }
-
     let newValue = value;
 
     // Helper for IP Formatting (Dots)
@@ -335,13 +353,22 @@ export default function Cameras() {
       serialNumber: formData.serialNumber || '', // Use the hardware serial field
       campusZone: formData.campusZone || 'INSIDE',
       brand: formData.brand || '',
+      dvrNvrDetails: formData.dvrNvrDetails || '',
       remarks: formData.remarks || ''
     };
 
-    // Only add cameraId if it's explicitly provided by user
-    if (formData.deviceSerialNumber && formData.deviceSerialNumber.trim() !== '') {
-      payload.cameraId = formData.deviceSerialNumber.trim();
+    // Auto-generate System Node ID if left blank
+    let finalCameraId = formData.deviceSerialNumber?.trim();
+    if (!finalCameraId) {
+      const type = formData.cameraType || 'Bullet';
+      const prefix = type === 'Dome' ? 'CCTV/DE/' : 'CCTV/BT/';
+      const existingNumbers = cameras
+        .filter(c => String(c.cameraId || '').startsWith(prefix))
+        .map(c => parseInt(String(c.cameraId || '').split('/').pop()) || 0);
+      const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+      finalCameraId = `${prefix}${nextNumber.toString().padStart(2, '0')}`;
     }
+    payload.cameraId = finalCameraId;
 
     try {
       setSubmitting(true);
@@ -353,12 +380,20 @@ export default function Cameras() {
         showNotification('New asset registered successfully');
       }
       
+      await ensureLocationExists({
+        collegeName: payload.collegeName,
+        block: payload.block,
+        floor: payload.floor,
+        room: payload.room,
+        brand: payload.brand
+      });
+      
       setShowModal(false);
       setEditingId(null);
       setFormData({
         block: '', floor: '', room: '', deviceType: '', ipAddress: '',
         ipv4Gateway: '', deviceSerialNumber: '', serialNumber: '', subnetMask: '', macAddress: '', status: 'Online',
-        collegeName: '', brand: '', remarks: ''
+        collegeName: '', brand: '', dvrNvrDetails: '', remarks: ''
       });
       fetchCameras();
     } catch (err) {
@@ -388,6 +423,7 @@ export default function Cameras() {
       campusZone: camera.campusZone || (isOutside(camera.siteName) ? 'OUTSIDE' : 'INSIDE'),
       collegeName: collegeName || '',
       brand: camera.brand || '',
+      dvrNvrDetails: camera.dvrNvrDetails || '',
       remarks: camera.remarks || ''
     });
     setEditingId(camera._id || camera.id);
@@ -417,11 +453,6 @@ export default function Cameras() {
     const floor = currentSite?.floor || '';
     const room = currentSite?.room || '';
 
-    setIsAddingNewCollege(college && !uniqueColleges.includes(college));
-    setIsAddingNewBlock(block && !uniqueBlocks.includes(block));
-    setIsAddingNewFloor(floor && !uniqueFloors.includes(floor));
-    setIsAddingNewRoom(room && !uniqueRooms.includes(room));
-
     setFormData({
       block: block,
       floor: floor,
@@ -436,6 +467,7 @@ export default function Cameras() {
       campusZone: 'INSIDE',
       collegeName: college, 
       brand: '', 
+      dvrNvrDetails: '',
       remarks: ''
     });
     setShowModal(true);
@@ -448,11 +480,11 @@ export default function Cameras() {
     // Filter cameras of the same type and extract numbers
     const existingNumbers = cameras
       .filter(c => {
-        if (type === 'Dome') return (c.cameraId || '').startsWith('CCTV/DE/');
-        return (c.cameraId || '').startsWith('CCTV/BT/');
+        if (type === 'Dome') return String(c.cameraId || '').startsWith('CCTV/DE/');
+        return String(c.cameraId || '').startsWith('CCTV/BT/');
       })
       .map(c => {
-        const parts = (c.cameraId || '').split('/');
+        const parts = String(c.cameraId || '').split('/');
         const numStr = parts[parts.length - 1];
         return parseInt(numStr) || 0;
       });
@@ -625,7 +657,7 @@ export default function Cameras() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
           <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main">
-            CCTV
+            Cameras
           </h1>
           <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">View and manage all hardware assets</p>
         </div>
@@ -694,7 +726,7 @@ export default function Cameras() {
                 <Map size={20} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-main mb-1">{stats.locations}</p>
+            <p className="text-3xl font-bold text-purple-600 mb-1">{stats.locations}</p>
             <p className="text-xs font-semibold text-secondary uppercase tracking-wider">Total Locations</p>
           </button>
 
@@ -704,7 +736,7 @@ export default function Cameras() {
                 <CctvIcon size={20} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-main mb-1">{stats.total}</p>
+            <p className="text-3xl font-bold text-blue-600 mb-1">{stats.total}</p>
             <p className="text-xs font-semibold text-secondary uppercase tracking-wider">Total Assets</p>
           </button>
 
@@ -714,7 +746,7 @@ export default function Cameras() {
                 <Building size={20} />
               </div>
             </div>
-            <p className={`text-3xl font-bold mb-1 ${filterType === 'INSIDE' ? 'text-blue-500' : 'text-main'}`}>{stats.inside}</p>
+            <p className="text-3xl font-bold mb-1 text-blue-500">{stats.inside}</p>
             <p className="text-xs font-semibold text-secondary uppercase tracking-wider">Inside Campus</p>
           </button>
 
@@ -724,7 +756,7 @@ export default function Cameras() {
                 <Map size={20} />
               </div>
             </div>
-            <p className={`text-3xl font-bold mb-1 ${filterType === 'OUTSIDE' ? 'text-amber-500' : 'text-main'}`}>{stats.outside}</p>
+            <p className="text-3xl font-bold mb-1 text-amber-500">{stats.outside}</p>
             <p className="text-xs font-semibold text-secondary uppercase tracking-wider">Outside Campus</p>
           </button>
         </div>
@@ -966,6 +998,21 @@ export default function Cameras() {
                       <div className="flex flex-col space-y-1">
                         <span className="text-xs font-black text-main uppercase tracking-tight">{camera.name || '—'}</span>
                         <span className="text-[9px] text-dim font-black uppercase tracking-widest">{camera.brand || 'VENDOR'}</span>
+                        {camera.dvrNvrDetails && (
+                          <div className="flex flex-wrap gap-1 mt-1 max-w-[150px]">
+                            {String(camera.dvrNvrDetails).split(',').filter(Boolean).map((nvr, idx) => {
+                              const nvrRaw = nvr.trim();
+                              const actualNvr = nvrs.find(n => n.nvrName === nvrRaw || String(n.sNo) === nvrRaw || String(n._id) === nvrRaw || String(n.id) === nvrRaw || String(n.serialNumber) === nvrRaw);
+                              const nvrName = actualNvr ? actualNvr.nvrName : nvrRaw;
+                              const displayText = nvrName.toUpperCase().startsWith('NVR') ? nvrName : `NVR: ${nvrName}`;
+                              return (
+                                <span key={idx} className="inline-flex items-center px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded-md text-[8px] font-black text-purple-400 uppercase tracking-widest w-fit">
+                                  {displayText}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="p-4">
@@ -1270,89 +1317,64 @@ export default function Cameras() {
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                       College / Institution Name
                     </label>
-                    {isAddingNewCollege ? (
-                      <div className="relative">
-                        <input required type="text" name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-teal-500/30 bg-panel shadow-inner" placeholder="Type new college name..." />
-                        <button type="button" onClick={() => setIsAddingNewCollege(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                      </div>
-                    ) : (
-                      <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                        <option value="">Select Existing College</option>
-                        {uniqueColleges.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    )}
+                    <ComboInput 
+                      required 
+                      name="collegeName" 
+                      value={formData.collegeName} 
+                      onChange={handleInputChange} 
+                      options={uniqueColleges} 
+                      placeholder="Select or Type College..." 
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Designation</label>
-                    {isAddingNewBrand ? (
-                      <div className="relative">
-                        <input required type="text" name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-teal-500/30 bg-panel shadow-inner" placeholder="Type new brand name..." />
-                        <button type="button" onClick={() => setIsAddingNewBrand(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                      </div>
-                    ) : (
-                      <select
-                        name="brand"
-                        value={formData.brand}
-                        onChange={handleInputChange}
-                        className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner font-bold text-white"
-                      >
-                        <option value="">Select Brand</option>
-                        {uniqueBrands.map(b => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                        <option value="NEW">+ Add New Brand</option>
-                      </select>
-                    )}
+                    <ComboInput 
+                      name="brand" 
+                      value={formData.brand} 
+                      onChange={handleInputChange} 
+                      options={uniqueBrands} 
+                      placeholder="Select or Type Brand..." 
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         Block
                       </label>
-                      {isAddingNewBlock ? (
-                        <div className="relative">
-                          <input required type="text" name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-blue-500/30 bg-panel shadow-inner" placeholder="Block name..." />
-                          <button type="button" onClick={() => setIsAddingNewBlock(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                          <option value="">Select Block</option>
-                          {uniqueBlocks.map(b => <option key={b} value={b}>{b}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        required 
+                        name="block" 
+                        value={formData.block} 
+                        onChange={handleInputChange} 
+                        options={uniqueBlocks} 
+                        placeholder="Block name..." 
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         Floor
                       </label>
-                      {isAddingNewFloor ? (
-                        <div className="relative">
-                          <input required type="text" name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-blue-500/30 bg-panel shadow-inner" placeholder="Floor level..." />
-                          <button type="button" onClick={() => setIsAddingNewFloor(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <select required name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                          <option value="">Select Floor</option>
-                          {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        required 
+                        name="floor" 
+                        value={formData.floor} 
+                        onChange={handleInputChange} 
+                        options={uniqueFloors} 
+                        placeholder="Floor level..." 
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                       Room / Specific Location
                     </label>
-                    {isAddingNewRoom ? (
-                      <div className="relative">
-                        <input type="text" name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-main bg-panel shadow-inner" placeholder="Type new room..." />
-                        <button type="button" onClick={() => setIsAddingNewRoom(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                      </div>
-                    ) : (
-                      <select name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                        <option value="">Select Existing Room</option>
-                        {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    )}
+                    <ComboInput 
+                      name="room" 
+                      value={formData.room} 
+                      onChange={handleInputChange} 
+                      options={uniqueRooms} 
+                      placeholder="Select or Type Room..." 
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Campus Zone</label>
@@ -1394,7 +1416,7 @@ export default function Cameras() {
                       System Node ID
                       <button type="button" onClick={generateSerialNumber} className="text-[9px] text-teal-600 font-black tracking-widest hover:text-teal-500 transition-colors uppercase">AUTO GENERATE</button>
                     </label>
-                    <input type="text" name="deviceSerialNumber" value={formData.deviceSerialNumber} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="CCTV/BT/01" />
+                    <input type="text" name="deviceSerialNumber" value={formData.deviceSerialNumber} readOnly className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner cursor-not-allowed opacity-80" placeholder="Auto-generated on save" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Manufacturer Serial Number</label>
@@ -1423,6 +1445,82 @@ export default function Cameras() {
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">MAC Interface</label>
                     <input type="text" name="macAddress" value={formData.macAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="00:1A:2B:3C:4D:5E" />
                   </div>
+                </div>
+                
+                <div className="mt-6 space-y-2 relative">
+                  <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1 flex justify-between">
+                    <span>Connected NVRs / Storage Servers</span>
+                    <span className="text-teal-500">{(String(formData.dvrNvrDetails || '').split(',').filter(Boolean).length)} Selected</span>
+                  </label>
+                  
+                  {/* Selected NVR Chips */}
+                  {(String(formData.dvrNvrDetails || '').split(',').filter(Boolean).length > 0) && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {String(formData.dvrNvrDetails || '').split(',').map(s => s.trim()).filter(Boolean).map(nvrName => (
+                        <div key={nvrName} className="flex items-center px-3 py-1.5 bg-teal-500/10 text-teal-400 border border-teal-500/30 rounded-xl text-xs font-bold shadow-[0_0_10px_rgba(20,184,166,0.1)]">
+                          <Server size={12} className="mr-2 opacity-70" />
+                          {nvrName}
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const updated = String(formData.dvrNvrDetails || '').split(',').map(s => s.trim()).filter(Boolean).filter(n => n !== nvrName);
+                              setFormData({...formData, dvrNvrDetails: updated.join(', ')});
+                            }} 
+                            className="ml-2 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Dropdown Trigger */}
+                  <div 
+                    onClick={() => setShowNvrDropdown(!showNvrDropdown)}
+                    className={`glass-input w-full p-4 text-sm bg-panel border-main cursor-pointer shadow-inner flex justify-between items-center transition-colors ${showNvrDropdown ? 'border-teal-500/50 text-white' : 'text-dim hover:text-white'}`}
+                  >
+                    <span>Click to assign an NVR...</span>
+                    <ChevronRight className={`transition-transform duration-300 ${showNvrDropdown ? 'rotate-90 text-teal-400' : ''}`} size={16} />
+                  </div>
+
+                  {/* Dropdown Menu */}
+                  {showNvrDropdown && (
+                    <div className="absolute z-50 mt-1 w-full bg-[#0f0f13] border border-white/10 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] max-h-48 overflow-y-auto custom-scrollbar">
+                      {nvrs.length === 0 ? (
+                        <div className="p-4 text-xs text-dim italic text-center">No NVRs registered yet.</div>
+                      ) : (
+                        nvrs.map(nvr => {
+                          const currentNvrs = String(formData.dvrNvrDetails || '').split(',').map(s => s.trim()).filter(Boolean);
+                          const isSelected = currentNvrs.includes(nvr.nvrName);
+                          return (
+                            <button
+                              key={nvr._id || nvr.id}
+                              type="button"
+                              onClick={() => {
+                                let updated = [...currentNvrs];
+                                if (isSelected) {
+                                  updated = updated.filter(name => name !== nvr.nvrName);
+                                } else {
+                                  updated.push(nvr.nvrName);
+                                }
+                                setFormData({...formData, dvrNvrDetails: updated.join(', ')});
+                              }}
+                              className={`w-full text-left px-4 py-3 text-xs font-bold transition-all flex items-center justify-between border-b border-white/5 last:border-0 ${
+                                isSelected ? 'bg-teal-500/10 text-teal-400' : 'text-secondary hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <div className="flex items-center">
+                                <Server size={14} className={`mr-2 ${isSelected ? 'text-teal-400' : 'text-dim'}`} />
+                                {nvr.nvrName} {nvr.ipAddress ? <span className="opacity-40 ml-1 text-[10px] font-mono font-normal">({nvr.ipAddress})</span> : ''}
+                              </div>
+                              {isSelected && <div className="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.8)]"></div>}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               

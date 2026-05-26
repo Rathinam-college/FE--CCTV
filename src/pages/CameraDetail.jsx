@@ -325,8 +325,10 @@ export default function CameraDetail() {
       <div className="hidden print-only-header">
         <div className="letter-branding text-black">Starlight Cyber Infrastructure</div>
         <div className="letter-sub text-black">Surveillance & Security Systems Protocol</div>
-        <div className="text-[10px] mt-4 font-bold text-black uppercase tracking-widest">
-          Generation Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+        <div className="report-title text-black hidden">OFFICIAL ASSET AUDIT REPORT</div>
+        <div className="text-[10px] mt-6 font-bold text-black uppercase tracking-widest text-left flex justify-between border-t border-black pt-2">
+          <span>Asset Designation: {camera.name} ({camera.cameraId || 'N/A'})</span>
+          <span>Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
         </div>
       </div>
 
@@ -443,10 +445,10 @@ export default function CameraDetail() {
       )}
 
       {/* Main Command Center Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 print:block">
         
         {/* Left Section: Core Intelligence */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 print:w-full">
           
           {editMode ? (
             <div className="glass-panel overflow-hidden border-amber-500/30 shadow-2xl animate-slide-up">
@@ -601,7 +603,7 @@ export default function CameraDetail() {
         </div>
 
         {/* Right Section: Administrative Hub */}
-        <div className="space-y-6">
+        <div className="space-y-6 no-print">
           
           {/* Quick Command Box */}
           <div className="glass-panel overflow-hidden border-white/10 shadow-xl flex flex-col bg-panel/30">
@@ -637,8 +639,8 @@ export default function CameraDetail() {
               </div>
               <h3 className="text-sm font-bold text-main tracking-wide uppercase">Status Transition</h3>
             </div>
-            <div className="p-5 grid grid-cols-3 gap-2">
-              {['Online', 'Offline', 'Maintenance'].map((s) => (
+            <div className="p-5 grid grid-cols-2 gap-2">
+              {['Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
                 <button
                   key={s}
                   onClick={() => handleStatusChange(s)}
@@ -750,23 +752,33 @@ export default function CameraDetail() {
               /* Formal Letterhead */
               .print-only-header {
                 display: block !important;
-                border-bottom: 2px solid #000 !important;
-                padding-bottom: 20px !important;
-                margin-bottom: 40px !important;
-                text-align: right;
+                border-bottom: 3px double #000 !important;
+                padding-bottom: 10px !important;
+                margin-bottom: 30px !important;
+                text-align: center;
               }
               .letter-branding {
-                font-family: 'Space Grotesk', sans-serif !important;
-                font-size: 24px !important;
+                font-family: 'Times New Roman', Times, serif !important;
+                font-size: 26px !important;
                 font-weight: 900 !important;
-                letter-spacing: -1px !important;
                 text-transform: uppercase !important;
+                color: #000 !important;
               }
               .letter-sub {
-                font-size: 10px !important;
-                font-weight: 700 !important;
+                font-family: 'Arial', sans-serif !important;
+                font-size: 12px !important;
+                font-weight: bold !important;
                 letter-spacing: 2px !important;
-                opacity: 0.6;
+                margin-top: 5px !important;
+                color: #333 !important;
+              }
+              .report-title {
+                display: block !important;
+                font-family: 'Arial', sans-serif !important;
+                font-size: 16px !important;
+                font-weight: bold !important;
+                margin-top: 15px !important;
+                text-decoration: underline !important;
               }
 
               /* Hide all UI controls */
@@ -783,48 +795,103 @@ export default function CameraDetail() {
                 background: white !important; 
                 box-shadow: none !important; 
                 color: black !important; 
-                margin-bottom: 40px !important; 
+                margin-bottom: 30px !important; 
                 padding: 0 !important; 
                 border-radius: 0 !important;
                 page-break-inside: avoid;
               }
               
               .glass-panel > div:first-child {
-                border-bottom: 1px solid #000 !important;
-                padding: 10px 0 !important;
-                margin-bottom: 20px !important;
-                text-align: left;
+                border-bottom: 2px solid #000 !important;
+                padding: 5px 0 !important;
+                margin-bottom: 15px !important;
+                background-color: transparent !important;
+                border-radius: 0 !important;
               }
               
-              .p-8 { padding: 0 !important; }
+              .glass-panel h3 {
+                font-size: 14px !important;
+                font-weight: 900 !important;
+                text-transform: uppercase !important;
+                color: #000 !important;
+              }
+              
+              .p-8 { padding: 20px !important; }
               
               .text-main, .text-dim, .text-blue-500, .text-secondary { 
                 color: #000 !important; 
               }
               
-              .border-blue-500\\/10 { 
+              .border-blue-500\\/10, .border-emerald-500\\/10, .border-purple-500\\/10 { 
                 border-color: #000 !important; 
-                margin-top: 30px !important;
-                margin-bottom: 15px !important;
+                margin-top: 20px !important;
+                margin-bottom: 10px !important;
+                border-top: 1px solid #000 !important;
               }
               
+              /* Section Headers */
+              .text-\\[10px\\].font-black.uppercase.tracking-\\[0\\.3em\\] {
+                font-size: 12px !important;
+                font-weight: 900 !important;
+                color: #000 !important;
+                text-decoration: underline !important;
+                letter-spacing: 1px !important;
+              }
+              
+              /* Intelligence Cards Grid */
+              .grid-cols-1.md\\:grid-cols-4 {
+                display: block !important;
+              }
+              
+              .glass-panel {
+                border-bottom: 1px solid #ddd !important;
+                padding: 12px 5px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+              }
+              
+              /* Detail Rows Grid */
+              .grid-cols-2.md\\:grid-cols-3 {
+                display: block !important;
+              }
+
+              /* Detail Row Formatting (Line by Line) */
+              .bg-panel\\/40 {
+                background: transparent !important;
+                border: none !important;
+                border-bottom: 1px solid #ddd !important;
+                padding: 12px 5px !important;
+                border-radius: 0 !important;
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                margin: 0 !important;
+              }
+              
+              .bg-panel\\/40:last-child {
+                border-bottom: 1px solid #ddd !important;
+              }
+              
+              .mb-1\\.5 { margin-bottom: 0 !important; }
+              
               /* Professional Spacing for 'Letter Type' */
-              .space-y-4 > * + * { margin-top: 12px !important; }
+              .space-y-12 > * { margin-bottom: 25px !important; }
               
               .text-dim { 
                 font-size: 11px !important;
                 text-transform: uppercase !important;
-                font-weight: 700 !important; 
-                opacity: 0.8; 
+                font-weight: 800 !important; 
+                color: #333 !important;
               }
-              .font-bold { font-weight: 700 !important; font-size: 13px !important; }
-              .font-mono { font-family: 'SFMono-Regular', Consolas, monospace !important; font-size: 12px !important; }
+              .font-bold { font-weight: 700 !important; font-size: 13px !important; color: #000 !important; }
+              .font-mono { font-family: 'SFMono-Regular', Consolas, monospace !important; font-size: 12px !important; color: #000 !important; }
               
               /* Official Footer */
               .print-only-footer {
                 display: block !important;
                 position: fixed;
-                bottom: 20mm;
+                bottom: 10mm;
                 left: 25mm;
                 right: 25mm;
                 border-top: 1px solid #ddd;
@@ -838,7 +905,7 @@ export default function CameraDetail() {
 
       {/* Official Footer (Visible in PDF only) */}
       <div className="hidden print-only-footer">
-        <p>© 2026 STARLIGHT CYBER | RATHINAM GROUP OF INSTITUTIONS | INFRASTRUCTURE AUDIT DIVISION</p>
+        <p>© 2026 STARLIGHT CYBER | RATHINAM GLOBAL UNIVERSITY | INFRASTRUCTURE AUDIT DIVISION</p>
         <p className="mt-1">This is a system-generated document. Unauthorized alteration is prohibited.</p>
       </div>
     </div>

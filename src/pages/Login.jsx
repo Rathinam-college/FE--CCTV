@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
-import { Eye, EyeOff, Shield, Lock, Mail, ArrowRight, Zap } from 'lucide-react';
-import loginImage from '../image/loginpage .png';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+
 import logo from '../image/logo.png';
+import bgImage from '../image/brlogin.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -22,137 +23,126 @@ export default function Login() {
     setError('');
     const success = await login(email, password);
     if (success) {
-      showNotification('Access Granted: System initialized');
+      showNotification('Authentication Successful', 'success');
       navigate('/dashboard');
     } else {
-      setError('Invalid cryptographic key (credentials)');
-      showNotification('Access Denied: Identity unverified', 'error');
+      setError('Invalid credentials provided. Please try again.');
+      showNotification('Authentication Failed', 'error');
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full relative flex items-center justify-center overflow-hidden bg-body">
-      {/* Background Orbs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-teal-500/5 rounded-full blur-[120px] pulse-glow"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-cyan-500/5 rounded-full blur-[120px] pulse-glow delay-1000"></div>
+    <div className="min-h-screen w-full relative flex items-center justify-center overflow-hidden font-sans">
+      
+      {/* Full-screen Background Image with subtle zoom animation */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-10000 scale-105"
+        style={{ backgroundImage: `url(${bgImage})` }}
+      ></div>
+      {/* Dark overlay for contrast */}
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[6px]"></div>
 
-      <div className="w-full max-w-[1200px] flex flex-col lg:flex-row items-center z-10 p-6 gap-20">
+      <div className="relative z-10 w-full max-w-md px-6 py-12 flex flex-col items-center">
         
-        {/* Branding Side */}
-        <div className="hidden lg:flex flex-1 flex-col items-start space-y-8 animate-fade-in">
-          <div className="flex items-center space-x-4">
-            <div className="bg-card p-2 rounded-2xl shadow-xl shadow-teal-500/10 border border-main">
-              <img src={logo} alt="Logo" className="h-12 w-auto" />
-            </div>
-            <div className="leading-none">
-              <h1 className="text-4xl font-['Space_Grotesk'] font-black tracking-tighter text-main">Rathinam <span className="text-teal-500 uppercase">cctv control</span></h1>
-              <p className="text-[10px] font-black text-secondary uppercase tracking-[0.4em] mt-2">Security & Infrastructure Intelligence</p>
-            </div>
-          </div>
+        {/* Premium Glassmorphic Login Card */}
+        <div className="w-full bg-white/90 backdrop-blur-2xl border border-white/50 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] rounded-[2rem] p-8 sm:p-10 flex flex-col items-center animate-fade-in-up">
           
-          <div className="relative group w-full">
-            <div className="absolute -inset-1 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-[2.5rem] blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
-            <div className="relative glass-panel overflow-hidden border-main bg-card shadow-2xl">
-              <img 
-                src={loginImage} 
-                alt="Branding" 
-                className="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-all duration-700 transform group-hover:scale-[1.01]"
-              />
-            </div>
+          {/* Logo Section properly scaled for wide aspect ratios */}
+          <div className="w-full flex justify-center mb-8">
+            <img 
+              src={logo} 
+              alt="Brand Logo" 
+              className="w-full max-w-[260px] h-auto object-contain drop-shadow-sm" 
+            />
           </div>
 
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center space-x-2 text-secondary text-xs font-bold uppercase tracking-widest">
-              <Shield size={16} className="text-emerald-500" />
-              <span>TLS 1.3 Secure</span>
-            </div>
-            <div className="flex items-center space-x-2 text-secondary text-xs font-bold uppercase tracking-widest">
-              <Zap size={16} className="text-cyan-500" />
-              <span>Edge Optimized</span>
-            </div>
+          <div className="w-full text-center mb-8">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">Login</h1>
+            <p className="text-slate-500 text-sm mt-1.5 font-medium">Please sign in to continue</p>
           </div>
-        </div>
 
-        {/* Login Form Side */}
-        <div className="w-full max-w-md animate-slide-up">
-          <div className="glass-panel p-10 bg-card border-main relative overflow-hidden group shadow-2xl">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-500 to-cyan-500"></div>
+          <form onSubmit={handleSubmit} className="space-y-5 w-full">
             
-            <div className="mb-10">
-              <h2 className="text-3xl font-['Space_Grotesk'] font-black text-main mb-2">Initialize Session</h2>
-              <p className="text-secondary text-xs font-bold uppercase tracking-widest">Provide administrative credentials</p>
+            <div className="space-y-2 relative group">
+              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider ml-1">Email</label>
+              <div className="relative w-full">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                  <Mail size={18} />
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 pl-11 pr-4 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm text-sm font-medium"
+                  placeholder="admin@example.com"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2 relative group">
+              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider ml-1">Password</label>
+              <div className="relative w-full">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                  <Lock size={18} />
+                </div>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 pl-11 pr-12 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm text-sm font-medium"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-blue-600 transition-colors"
+                >
+                  <div className="p-2 rounded-xl hover:bg-slate-50 transition-colors">
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </div>
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-teal-500 transition-colors" size={18} />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="glass-input w-full !pl-12 py-4 placeholder:text-secondary border-main focus:border-teal-500 bg-panel"
-                    placeholder="admin@rathinam.in"
-                    required
-                  />
-                </div>
+            {error && (
+              <div className="bg-red-50 text-red-600 p-3.5 rounded-2xl flex items-center space-x-3 border border-red-100 mt-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                <p className="text-xs font-bold">{error}</p>
               </div>
+            )}
 
-              <div className="space-y-2">
-                <div className="flex justify-between items-center ml-1">
-                  <label className="text-[10px] font-black text-dim uppercase tracking-widest">Access Key</label>
-                  <button type="button" className="text-[10px] font-black text-teal-500 uppercase tracking-widest hover:text-teal-400 transition-colors">Recovery</button>
-                </div>
-                <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-teal-500 transition-colors" size={18} />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="glass-input w-full !pl-12 py-4 placeholder:text-slate-400"
-                    placeholder="••••••••"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-600 transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </div>
-
-              {error && (
-                <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-2xl flex items-center space-x-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
-                  <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">{error}</p>
-                </div>
-              )}
-
+            <div className="pt-3">
               <button
                 type="submit"
                 disabled={isLoading}
-                className="neon-button w-full h-14 mt-4"
+                className="group relative w-full flex items-center justify-center py-4 px-6 border border-transparent text-sm font-bold rounded-2xl text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-900/20 transition-all duration-300 shadow-xl shadow-slate-900/20 hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
               >
                 {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Authenticating...</span>
+                  </div>
                 ) : (
-                  <span className="flex items-center">
-                    Authorize Access <ArrowRight size={16} className="ml-2 group-hover:translate-x-1 transition-transform" />
-                  </span>
+                  <span>Continue to Dashboard</span>
                 )}
               </button>
-            </form>
-            
-            <div className="mt-8 pt-8 border-t border-slate-100 text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Rathinam Institutions Security Portal v4.0</p>
             </div>
-          </div>
+          </form>
+          
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center">
+          <p className="text-xs text-white/50 font-medium tracking-wide">
+            Secured by enterprise-grade encryption
+          </p>
         </div>
 
       </div>
     </div>
   );
 }
+

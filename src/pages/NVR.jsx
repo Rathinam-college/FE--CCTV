@@ -6,12 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useSiteStore } from '../store/siteStore';
+import ComboInput from '../components/ComboInput';
 
 export default function NVR() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
-  const { currentSite, fetchSite, allLocations, fetchAllLocations } = useSiteStore();
+  const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   const [nvrs, setNvrs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Storage:EDIT');
@@ -28,6 +29,7 @@ export default function NVR() {
     floor: '',
     room: '',
     brand: '',
+    model: '',
     hardDisk: '',
     storageList: [{ size: '', unit: 'TB' }],
     channel: '',
@@ -35,15 +37,11 @@ export default function NVR() {
     status: 'Online'
   });
 
-  const [isAddingNewCollege, setIsAddingNewCollege] = useState(false);
-  const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
-  const [isAddingNewFloor, setIsAddingNewFloor] = useState(false);
-  const [isAddingNewRoom, setIsAddingNewRoom] = useState(false);
-  const [isAddingNewBrand, setIsAddingNewBrand] = useState(false);
 
   useEffect(() => {
     fetchNVRs();
     fetchAllLocations();
+    fetchOccupations();
   }, []);
 
   useEffect(() => {
@@ -74,11 +72,12 @@ export default function NVR() {
 
   const uniqueColleges = useMemo(() => {
     const colleges = new Set();
+    if (occupations) occupations.forEach(o => colleges.add(o.name));
     nvrs.forEach(n => { if (n.collegeName) colleges.add(n.collegeName); });
     allLocations.forEach(loc => { if (loc.collegeName) colleges.add(loc.collegeName); });
     if (currentSite?.collegeName) colleges.add(currentSite.collegeName);
     return Array.from(colleges).sort();
-  }, [nvrs, currentSite, allLocations]);
+  }, [occupations, nvrs, currentSite, allLocations]);
 
   const uniqueBlocks = useMemo(() => {
     const blocks = new Set();
@@ -90,19 +89,34 @@ export default function NVR() {
 
   const uniqueFloors = useMemo(() => {
     const floors = new Set();
-    nvrs.forEach(n => { if (n.floor) floors.add(n.floor); });
-    allLocations.forEach(loc => { if (loc.floor) floors.add(loc.floor); });
-    if (currentSite?.floor) floors.add(currentSite.floor);
+    const targetBlock = String(formData.block || '');
+    if (targetBlock) {
+      nvrs.forEach(n => { if (String(n.block || '') === targetBlock && n.floor) floors.add(String(n.floor)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && loc.floor) floors.add(String(loc.floor)); });
+      if (String(currentSite?.block || '') === targetBlock && currentSite?.floor) floors.add(String(currentSite.floor));
+    } else {
+      nvrs.forEach(n => { if (n.floor) floors.add(String(n.floor)); });
+      allLocations.forEach(loc => { if (loc.floor) floors.add(String(loc.floor)); });
+      if (currentSite?.floor) floors.add(String(currentSite.floor));
+    }
     return Array.from(floors).sort();
-  }, [nvrs, currentSite, allLocations]);
+  }, [nvrs, currentSite, allLocations, formData.block]);
 
   const uniqueRooms = useMemo(() => {
     const rooms = new Set();
-    nvrs.forEach(n => { if (n.room) rooms.add(n.room); });
-    allLocations.forEach(loc => { if (loc.room) rooms.add(loc.room); });
-    if (currentSite?.room) rooms.add(currentSite.room);
+    const targetBlock = String(formData.block || '');
+    const targetFloor = String(formData.floor || '');
+    if (targetBlock && targetFloor) {
+      nvrs.forEach(n => { if (String(n.block || '') === targetBlock && String(n.floor || '') === targetFloor && n.room) rooms.add(String(n.room)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && String(loc.floor || '') === targetFloor && loc.room) rooms.add(String(loc.room)); });
+      if (String(currentSite?.block || '') === targetBlock && String(currentSite?.floor || '') === targetFloor && currentSite?.room) rooms.add(String(currentSite.room));
+    } else {
+      nvrs.forEach(n => { if (n.room) rooms.add(String(n.room)); });
+      allLocations.forEach(loc => { if (loc.room) rooms.add(String(loc.room)); });
+      if (currentSite?.room) rooms.add(String(currentSite.room));
+    }
     return Array.from(rooms).sort();
-  }, [nvrs, currentSite, allLocations]);
+  }, [nvrs, currentSite, allLocations, formData.block, formData.floor]);
 
   const uniqueBrands = useMemo(() => {
     const brands = new Set();
@@ -117,11 +131,6 @@ export default function NVR() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    if (name === 'brand' && value === 'NEW') {
-      setIsAddingNewBrand(true);
-      setFormData(prev => ({ ...prev, brand: '' }));
-      return;
-    }
 
     let newValue = value;
 
@@ -148,7 +157,6 @@ export default function NVR() {
         );
         if (matchingLoc && matchingLoc.brand) {
           nextData.brand = matchingLoc.brand;
-          setIsAddingNewBrand(false);
         }
       }
       return nextData;
@@ -182,16 +190,20 @@ export default function NVR() {
         showNotification('New NVR asset registered');
       }
       
+      await ensureLocationExists({
+        collegeName: payload.collegeName,
+        block: payload.block,
+        floor: payload.floor,
+        room: payload.room,
+        brand: payload.brand
+      });
+      
       setShowModal(false);
       setEditingId(null);
       setFormData({ 
         sNo: '', ipAddress: '', nvrName: '', collegeName: '', block: '', floor: '', room: '', 
-        brand: '', hardDisk: '', storageList: [{ size: '', unit: 'TB' }], channel: '', serialNumber: '', status: 'Online' 
+        brand: '', model: '', hardDisk: '', storageList: [{ size: '', unit: 'TB' }], channel: '', serialNumber: '', status: 'Online' 
       });
-      setIsAddingNewCollege(false);
-      setIsAddingNewBlock(false);
-      setIsAddingNewFloor(false);
-      setIsAddingNewRoom(false);
       fetchNVRs();
     } catch (err) {
       console.error(err);
@@ -208,14 +220,10 @@ export default function NVR() {
     const floor = currentSite?.floor || '';
     const room = currentSite?.room || '';
 
-    setIsAddingNewCollege(college && !uniqueColleges.includes(college));
-    setIsAddingNewBlock(block && !uniqueBlocks.includes(block));
-    setIsAddingNewFloor(floor && !uniqueFloors.includes(floor));
-    setIsAddingNewRoom(room && !uniqueRooms.includes(room));
 
     setFormData({ 
       sNo: '', ipAddress: '', nvrName: '', collegeName: college, block: block, floor: floor, room: room, 
-      brand: '', hardDisk: '', storageList: [{ size: '', unit: 'TB' }], channel: '', serialNumber: '', status: 'Online' 
+      brand: '', model: '', hardDisk: '', storageList: [{ size: '', unit: 'TB' }], channel: '', serialNumber: '', status: 'Online' 
     });
     setShowModal(true);
   };
@@ -271,6 +279,7 @@ export default function NVR() {
       floor: nvr.floor || '',
       room: nvr.room || '',
       brand: nvr.brand || '',
+      model: nvr.model || '',
       hardDisk: nvr.hardDisk || '',
       storageList: nvr.hardDisk ? nvr.hardDisk.split('+').map(s => {
         const match = s.trim().match(/^(\d+)\s*(TB|GB)$/i);
@@ -348,14 +357,15 @@ export default function NVR() {
       (nvr.block || '').toLowerCase().includes(q) ||
       (nvr.room || '').toLowerCase().includes(q) ||
       (nvr.ipAddress || '').toLowerCase().includes(q) ||
-      (nvr.brand || '').toLowerCase().includes(q)
+      (nvr.brand || '').toLowerCase().includes(q) ||
+      (nvr.model || '').toLowerCase().includes(q)
     );
   });
 
   const exportToExcel = () => {
     const headers = [
-      'S.No', 'Node Name', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Brand', 
-      'Hard Disk', 'Channels', 'Serial Number', 'Status'
+      'S.No', 'Node Name', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Brand', 'Model',
+      'Hard Disk', 'Channels', 'Asset Number', 'Status'
     ];
 
     const escapeCSV = (val) => {
@@ -376,6 +386,7 @@ export default function NVR() {
       escapeCSV(nvr.floor || 'N/A'),
       escapeCSV(nvr.room || 'N/A'),
       escapeCSV(nvr.brand || 'N/A'),
+      escapeCSV(nvr.model || 'N/A'),
       escapeCSV(nvr.hardDisk || 'N/A'),
       escapeCSV(nvr.channel || 'N/A'),
       escapeCSV(nvr.serialNumber || 'N/A'),
@@ -414,7 +425,7 @@ export default function NVR() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
         <div>
           <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main">
-            NVR Units
+            NVR
           </h1>
           <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Manage network storage and recording nodes</p>
         </div>
@@ -444,7 +455,7 @@ export default function NVR() {
             <Server size={24} />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-main">{stats.total}</h3>
+            <h3 className="text-2xl font-bold text-indigo-400">{stats.total}</h3>
             <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Total Assets</p>
           </div>
         </div>
@@ -454,7 +465,7 @@ export default function NVR() {
             <ShieldCheck size={24} />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-main">{stats.online}</h3>
+            <h3 className="text-2xl font-bold text-emerald-400">{stats.online}</h3>
             <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Online NVRs</p>
           </div>
         </div>
@@ -464,7 +475,7 @@ export default function NVR() {
             <ShieldAlert size={24} />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-main">{stats.offline}</h3>
+            <h3 className="text-2xl font-bold text-orange-400">{stats.offline}</h3>
             <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Offline NVRs</p>
           </div>
         </div>
@@ -511,7 +522,7 @@ export default function NVR() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Deep search by NVR Name, Serial, Location, Company or IP..."
+              placeholder="Deep search by NVR Name, Asset Number, Location, Company or IP..."
               className="glass-input w-full !pl-12 pr-4 py-2.5 text-sm placeholder:text-slate-400"
             />
           </div>
@@ -526,7 +537,7 @@ export default function NVR() {
             <thead>
               <tr className="bg-panel border-b border-main">
                 <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">S NO</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Serial Number</th>
+                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Asset Number</th>
                 <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Info</th>
                 <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Location & Brand</th>
                 <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Specs (Disk/Chan)</th>
@@ -572,7 +583,7 @@ export default function NVR() {
                         {nvr.collegeName || '—'}
                       </div>
                       <div className="text-[10px] text-indigo-400 font-bold pl-5">
-                        {nvr.brand || '—'}
+                        {nvr.brand || '—'} {nvr.model ? `(${nvr.model})` : ''}
                       </div>
                     </div>
                   </td>
@@ -659,7 +670,7 @@ export default function NVR() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Serial Number</label>
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">S.No</label>
                       <input type="text" name="sNo" value={formData.sNo} onChange={handleInputChange} className="glass-input w-full p-4 text-sm bg-panel border-main shadow-inner" placeholder="e.g. 1" />
                     </div>
                     <div className="space-y-2">
@@ -679,17 +690,14 @@ export default function NVR() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         College / Institution
                       </label>
-                      {isAddingNewCollege ? (
-                        <div className="relative">
-                          <input required type="text" name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-teal-500/30 bg-panel shadow-inner" placeholder="Type new college..." />
-                          <button type="button" onClick={() => setIsAddingNewCollege(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                          <option value="">Select Existing College</option>
-                          {uniqueColleges.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        required 
+                        name="collegeName" 
+                        value={formData.collegeName} 
+                        onChange={handleInputChange} 
+                        options={uniqueColleges} 
+                        placeholder="Select or Type College..." 
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -697,34 +705,28 @@ export default function NVR() {
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Block
                         </label>
-                        {isAddingNewBlock ? (
-                          <div className="relative">
-                            <input required type="text" name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-blue-500/30 bg-panel shadow-inner" placeholder="Block name..." />
-                            <button type="button" onClick={() => setIsAddingNewBlock(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                          </div>
-                        ) : (
-                          <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                            <option value="">Select Block</option>
-                            {uniqueBlocks.map(b => <option key={b} value={b}>{b}</option>)}
-                          </select>
-                        )}
+                        <ComboInput 
+                          required 
+                          name="block" 
+                          value={formData.block} 
+                          onChange={handleInputChange} 
+                          options={uniqueBlocks} 
+                          placeholder="Block name..." 
+                        />
                       </div>
 
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Floor Level
                         </label>
-                        {isAddingNewFloor ? (
-                          <div className="relative">
-                            <input required type="text" name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-blue-500/30 bg-panel shadow-inner" placeholder="Floor level..." />
-                            <button type="button" onClick={() => setIsAddingNewFloor(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                          </div>
-                        ) : (
-                          <select required name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                            <option value="">Select Floor</option>
-                            {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
-                          </select>
-                        )}
+                        <ComboInput 
+                          required 
+                          name="floor" 
+                          value={formData.floor} 
+                          onChange={handleInputChange} 
+                          options={uniqueFloors} 
+                          placeholder="Floor level..." 
+                        />
                       </div>
                     </div>
 
@@ -732,17 +734,13 @@ export default function NVR() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         Room / Specific Location
                       </label>
-                      {isAddingNewRoom ? (
-                        <div className="relative">
-                          <input required type="text" name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-main bg-panel shadow-inner" placeholder="Type new room..." />
-                          <button type="button" onClick={() => setIsAddingNewRoom(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <select required name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                          <option value="">Select Room</option>
-                          {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        name="room" 
+                        value={formData.room} 
+                        onChange={handleInputChange} 
+                        options={uniqueRooms} 
+                        placeholder="Select or Type Room..." 
+                      />
                     </div>
                   </div>
                 </div>
@@ -751,20 +749,28 @@ export default function NVR() {
                 <div className="space-y-6">
                   <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Hardware & Vendor</h3>
                   
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Designation</label>
-                    {isAddingNewBrand ? (
-                      <div className="relative">
-                        <input required type="text" name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-teal-500/30 bg-panel shadow-inner" placeholder="Type new brand..." />
-                        <button type="button" onClick={() => setIsAddingNewBrand(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main"><X size={16} /></button>
-                      </div>
-                    ) : (
-                      <select name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner font-bold text-white">
-                        <option value="">Select Brand</option>
-                        {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
-                        <option value="NEW">+ Add New Brand</option>
-                      </select>
-                    )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Designation</label>
+                      <ComboInput 
+                        name="brand" 
+                        value={formData.brand} 
+                        onChange={handleInputChange} 
+                        options={uniqueBrands} 
+                        placeholder="Select or Type Brand..." 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Model Number</label>
+                      <input 
+                        type="text" 
+                        name="model" 
+                        value={formData.model} 
+                        onChange={handleInputChange} 
+                        className="glass-input w-full p-4 text-sm bg-panel border-main shadow-inner" 
+                        placeholder="e.g. DS-7616NI-K2" 
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-4">
@@ -818,7 +824,7 @@ export default function NVR() {
 
                   <div className="space-y-2">
                     <div className="flex justify-between items-center ml-1">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Serial Number</label>
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Asset Number</label>
                     </div>
                     <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="CCTV/NVR/01" />
                   </div>

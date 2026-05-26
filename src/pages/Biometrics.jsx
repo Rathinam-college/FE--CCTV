@@ -6,12 +6,13 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } 
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useSiteStore } from '../store/siteStore';
+import ComboInput from '../components/ComboInput';
 
 export default function Biometrics() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
-  const { currentSite, fetchSite, allLocations, fetchAllLocations } = useSiteStore();
+  const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   const [devices, setDevices] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Identity:EDIT');
@@ -30,18 +31,15 @@ export default function Biometrics() {
     ipAddress: '',
     serverIp: '',
     serialNumber: '',
+    macAddress: '',
     status: 'Online'
   });
 
-  const [isAddingNewCollege, setIsAddingNewCollege] = useState(false);
-  const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
-  const [isAddingNewFloor, setIsAddingNewFloor] = useState(false);
-  const [isAddingNewRoom, setIsAddingNewRoom] = useState(false);
-  const [isAddingNewBrand, setIsAddingNewBrand] = useState(false);
 
   useEffect(() => {
     fetchDevices();
     fetchAllLocations();
+    fetchOccupations();
   }, []);
 
   useEffect(() => {
@@ -70,11 +68,12 @@ export default function Biometrics() {
 
   const uniqueColleges = useMemo(() => {
     const colleges = new Set();
+    if (occupations) occupations.forEach(o => colleges.add(o.name));
     devices.forEach(d => { if (d.collegeName) colleges.add(d.collegeName); });
     allLocations.forEach(loc => { if (loc.collegeName) colleges.add(loc.collegeName); });
     if (currentSite?.collegeName) colleges.add(currentSite.collegeName);
     return Array.from(colleges).sort();
-  }, [devices, currentSite, allLocations]);
+  }, [occupations, devices, currentSite, allLocations]);
 
   const uniqueBlocks = useMemo(() => {
     const blocks = new Set();
@@ -86,19 +85,34 @@ export default function Biometrics() {
 
   const uniqueFloors = useMemo(() => {
     const floors = new Set();
-    devices.forEach(d => { if (d.floor) floors.add(d.floor); });
-    allLocations.forEach(loc => { if (loc.floor) floors.add(loc.floor); });
-    if (currentSite?.floor) floors.add(currentSite.floor);
+    const targetBlock = String(formData.block || '');
+    if (targetBlock) {
+      devices.forEach(d => { if (String(d.block || '') === targetBlock && d.floor) floors.add(String(d.floor)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && loc.floor) floors.add(String(loc.floor)); });
+      if (String(currentSite?.block || '') === targetBlock && currentSite?.floor) floors.add(String(currentSite.floor));
+    } else {
+      devices.forEach(d => { if (d.floor) floors.add(String(d.floor)); });
+      allLocations.forEach(loc => { if (loc.floor) floors.add(String(loc.floor)); });
+      if (currentSite?.floor) floors.add(String(currentSite.floor));
+    }
     return Array.from(floors).sort();
-  }, [devices, currentSite, allLocations]);
+  }, [devices, currentSite, allLocations, formData.block]);
 
   const uniqueRooms = useMemo(() => {
     const rooms = new Set();
-    devices.forEach(d => { if (d.room) rooms.add(d.room); });
-    allLocations.forEach(loc => { if (loc.room) rooms.add(loc.room); });
-    if (currentSite?.room) rooms.add(currentSite.room);
+    const targetBlock = String(formData.block || '');
+    const targetFloor = String(formData.floor || '');
+    if (targetBlock && targetFloor) {
+      devices.forEach(d => { if (String(d.block || '') === targetBlock && String(d.floor || '') === targetFloor && d.room) rooms.add(String(d.room)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && String(loc.floor || '') === targetFloor && loc.room) rooms.add(String(loc.room)); });
+      if (String(currentSite?.block || '') === targetBlock && String(currentSite?.floor || '') === targetFloor && currentSite?.room) rooms.add(String(currentSite.room));
+    } else {
+      devices.forEach(d => { if (d.room) rooms.add(String(d.room)); });
+      allLocations.forEach(loc => { if (loc.room) rooms.add(String(loc.room)); });
+      if (currentSite?.room) rooms.add(String(currentSite.room));
+    }
     return Array.from(rooms).sort();
-  }, [devices, currentSite, allLocations]);
+  }, [devices, currentSite, allLocations, formData.block, formData.floor]);
 
   const uniqueBrands = useMemo(() => {
     const brands = new Set();
@@ -113,11 +127,6 @@ export default function Biometrics() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    if (name === 'brand' && value === 'NEW') {
-      setIsAddingNewBrand(true);
-      setFormData(prev => ({ ...prev, brand: '' }));
-      return;
-    }
 
     let newValue = value;
 
@@ -144,7 +153,6 @@ export default function Biometrics() {
         );
         if (matchingLoc && matchingLoc.brand) {
           nextData.brand = matchingLoc.brand;
-          setIsAddingNewBrand(false);
         }
       }
       return nextData;
@@ -160,14 +168,10 @@ export default function Biometrics() {
     const floor = currentSite?.floor || '';
     const room = currentSite?.room || '';
 
-    setIsAddingNewCollege(college && !uniqueColleges.includes(college));
-    setIsAddingNewBlock(block && !uniqueBlocks.includes(block));
-    setIsAddingNewFloor(floor && !uniqueFloors.includes(floor));
-    setIsAddingNewRoom(room && !uniqueRooms.includes(room));
 
     setFormData({ 
       name: '', collegeName: college, block: block, floor: floor, room: room, 
-      type: 'Fingerprint', brand: 'ZKTECO', ipAddress: '', serverIp: '', serialNumber: '', status: 'Online' 
+      type: 'Fingerprint', brand: 'ZKTECO', ipAddress: '', serverIp: '', serialNumber: '', macAddress: '', status: 'Online' 
     });
     setShowModal(true);
   };
@@ -175,23 +179,33 @@ export default function Biometrics() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const submitData = {
+        ...formData,
+        location: formData.room || formData.block || 'Unknown',
+      };
+
       if (editingId) {
-        await api.put(`/cameras/biometrics/${editingId}/`, formData);
+        await api.put(`/cameras/biometrics/${editingId}/`, submitData);
         showNotification('Identity device updated');
       } else {
-        await api.post('/cameras/biometrics/', formData);
+        await api.post('/cameras/biometrics/', submitData);
         showNotification('New identity device registered');
       }
+      
+      await ensureLocationExists({
+        collegeName: submitData.collegeName,
+        block: submitData.block,
+        floor: submitData.floor,
+        room: submitData.room,
+        brand: submitData.brand
+      });
+      
       setShowModal(false);
       setEditingId(null);
       setFormData({ 
         name: '', collegeName: '', block: '', floor: '', room: '', 
-        type: 'Fingerprint', brand: 'ZKTECO', ipAddress: '', serverIp: '', serialNumber: '', status: 'Online' 
+        type: 'Fingerprint', brand: 'ZKTECO', ipAddress: '', serverIp: '', serialNumber: '', macAddress: '', status: 'Online' 
       });
-      setIsAddingNewCollege(false);
-      setIsAddingNewBlock(false);
-      setIsAddingNewFloor(false);
-      setIsAddingNewRoom(false);
       fetchDevices();
     } catch (err) {
       console.error(err);
@@ -211,6 +225,7 @@ export default function Biometrics() {
       ipAddress: device.ipAddress,
       serverIp: device.serverIp || '',
       serialNumber: device.serialNumber,
+      macAddress: device.macAddress || '',
       status: device.status
     });
     setEditingId(device.id || device._id);
@@ -260,7 +275,8 @@ export default function Biometrics() {
       (d.block || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (d.room || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (d.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (d.ipAddress || '').toLowerCase().includes(searchQuery.toLowerCase())
+      (d.ipAddress || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (d.macAddress || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [devices, searchQuery]);
 
@@ -291,7 +307,7 @@ export default function Biometrics() {
   ];
 
   const exportToExcel = () => {
-    const headers = ['S.No', 'Serial Number', 'Usage', 'Brand', 'College', 'Block', 'Floor', 'Room', 'IP Address', 'Type', 'Status'];
+    const headers = ['S.No', 'Serial Number', 'Usage', 'Brand', 'College', 'Block', 'Floor', 'Room', 'IP Address', 'MAC Address', 'Type', 'Status'];
     
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
@@ -312,6 +328,7 @@ export default function Biometrics() {
       escapeCSV(d.floor || 'N/A'),
       escapeCSV(d.room || 'N/A'),
       escapeCSV(d.ipAddress || 'N/A'),
+      escapeCSV(d.macAddress || 'N/A'),
       escapeCSV(d.type || 'N/A'),
       escapeCSV(d.status || 'N/A')
     ]);
@@ -337,7 +354,7 @@ export default function Biometrics() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
         <div>
           <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main">
-            Biometric Nodes
+            Biometric
           </h1>
           <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Manage attendance hardware and biometric devices</p>
         </div>
@@ -368,7 +385,7 @@ export default function Biometrics() {
             <Fingerprint size={24} />
           </div>
           <div>
-            <h3 className="text-3xl font-black text-main tracking-tighter">{stats.total}</h3>
+            <h3 className="text-3xl font-black text-teal-600 tracking-tighter">{stats.total}</h3>
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em]">Total Nodes</p>
           </div>
         </div>
@@ -378,7 +395,7 @@ export default function Biometrics() {
             <Building size={24} />
           </div>
           <div>
-            <h3 className="text-3xl font-black text-main tracking-tighter">{stats.online}</h3>
+            <h3 className="text-3xl font-black text-emerald-600 tracking-tighter">{stats.online}</h3>
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em]">Operational</p>
           </div>
         </div>
@@ -388,7 +405,7 @@ export default function Biometrics() {
             <Users size={24} />
           </div>
           <div>
-            <h3 className="text-3xl font-black text-main tracking-tighter">{stats.offline}</h3>
+            <h3 className="text-3xl font-black text-orange-600 tracking-tighter">{stats.offline}</h3>
             <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em]">Down/Issues</p>
           </div>
         </div>
@@ -537,7 +554,10 @@ export default function Biometrics() {
                       </div>
                     </div>
                   </td>
-                  <td className="p-5 text-xs font-mono text-teal-600 font-bold">{device.ipAddress || '—'}</td>
+                  <td className="p-5 flex flex-col space-y-1">
+                    <span className="text-xs font-mono text-teal-600 font-bold">{device.ipAddress || '—'}</span>
+                    <span className="text-[9px] text-secondary font-mono tracking-widest uppercase">{device.macAddress || 'NO MAC'}</span>
+                  </td>
                   <td className="p-5">
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                       device.status === 'Online' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
@@ -611,17 +631,14 @@ export default function Biometrics() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         College / Institution
                       </label>
-                      {isAddingNewCollege ? (
-                        <div className="relative">
-                          <input required type="text" name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-teal-500/30 bg-panel shadow-inner" placeholder="Type new college..." />
-                          <button type="button" onClick={() => setIsAddingNewCollege(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                          <option value="">Select Existing College</option>
-                          {uniqueColleges.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        required 
+                        name="collegeName" 
+                        value={formData.collegeName} 
+                        onChange={handleInputChange} 
+                        options={uniqueColleges} 
+                        placeholder="Select or Type College..." 
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-6">
@@ -629,51 +646,41 @@ export default function Biometrics() {
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Block
                         </label>
-                        {isAddingNewBlock ? (
-                          <div className="relative">
-                            <input required type="text" name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-blue-500/30 bg-panel shadow-inner" placeholder="Block name..." />
-                            <button type="button" onClick={() => setIsAddingNewBlock(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                          </div>
-                        ) : (
-                          <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                            <option value="">Select Block</option>
-                            {uniqueBlocks.map(b => <option key={b} value={b}>{b}</option>)}
-                          </select>
-                        )}
+                        <ComboInput 
+                          required 
+                          name="block" 
+                          value={formData.block} 
+                          onChange={handleInputChange} 
+                          options={uniqueBlocks} 
+                          placeholder="Block name..." 
+                        />
                       </div>
 
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Floor Level
                         </label>
-                        {isAddingNewFloor ? (
-                          <div className="relative">
-                            <input required type="text" name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-blue-500/30 bg-panel shadow-inner" placeholder="Floor level..." />
-                            <button type="button" onClick={() => setIsAddingNewFloor(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                          </div>
-                        ) : (
-                          <select required name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                            <option value="">Select Floor</option>
-                            {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
-                          </select>
-                        )}
+                        <ComboInput 
+                          required 
+                          name="floor" 
+                          value={formData.floor} 
+                          onChange={handleInputChange} 
+                          options={uniqueFloors} 
+                          placeholder="Floor level..." 
+                        />
                       </div>
                     </div>
                      <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         Room / Specific Location
                       </label>
-                      {isAddingNewRoom ? (
-                        <div className="relative">
-                          <input required type="text" name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-main bg-panel shadow-inner" placeholder="Type new room..." />
-                          <button type="button" onClick={() => setIsAddingNewRoom(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main transition-all"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <select required name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner">
-                          <option value="">Select Room</option>
-                          {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        name="room" 
+                        value={formData.room} 
+                        onChange={handleInputChange} 
+                        options={uniqueRooms} 
+                        placeholder="Select or Type Room..." 
+                      />
                     </div>
                   </div>
                 </div>
@@ -685,18 +692,13 @@ export default function Biometrics() {
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Name</label>
-                      {isAddingNewBrand ? (
-                        <div className="relative">
-                          <input required type="text" name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-4 text-sm border-teal-500/30 bg-panel shadow-inner" placeholder="Type new brand..." />
-                          <button type="button" onClick={() => setIsAddingNewBrand(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-main"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <select name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-4 text-sm cursor-pointer bg-panel border-main shadow-inner font-bold text-white">
-                          <option value="">Select Brand</option>
-                          {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
-                          <option value="NEW">+ Add New Brand</option>
-                        </select>
-                      )}
+                      <ComboInput 
+                        name="brand" 
+                        value={formData.brand} 
+                        onChange={handleInputChange} 
+                        options={uniqueBrands} 
+                        placeholder="Select or Type Brand..." 
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Device IP Protocol</label>
@@ -708,11 +710,19 @@ export default function Biometrics() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center ml-1">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Serial Number</label>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center ml-1">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Serial Number</label>
+                      </div>
+                      <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="BIO/01" />
                     </div>
-                    <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="BIO/01" />
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center ml-1">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest">MAC Address</label>
+                      </div>
+                      <input type="text" name="macAddress" value={formData.macAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="00:1A:2B:3C:4D:5E" />
+                    </div>
                   </div>
 
                   <div className="space-y-4 pt-2">

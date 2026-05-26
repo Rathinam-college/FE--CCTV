@@ -77,7 +77,7 @@ export default function DeviceHistory() {
       let endpoint = '';
       switch (type) {
         case 'camera': endpoint = `/cameras/${id}/`; break;
-        case 'nvr': endpoint = `/cameras/nvr/${id}/`; break;
+        case 'nvr': endpoint = `/cameras/nvrs/${id}/`; break;
         case 'biometric': endpoint = `/cameras/biometrics/${id}/`; break;
         case 'switch': endpoint = `/cameras/switches/${id}/`; break;
         default: throw new Error('Invalid device type');

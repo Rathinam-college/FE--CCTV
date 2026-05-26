@@ -8,15 +8,16 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { useSiteStore } from '../store/siteStore';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
-import { useSiteStore } from '../store/siteStore';
+import ComboInput from '../components/ComboInput';
 
 export default function NetworkSwitches() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
-  const { currentSite, fetchSite, allLocations, fetchAllLocations } = useSiteStore();
+  const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   const [switches, setSwitches] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -39,15 +40,11 @@ export default function NetworkSwitches() {
     status: 'Online'
   });
 
-  const [isAddingNewCollege, setIsAddingNewCollege] = useState(false);
-  const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
-  const [isAddingNewFloor, setIsAddingNewFloor] = useState(false);
-  const [isAddingNewRoom, setIsAddingNewRoom] = useState(false);
-  const [isAddingNewBrand, setIsAddingNewBrand] = useState(false);
 
   useEffect(() => {
     fetchSwitches();
     fetchAllLocations();
+    fetchOccupations();
   }, []);
 
   useEffect(() => {
@@ -81,11 +78,12 @@ export default function NetworkSwitches() {
 
   const uniqueColleges = useMemo(() => {
     const colleges = new Set();
+    if (occupations) occupations.forEach(o => colleges.add(o.name));
     switches.forEach(s => { if (s.collegeName) colleges.add(s.collegeName); });
     allLocations.forEach(loc => { if (loc.collegeName) colleges.add(loc.collegeName); });
     if (currentSite?.collegeName) colleges.add(currentSite.collegeName);
     return Array.from(colleges).sort();
-  }, [switches, currentSite, allLocations]);
+  }, [occupations, switches, currentSite, allLocations]);
 
   const uniqueBlocks = useMemo(() => {
     const blocks = new Set();
@@ -97,19 +95,34 @@ export default function NetworkSwitches() {
 
   const uniqueFloors = useMemo(() => {
     const floors = new Set();
-    switches.forEach(s => { if (s.floor) floors.add(s.floor); });
-    allLocations.forEach(loc => { if (loc.floor) floors.add(loc.floor); });
-    if (currentSite?.floor) floors.add(currentSite.floor);
+    const targetBlock = String(formData.block || '');
+    if (targetBlock) {
+      switches.forEach(s => { if (String(s.block || '') === targetBlock && s.floor) floors.add(String(s.floor)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && loc.floor) floors.add(String(loc.floor)); });
+      if (String(currentSite?.block || '') === targetBlock && currentSite?.floor) floors.add(String(currentSite.floor));
+    } else {
+      switches.forEach(s => { if (s.floor) floors.add(String(s.floor)); });
+      allLocations.forEach(loc => { if (loc.floor) floors.add(String(loc.floor)); });
+      if (currentSite?.floor) floors.add(String(currentSite.floor));
+    }
     return Array.from(floors).sort();
-  }, [switches, currentSite, allLocations]);
+  }, [switches, currentSite, allLocations, formData.block]);
 
   const uniqueRooms = useMemo(() => {
     const rooms = new Set();
-    switches.forEach(s => { if (s.room) rooms.add(s.room); });
-    allLocations.forEach(loc => { if (loc.room) rooms.add(loc.room); });
-    if (currentSite?.room) rooms.add(currentSite.room);
+    const targetBlock = String(formData.block || '');
+    const targetFloor = String(formData.floor || '');
+    if (targetBlock && targetFloor) {
+      switches.forEach(s => { if (String(s.block || '') === targetBlock && String(s.floor || '') === targetFloor && s.room) rooms.add(String(s.room)); });
+      allLocations.forEach(loc => { if (String(loc.block || '') === targetBlock && String(loc.floor || '') === targetFloor && loc.room) rooms.add(String(loc.room)); });
+      if (String(currentSite?.block || '') === targetBlock && String(currentSite?.floor || '') === targetFloor && currentSite?.room) rooms.add(String(currentSite.room));
+    } else {
+      switches.forEach(s => { if (s.room) rooms.add(String(s.room)); });
+      allLocations.forEach(loc => { if (loc.room) rooms.add(String(loc.room)); });
+      if (currentSite?.room) rooms.add(String(currentSite.room));
+    }
     return Array.from(rooms).sort();
-  }, [switches, currentSite, allLocations]);
+  }, [switches, currentSite, allLocations, formData.block, formData.floor]);
 
   const uniqueBrands = useMemo(() => {
     const brands = new Set();
@@ -124,11 +137,6 @@ export default function NetworkSwitches() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    if (name === 'brand' && value === 'NEW') {
-      setIsAddingNewBrand(true);
-      setFormData(prev => ({ ...prev, brand: '' }));
-      return;
-    }
 
     let newValue = value;
 
@@ -155,7 +163,6 @@ export default function NetworkSwitches() {
         );
         if (matchingLoc && matchingLoc.brand) {
           nextData.brand = matchingLoc.brand;
-          setIsAddingNewBrand(false);
         }
       }
       return nextData;
@@ -165,13 +172,26 @@ export default function NetworkSwitches() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const submitData = {
+        ...formData,
+        location: formData.room || formData.block || 'Unknown',
+      };
+
       if (editingId) {
-        await api.put(`/cameras/switches/${editingId}/`, formData);
-        showNotification('Switch updated successfully');
+        await api.put(`/cameras/switches/${editingId}/`, submitData);
+        showNotification('Network switch updated');
       } else {
-        await api.post('/cameras/switches/', formData);
+        await api.post('/cameras/switches/', submitData);
         showNotification('New switch registered successfully');
       }
+      
+      await ensureLocationExists({
+        collegeName: submitData.collegeName,
+        block: submitData.block,
+        floor: submitData.floor,
+        room: submitData.room,
+        brand: submitData.brand
+      });
       
       setShowModal(false);
       resetForm();
@@ -191,10 +211,6 @@ export default function NetworkSwitches() {
     const floor = currentSite?.floor || '';
     const room = currentSite?.room || '';
 
-    setIsAddingNewCollege(college && !uniqueColleges.includes(college));
-    setIsAddingNewBlock(block && !uniqueBlocks.includes(block));
-    setIsAddingNewFloor(floor && !uniqueFloors.includes(floor));
-    setIsAddingNewRoom(room && !uniqueRooms.includes(room));
 
     setFormData(prev => ({
       ...prev,
@@ -212,10 +228,6 @@ export default function NetworkSwitches() {
       name: '', ipAddress: '', collegeName: '', block: '', floor: '', room: '', brand: '',
       model: '', portCount: '', serialNumber: '', status: 'Online'
     });
-    setIsAddingNewCollege(false);
-    setIsAddingNewBlock(false);
-    setIsAddingNewFloor(false);
-    setIsAddingNewRoom(false);
   };
 
   const editSwitch = (sw) => {
@@ -603,17 +615,14 @@ export default function NetworkSwitches() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         College / Institution
                       </label>
-                      {isAddingNewCollege ? (
-                        <div className="relative">
-                          <input required type="text" name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm border-teal-500/30 bg-panel" placeholder="Type new college..." />
-                          <button type="button" onClick={() => setIsAddingNewCollege(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-main"><X size={14} /></button>
-                        </div>
-                      ) : (
-                        <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer bg-panel border-main">
-                          <option value="">Select Existing College</option>
-                          {uniqueColleges.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        required 
+                        name="collegeName" 
+                        value={formData.collegeName} 
+                        onChange={handleInputChange} 
+                        options={uniqueColleges} 
+                        placeholder="Select or Type College..." 
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -621,37 +630,28 @@ export default function NetworkSwitches() {
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Block
                         </label>
-                        {isAddingNewBlock ? (
-                          <div className="relative">
-                            <input required type="text" name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-3 text-sm border-blue-500/30" placeholder="Block name..." />
-                            <button type="button" onClick={() => setIsAddingNewBlock(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
-                          </div>
-                        ) : (
-                          <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer bg-panel border-main">
-                            <option value="">Select Block</option>
-                            {uniqueBlocks.map(b => <option key={b} value={b}>{b}</option>)}
-                          </select>
-                        )}
+                        <ComboInput 
+                          required 
+                          name="block" 
+                          value={formData.block} 
+                          onChange={handleInputChange} 
+                          options={uniqueBlocks} 
+                          placeholder="Block name..." 
+                        />
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1 flex justify-between">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Floor
-                          {!isAddingNewFloor && (
-                            <button type="button" onClick={() => setIsAddingNewFloor(true)} className="text-[9px] text-teal-600 hover:text-teal-500 transition-colors underline">NEW</button>
-                          )}
                         </label>
-                        {isAddingNewFloor ? (
-                          <div className="relative">
-                            <input required type="text" name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-3 text-sm border-blue-500/30" placeholder="Floor..." />
-                            <button type="button" onClick={() => setIsAddingNewFloor(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
-                          </div>
-                        ) : (
-                          <select required name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer bg-panel border-main">
-                            <option value="">Select Floor</option>
-                            {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
-                          </select>
-                        )}
+                        <ComboInput 
+                          required 
+                          name="floor" 
+                          value={formData.floor} 
+                          onChange={handleInputChange} 
+                          options={uniqueFloors} 
+                          placeholder="Floor..." 
+                        />
                       </div>
                     </div>
 
@@ -659,17 +659,13 @@ export default function NetworkSwitches() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         Room / specific location
                       </label>
-                      {isAddingNewRoom ? (
-                        <div className="relative">
-                          <input required type="text" name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-3 text-sm border-main bg-panel" placeholder="Type new room..." />
-                          <button type="button" onClick={() => setIsAddingNewRoom(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-main"><X size={14} /></button>
-                        </div>
-                      ) : (
-                        <select required name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer bg-panel border-main text-secondary">
-                          <option value="">Select Room</option>
-                          {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      )}
+                      <ComboInput 
+                        name="room" 
+                        value={formData.room} 
+                        onChange={handleInputChange} 
+                        options={uniqueRooms} 
+                        placeholder="Select or Type Room..." 
+                      />
                     </div>
                   </div>
                 </div>
@@ -680,8 +676,14 @@ export default function NetworkSwitches() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Name</label>
-                      <input type="text" name="brand" value={formData.brand} onChange={handleInputChange} className="glass-input w-full p-3 text-sm bg-panel border-main" placeholder="e.g. Cisco" />
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Network Brand</label>
+                      <ComboInput 
+                        name="brand" 
+                        value={formData.brand} 
+                        onChange={handleInputChange} 
+                        options={uniqueBrands} 
+                        placeholder="Select or Type Brand..." 
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Model</label>
