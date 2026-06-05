@@ -25,8 +25,24 @@ import {
 
 const getImageUrl = (path) => {
   if (!path) return '';
+  
+  // Remove internal docker/local backend hosts to force it through the Vite proxy
+  if (path.includes('backend:5000')) {
+    path = path.replace(/https?:\/\/backend:5000/, '');
+  } else if (path.includes('localhost:5000')) {
+    path = path.replace(/https?:\/\/localhost:5000/, '');
+  }
+  
   if (path.startsWith('http')) return path;
-  return path.startsWith('/') ? path : `/${path}`;
+  
+  const baseUrl = import.meta.env.BASE_URL || '/cctv/';
+  let cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  
+  if (cleanPath.startsWith('cctv/')) {
+    return `/${cleanPath}`;
+  }
+  
+  return `${baseUrl}${cleanPath}`;
 };
 
 const getFileName = (path) => {

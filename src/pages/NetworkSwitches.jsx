@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { 
-  Search, Filter, Plus, Server, Hash, Cpu, X, 
-  Edit2, Trash2, Building, Activity, ShieldCheck, 
+import {
+  Search, Filter, Plus, Server, Hash, Cpu, X,
+  Edit2, Trash2, Building, Activity, ShieldCheck,
   ShieldAlert, Download, Network, Database, Upload,
   Info, ChevronRight
 } from 'lucide-react';
@@ -11,24 +11,29 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } 
 import { useSiteStore } from '../store/siteStore';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import ComboInput from '../components/ComboInput';
 
 export default function NetworkSwitches() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   const [switches, setSwitches] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Network:EDIT');
-  
+
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     ipAddress: '',
+    ipv4Gateway: '',
+    subnetMask: '',
+    macAddress: '',
     collegeName: '',
     block: '',
     floor: '',
@@ -53,8 +58,8 @@ export default function NetworkSwitches() {
       const existingNumbers = switches
         .filter(s => (s.serialNumber || '').startsWith(prefix))
         .map(s => {
-            const parts = (s.serialNumber || '').split('/');
-            return parseInt(parts[parts.length - 1]) || 0;
+          const parts = (s.serialNumber || '').split('/');
+          return parseInt(parts[parts.length - 1]) || 0;
         });
       const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
       const formattedNumber = nextNumber.toString().padStart(2, '0');
@@ -138,24 +143,33 @@ export default function NetworkSwitches() {
     const { name, value } = e.target;
 
 
-    let newValue = value;
-
-    if (name === 'ipAddress') {
-      const cleaned = value.replace(/[^0-9.]/g, '');
+    const applyIPMask = (val) => {
+      const cleaned = val.replace(/[^0-9.]/g, '');
       const parts = cleaned.split('.');
-      if (parts[parts.length - 1].length === 3 && parts.length < 4 && !value.endsWith('.')) {
-        newValue = cleaned + '.';
-      } else {
-        newValue = cleaned;
+      if (parts[parts.length - 1].length === 3 && parts.length < 4 && !val.endsWith('.')) {
+        return cleaned + '.';
       }
+      return cleaned;
+    };
+
+    const applyMACMask = (val) => {
+      const cleaned = val.replace(/[^0-9A-Fa-f]/g, '')?.toUpperCase() || '';
+      const parts = cleaned.match(/.{1,2}/g) || [];
+      return parts.slice(0, 6).join(':');
+    };
+
+    if (['ipAddress', 'ipv4Gateway', 'subnetMask'].includes(name)) {
+      newValue = applyIPMask(value);
+    } else if (name === 'macAddress') {
+      newValue = applyMACMask(value);
     }
 
     setFormData(prev => {
       const nextData = { ...prev, [name]: newValue };
-      
+
       // Auto-populate brand if location is found in Master Registry
       if (['collegeName', 'block', 'floor', 'room'].includes(name)) {
-        const matchingLoc = allLocations.find(loc => 
+        const matchingLoc = allLocations.find(loc =>
           (loc.collegeName || '') === (name === 'collegeName' ? newValue : (prev.collegeName || '')) &&
           (loc.block || '') === (name === 'block' ? newValue : (prev.block || '')) &&
           (loc.floor || '') === (name === 'floor' ? newValue : (prev.floor || '')) &&
@@ -175,6 +189,7 @@ export default function NetworkSwitches() {
       const submitData = {
         ...formData,
         location: formData.room || formData.block || 'Unknown',
+        gateway: formData.ipv4Gateway || '',
       };
 
       if (editingId) {
@@ -184,7 +199,7 @@ export default function NetworkSwitches() {
         await api.post('/cameras/switches/', submitData);
         showNotification('New switch registered successfully');
       }
-      
+
       await ensureLocationExists({
         collegeName: submitData.collegeName,
         block: submitData.block,
@@ -192,7 +207,7 @@ export default function NetworkSwitches() {
         room: submitData.room,
         brand: submitData.brand
       });
-      
+
       setShowModal(false);
       resetForm();
       fetchSwitches();
@@ -225,7 +240,7 @@ export default function NetworkSwitches() {
   const resetForm = () => {
     setEditingId(null);
     setFormData({
-      name: '', ipAddress: '', collegeName: '', block: '', floor: '', room: '', brand: '',
+      name: '', ipAddress: '', ipv4Gateway: '', subnetMask: '', macAddress: '', collegeName: '', block: '', floor: '', room: '', brand: '',
       model: '', portCount: '', serialNumber: '', status: 'Online'
     });
   };
@@ -234,6 +249,9 @@ export default function NetworkSwitches() {
     setFormData({
       name: sw.name || '',
       ipAddress: sw.ipAddress || '',
+      ipv4Gateway: sw.gateway || '',
+      subnetMask: sw.subnetMask || '',
+      macAddress: sw.macAddress || '',
       collegeName: sw.collegeName || '',
       block: sw.block || '',
       floor: sw.floor || '',
@@ -249,16 +267,16 @@ export default function NetworkSwitches() {
   };
 
   const deleteSwitch = async (id) => {
-    if (window.confirm('WARNING: Are you sure you want to remove this network switch?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/cameras/switches/${id}/`);
         showNotification('Switch removed successfully');
         fetchSwitches();
       } catch (err) {
         console.error(err);
-        showNotification('Error deleting switch', 'error');
+        showNotification('Failed to remove switch', 'error');
       }
-    }
+    });
   };
 
   const filteredSwitches = useMemo(() => {
@@ -266,9 +284,9 @@ export default function NetworkSwitches() {
       const matchesSearch = !searchQuery || [
         sw.name, sw.ipAddress, sw.collegeName, sw.block, sw.room, sw.brand, sw.model, sw.serialNumber
       ].some(val => (val || '').toLowerCase().includes(searchQuery.toLowerCase()));
-      
+
       const matchesStatus = statusFilter === 'ALL' || sw.status === statusFilter;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [switches, searchQuery, statusFilter]);
@@ -311,7 +329,7 @@ export default function NetworkSwitches() {
 
   const exportToExcel = () => {
     const headers = [
-      'S.No', 'Switch Name', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Brand', 
+      'S.No', 'Switch Name', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Brand',
       'Model', 'Ports', 'Serial Number', 'Status'
     ];
 
@@ -339,11 +357,11 @@ export default function NetworkSwitches() {
       escapeCSV(sw.status || 'N/A')
     ]);
 
-    const csvContent = "\uFEFF" + [ 
-      headers.join(","), 
+    const csvContent = "\uFEFF" + [
+      headers.join(","),
       ...dataRows.map(row => row.join(","))
     ].join("\n");
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -363,17 +381,16 @@ export default function NetworkSwitches() {
             <Network className="mr-3 text-blue-400" size={32} />
             Switches
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Manage network switches and core infrastructure</p>
         </div>
         <div className="flex space-x-3">
           {canEdit && (
             <>
-              <input 
-                type="file" 
-                id="csv-upload" 
-                className="hidden" 
-                accept=".csv" 
-                onChange={handleFileUpload} 
+              <input
+                type="file"
+                id="csv-upload"
+                className="hidden"
+                accept=".csv"
+                onChange={handleFileUpload}
               />
               <label htmlFor="csv-upload" className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all shadow-lg cursor-pointer">
                 <Upload size={18} className="mr-2" /> Upload CSV
@@ -400,7 +417,7 @@ export default function NetworkSwitches() {
           </div>
           <div>
             <h3 className="text-2xl font-bold text-main">{stats.total}</h3>
-            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Total Units</p>
+            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Total </p>
           </div>
         </div>
 
@@ -410,7 +427,7 @@ export default function NetworkSwitches() {
           </div>
           <div>
             <h3 className="text-2xl font-bold text-main">{stats.online}</h3>
-            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Active Nodes</p>
+            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Active </p>
           </div>
         </div>
 
@@ -420,7 +437,7 @@ export default function NetworkSwitches() {
           </div>
           <div>
             <h3 className="text-2xl font-bold text-main">{stats.offline}</h3>
-            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Offline Nodes</p>
+            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Offline </p>
           </div>
         </div>
 
@@ -440,7 +457,7 @@ export default function NetworkSwitches() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <RechartsTooltip 
+                <RechartsTooltip
                   contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
                   itemStyle={{ color: '#fff' }}
                 />
@@ -475,11 +492,10 @@ export default function NetworkSwitches() {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  statusFilter === status 
-                    ? 'bg-blue-600 text-main shadow-lg' 
-                    : 'text-dim hover:text-main hover:bg-white/5'
-                }`}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${statusFilter === status
+                  ? 'bg-blue-600 text-main shadow-lg'
+                  : 'text-dim hover:text-main hover:bg-white/5'
+                  }`}
               >
                 {status}
               </button>
@@ -500,8 +516,8 @@ export default function NetworkSwitches() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredSwitches.map((sw) => (
-                <tr 
-                  key={sw._id || sw.id} 
+                <tr
+                  key={sw._id || sw.id}
                   className="hover:bg-white/5 transition-all group cursor-pointer"
                   onClick={(e) => {
                     if (!e.target.closest('button')) {
@@ -543,11 +559,10 @@ export default function NetworkSwitches() {
                     </span>
                   </td>
                   <td className="p-5">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
-                      sw.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' :
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${sw.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' :
                       sw.status === 'Offline' ? 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]' :
-                      'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                    }`}>
+                        'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                      }`}>
                       <span className={`w-1.5 h-1.5 rounded-full mr-2 ${sw.status === 'Online' ? 'bg-emerald-400' : sw.status === 'Offline' ? 'bg-red-400' : 'bg-orange-400'}`}></span>
                       {sw.status}
                     </span>
@@ -588,7 +603,7 @@ export default function NetworkSwitches() {
           <div className="bg-card rounded-[2.5rem] w-full max-w-3xl overflow-hidden border border-main shadow-2xl my-8">
             <div className="p-6 border-b border-main bg-panel flex justify-between items-center">
               <h2 className="text-xl font-bold text-main flex items-center">
-                <Network className="mr-3 text-teal-500" /> {editingId ? 'Edit Switch' : 'Register New Infrastructure'}
+                <Network className="mr-3 text-teal-500" /> {editingId ? 'Edit Switch' : 'Switch'}
               </h2>
               <button onClick={() => setShowModal(false)} className="text-secondary hover:text-main transition-colors">
                 <X size={24} />
@@ -598,15 +613,9 @@ export default function NetworkSwitches() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Column 1: Identity & Location */}
                 <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Switch Name</label>
-                      <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="glass-input w-full p-3 text-sm bg-panel border-main" placeholder="e.g. Core-Switch-01" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IP Address</label>
-                      <input required type="text" name="ipAddress" value={formData.ipAddress} onChange={handleInputChange} className="glass-input w-full p-3 text-sm font-mono text-teal-500 bg-panel border-main" placeholder="192.168.1.1" />
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Switch Name</label>
+                    <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="glass-input w-full p-3 text-sm bg-panel border-main" placeholder="e.g. Core-Switch-01" />
                   </div>
 
                   {/* Location Intelligence Fields */}
@@ -615,13 +624,13 @@ export default function NetworkSwitches() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         College / Institution
                       </label>
-                      <ComboInput 
-                        required 
-                        name="collegeName" 
-                        value={formData.collegeName} 
-                        onChange={handleInputChange} 
-                        options={uniqueColleges} 
-                        placeholder="Select or Type College..." 
+                      <ComboInput
+                        required
+                        name="collegeName"
+                        value={formData.collegeName}
+                        onChange={handleInputChange}
+                        options={uniqueColleges}
+                        placeholder="Select or Type College..."
                       />
                     </div>
 
@@ -630,13 +639,13 @@ export default function NetworkSwitches() {
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Block
                         </label>
-                        <ComboInput 
-                          required 
-                          name="block" 
-                          value={formData.block} 
-                          onChange={handleInputChange} 
-                          options={uniqueBlocks} 
-                          placeholder="Block name..." 
+                        <ComboInput
+                          required
+                          name="block"
+                          value={formData.block}
+                          onChange={handleInputChange}
+                          options={uniqueBlocks}
+                          placeholder="Block name..."
                         />
                       </div>
 
@@ -644,13 +653,13 @@ export default function NetworkSwitches() {
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Floor
                         </label>
-                        <ComboInput 
-                          required 
-                          name="floor" 
-                          value={formData.floor} 
-                          onChange={handleInputChange} 
-                          options={uniqueFloors} 
-                          placeholder="Floor..." 
+                        <ComboInput
+                          required
+                          name="floor"
+                          value={formData.floor}
+                          onChange={handleInputChange}
+                          options={uniqueFloors}
+                          placeholder="Floor..."
                         />
                       </div>
                     </div>
@@ -659,12 +668,12 @@ export default function NetworkSwitches() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         Room / specific location
                       </label>
-                      <ComboInput 
-                        name="room" 
-                        value={formData.room} 
-                        onChange={handleInputChange} 
-                        options={uniqueRooms} 
-                        placeholder="Select or Type Room..." 
+                      <ComboInput
+                        name="room"
+                        value={formData.room}
+                        onChange={handleInputChange}
+                        options={uniqueRooms}
+                        placeholder="Select or Type Room..."
                       />
                     </div>
                   </div>
@@ -672,17 +681,17 @@ export default function NetworkSwitches() {
 
                 {/* Column 2: Hardware & Status */}
                 <div className="space-y-5">
-                  <h3 className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] border-b border-main pb-2">Hardware & Vendor</h3>
-                  
+
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Network Brand</label>
-                      <ComboInput 
-                        name="brand" 
-                        value={formData.brand} 
-                        onChange={handleInputChange} 
-                        options={uniqueBrands} 
-                        placeholder="Select or Type Brand..." 
+                      <ComboInput
+                        name="brand"
+                        value={formData.brand}
+                        onChange={handleInputChange}
+                        options={uniqueBrands}
+                        placeholder="Select or Type Brand..."
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -712,12 +721,11 @@ export default function NetworkSwitches() {
                           <button
                             key={s}
                             type="button"
-                            onClick={() => setFormData({...formData, status: s})}
-                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg border transition-all ${
-                              formData.status === s 
-                                ? 'bg-teal-600/20 border-teal-500/50 text-teal-400 shadow-[0_0_10px_rgba(13,148,136,0.2)]' 
-                                : 'border-main text-secondary hover:text-main hover:bg-white/5'
-                            }`}
+                            onClick={() => setFormData({ ...formData, status: s })}
+                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg border transition-all ${formData.status === s
+                              ? 'bg-teal-600/20 border-teal-500/50 text-teal-400 shadow-[0_0_10px_rgba(13,148,136,0.2)]'
+                              : 'border-main text-secondary hover:text-main hover:bg-white/5'
+                              }`}
                           >
                             {s}
                           </button>
@@ -728,12 +736,35 @@ export default function NetworkSwitches() {
                 </div>
               </div>
 
+              {/* Network Information */}
+              <div className="space-y-6 mt-10">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IP Protocol</label>
+                    <input required type="text" name="ipAddress" value={formData.ipAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel shadow-inner" placeholder="192.168.1.100" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IPv4 Gateway</label>
+                    <input type="text" name="ipv4Gateway" value={formData.ipv4Gateway} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="192.168.1.1" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Subnet Mask</label>
+                    <input type="text" name="subnetMask" value={formData.subnetMask} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="255.255.255.0" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">MAC Interface</label>
+                    <input type="text" name="macAddress" value={formData.macAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="00:1A:2B:3C:4D:5E" />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end space-x-3 pt-8 border-t border-main">
                 <button type="button" onClick={() => setShowModal(false)} className="px-6 py-3 text-[10px] font-black tracking-widest text-secondary hover:text-main uppercase transition-colors">
                   Cancel
                 </button>
                 <button type="submit" className="neon-button min-w-[180px]">
-                  {editingId ? 'Save Changes' : 'Register Switch'}
+                  {editingId ? 'Update' : 'Save'}
                 </button>
               </div>
             </form>

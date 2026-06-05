@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { Building, Plus, Trash2, ShieldAlert, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSiteStore } from '../store/siteStore';
@@ -9,6 +10,7 @@ import { useSiteStore } from '../store/siteStore';
 export default function Occupation() {
   const { user } = useAuthStore();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   
   const [occupations, setOccupations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -137,15 +139,15 @@ export default function Occupation() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this occupation?')) return;
-    try {
-      await api.delete(`/cameras/occupations/${id}/`);
-      showNotification('Occupation deleted', 'success');
-      fetchOccupations();
-    } catch (err) {
-      console.error(err);
-      showNotification('Failed to delete occupation', 'error');
-    }
+    showConfirm('Are you sure?', async () => {
+      try {
+        await api.delete(`/cameras/occupations/${id}/`);
+        showNotification('Occupation deleted', 'success');
+        fetchOccupations();
+      } catch (error) {
+        showNotification('Failed to delete', 'error');
+      }
+    });
   };
 
   if (!canView) {
@@ -162,10 +164,10 @@ export default function Occupation() {
     <div className="min-h-[calc(100vh-80px)] -m-6 lg:-m-10 p-6 lg:p-10 bg-main text-main animate-fade-in relative">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-main pb-8 gap-6 mb-10">
         <div>
-          <h1 className="text-5xl font-black font-['Space_Grotesk'] tracking-tighter text-main italic">
-            INFRA BUILDER
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+            <Building className="mr-3 text-teal-500" size={28} />
+            Occupation
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.4em] mt-2">Manage Colleges and IT Companies</p>
         </div>
         {canEdit && (
           <button

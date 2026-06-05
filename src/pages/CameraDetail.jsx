@@ -323,8 +323,8 @@ export default function CameraDetail() {
     <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-12 relative">
       {/* Formal Letterhead (Visible in PDF only) */}
       <div className="hidden print-only-header">
-        <div className="letter-branding text-black">Starlight Cyber Infrastructure</div>
-        <div className="letter-sub text-black">Surveillance & Security Systems Protocol</div>
+        <div className="letter-branding text-black">RATHINAM GLOBAL UNIVERSITY</div>
+        <div className="letter-sub text-black">Asset Report</div>
         <div className="report-title text-black hidden">OFFICIAL ASSET AUDIT REPORT</div>
         <div className="text-[10px] mt-6 font-bold text-black uppercase tracking-widest text-left flex justify-between border-t border-black pt-2">
           <span>Asset Designation: {camera.name} ({camera.cameraId || 'N/A'})</span>
@@ -905,7 +905,7 @@ export default function CameraDetail() {
 
       {/* Official Footer (Visible in PDF only) */}
       <div className="hidden print-only-footer">
-        <p>© 2026 STARLIGHT CYBER | RATHINAM GLOBAL UNIVERSITY | INFRASTRUCTURE AUDIT DIVISION</p>
+        <p>© 2026 RATHINAM GLOBAL UNIVERSITY</p>
         <p className="mt-1">This is a system-generated document. Unauthorized alteration is prohibited.</p>
       </div>
     </div>

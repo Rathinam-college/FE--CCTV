@@ -36,7 +36,7 @@ export default function Launcher() {
     ...(user?.role === 'Super Admin' ? [
       { name: 'Maintenance', icon: Wrench, path: '/maintenance', color: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/50', desc: 'Hardware repair and ticket workflow' },
       { name: 'Routes', icon: MapPin, path: '/routes', color: 'from-blue-400 to-cyan-500', shadow: 'shadow-blue-500/50', desc: 'Campus site and patrol path mapping' },
-      { name: 'Network', icon: Zap, path: '/network-switches', color: 'from-cyan-400 to-blue-500', shadow: 'shadow-cyan-500/50', desc: 'Infrastructure and bandwidth monitoring' },
+      { name: 'Network', icon: Zap, path: '/network-switches', color: 'from-cyan-400 to-blue-500', shadow: 'shadow-cyan-500/50', desc: 'Network switch monitoring' },
       { name: 'Reports', icon: FileBarChart, path: '/reports', color: 'from-rose-400 to-red-500', shadow: 'shadow-rose-500/50', desc: 'Compliance and audit documentation' },
       { name: 'Onboarding', icon: LayoutGrid, path: '/onboarding', color: 'from-cyan-500 to-blue-600', shadow: 'shadow-cyan-500/50', desc: 'Batch register hardware and nodes' },
       { name: 'Unified Editor', icon: RefreshCw, path: '/asset-editor', color: 'from-indigo-500 to-purple-600', shadow: 'shadow-indigo-500/50', desc: 'Modify hardware across all modules' },
@@ -88,7 +88,7 @@ export default function Launcher() {
           </h1>
           <p className="text-lg text-secondary font-medium leading-relaxed mb-10 max-w-2xl mx-auto">
             Welcome back, <span className="text-main font-bold">{user?.name || 'Authorized Personnel'}</span>. 
-            Access your secure command center to oversee infrastructure and maintain campus safety.
+            Access your secure command center to oversee hardware and maintain campus safety.
           </p>
 
           {/* Search Box */}

@@ -84,7 +84,7 @@ export default function MoveHistory() {
             <MapPin className="mr-3 text-blue-400" size={32} />
             Asset Move History
           </h1>
-          <p className="text-sm text-dim mt-1">Track chronological relocation and network updates across all infrastructure</p>
+          <p className="text-sm text-dim mt-1">Track device relocation history</p>
         </div>
         <button 
           onClick={fetchMoveHistory} 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,6 +17,7 @@ export default function Tickets() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const [tickets, setTickets] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,18 +115,19 @@ export default function Tickets() {
 
   const handleDeleteStaff = async (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this staff member? This will remove them from all associated tickets.')) return;
-    try {
-      await api.delete(`/tickets/staff/${id}/`);
-      setStaff(staff.filter(s => (s.id || s._id) !== id));
-      setFormData(prev => ({
-        ...prev,
-        assignedStaff: prev.assignedStaff.filter(sId => sId !== id)
-      }));
-      showNotification('Staff member removed', 'success');
-    } catch (err) {
-      showNotification('Failed to delete staff member', 'error');
-    }
+    showConfirm('Are you sure?', async () => {
+      try {
+        await api.delete(`/tickets/staff/${id}/`);
+        setStaff(staff.filter(s => (s.id || s._id) !== id));
+        setFormData(prev => ({
+          ...prev,
+          assignedStaff: prev.assignedStaff.filter(sId => sId !== id)
+        }));
+        showNotification('Staff member removed', 'success');
+      } catch (err) {
+        showNotification('Failed to delete staff member', 'error');
+      }
+    });
   };
 
   const handleAddQuickStaff = async () => {
@@ -417,7 +420,7 @@ export default function Tickets() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this ticket?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/tickets/${id}/`);
         showNotification('Ticket deleted successfully');
@@ -426,7 +429,7 @@ export default function Tickets() {
         console.error('Error deleting ticket:', err);
         showNotification('Failed to delete ticket', 'error');
       }
-    }
+    });
   };
 
   const filteredTickets = Array.isArray(tickets) ? tickets.filter(ticket => {
@@ -516,7 +519,6 @@ export default function Tickets() {
             <Tag className="mr-3 text-blue-400" size={28} />
             Ticket Management
           </h1>
-          <p className="text-sm text-dim mt-1">Operational maintenance logging and tracking system</p>
         </div>
         <div className="flex items-center space-x-3 w-full md:w-auto">
 
@@ -564,7 +566,7 @@ export default function Tickets() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Active Pipeline</p>
+            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Active Ticket</p>
             <div className="flex items-end space-x-3">
               <span className="text-3xl font-black text-amber-500 leading-none">{summaryStats.open + summaryStats.inProgress}</span>
               <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Requires Action</span>
@@ -845,9 +847,8 @@ export default function Tickets() {
             <div className="p-8 border-b border-main bg-panel flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-2xl font-black text-main tracking-tight uppercase">
-                  {editingId ? 'Modify Ticket' : 'Initialize Ticket'}
+                  {editingId ? 'Modify Ticket' : 'Ticket'}
                 </h2>
-                <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Service Protocol Node</p>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-dim hover:text-main transition-all">
                 <X size={24} />
@@ -857,10 +858,7 @@ export default function Tickets() {
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-10">
               {/* Section 1: Location Intelligence */}
               <div className="space-y-4">
-                <div className="flex items-center space-x-3 mb-2">
-                  <MapPin size={16} className="text-teal-500" />
-                  <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Location Intelligence</h3>
-                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-panel/30 rounded-3xl border border-main">
                   <div>
                     <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">College</label>
@@ -922,10 +920,7 @@ export default function Tickets() {
               {/* Section 2: Logistical Metadata */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="space-y-6">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <Tag size={16} className="text-blue-500" />
-                    <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Logistics</h3>
-                  </div>
+
                   <div className="space-y-4">
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Operation Date</label>
@@ -934,7 +929,7 @@ export default function Tickets() {
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Asset Category</label>
                       <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-xs cursor-pointer bg-panel border-main">
-                        <option value="Assets">Assets / Infrastructure</option>
+                        <option value="Assets">Assets</option>
                         <option value="Storage">Storage Units</option>
                         <option value="Identity">Identity Access</option>
                         <option value="Network">Network Nodes</option>
@@ -949,10 +944,7 @@ export default function Tickets() {
                 </div>
 
                 <div className="md:col-span-2 space-y-6">
-                   <div className="flex items-center space-x-3 mb-2">
-                    <Briefcase size={16} className="text-amber-500" />
-                    <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Incident Details</h3>
-                  </div>
+
                   <div className="space-y-4">
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Site Administrator (Responsible)</label>
@@ -1122,13 +1114,13 @@ export default function Tickets() {
               </div>
 
               <div className="flex justify-end items-center space-x-6 mt-10 pt-8 border-t border-main">
-                <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black text-secondary hover:text-main uppercase tracking-[0.2em] transition-colors">Abort</button>
+                <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black text-secondary hover:text-main uppercase tracking-[0.2em] transition-colors">Cancel</button>
                 <button 
                   type="submit" 
                   disabled={submitting}
                   className="glass-button px-16 py-4"
                 >
-                  {submitting ? 'PROCESSING...' : (editingId ? 'COMMIT CHANGES' : 'INITIALIZE TICKET')}
+                  {submitting ? 'PROCESSING...' : (editingId ? 'Update' : 'Save')}
                 </button>
               </div>
             </form>

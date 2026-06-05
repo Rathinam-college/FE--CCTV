@@ -219,9 +219,24 @@ export default function Billing() {
 
   const getFullUrl = (path) => {
     if (!path) return null;
-    if (path.startsWith('http')) return path;
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    return `http://localhost:5000${cleanPath}`;
+    
+    try {
+      const url = new URL(path);
+      path = url.pathname;
+    } catch (e) {}
+    
+    let cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    
+    if (cleanPath.startsWith('cctv/')) {
+      cleanPath = cleanPath.substring(5);
+    }
+    
+    if (!cleanPath.startsWith('media/') && !cleanPath.startsWith('api/')) {
+      cleanPath = 'media/' + cleanPath;
+    }
+    
+    const baseUrl = import.meta.env.BASE_URL || '/cctv/';
+    return `${baseUrl}${cleanPath}`;
   };
 
   const getFileName = (path) => {
@@ -233,13 +248,12 @@ export default function Billing() {
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-white/10 pb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-main pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight flex items-center">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
             <FileText className="mr-3 text-blue-400" size={28} />
             Billing & PO Tracking
           </h1>
-          <p className="text-sm text-dim mt-1">Manage purchase orders and bills across all maintenance sectors</p>
         </div>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
@@ -248,12 +262,12 @@ export default function Billing() {
             placeholder="Search descriptions, numbers..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="glass-input w-full !pl-14 pr-4 py-2 text-sm bg-panel border-white/10 text-white"
+            className="glass-input w-full !pl-14 pr-4 py-2 text-sm bg-panel border-main text-main"
           />
         </div>
       </div>
 
-      <div className="flex space-x-2 border-b border-white/10 mb-4">
+      <div className="flex space-x-2 border-b border-main mb-4">
         {[
           { id: 'Billing & PO', icon: FileBarChart },
           { id: 'Ticket Documents', icon: FileText },
@@ -266,7 +280,7 @@ export default function Billing() {
             className={`flex items-center space-x-2 px-6 py-3 border-b-2 font-bold text-xs uppercase tracking-widest transition-all ${
               activeTab === tab.id
                 ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-dim hover:text-white hover:border-white/20'
+                : 'border-transparent text-dim hover:text-main hover:border-main/50'
             }`}
           >
             <tab.icon size={16} />
@@ -284,7 +298,7 @@ export default function Billing() {
               className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
                 billingFilter === filter
                   ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
-                  : 'bg-white/5 text-dim hover:bg-white/10'
+                  : 'bg-card text-dim hover:bg-main/5'
               }`}
             >
               {filter}
@@ -293,12 +307,12 @@ export default function Billing() {
         </div>
       )}
 
-      <div className="glass-panel overflow-hidden border border-white/10 shadow-2xl bg-panel rounded-[2rem]">
+      <div className="glass-panel overflow-hidden border border-main shadow-2xl bg-panel rounded-[2rem]">
         <div className="overflow-x-auto min-h-[400px]">
           <table className="w-full text-left border-collapse">
             <thead>
               {activeTab === 'Billing & PO' ? (
-                <tr className="bg-white/5 border-b border-white/10">
+                <tr className="bg-card border-b border-main">
                   <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Date / ID</th>
                   <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Description</th>
                   <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Location / Details</th>
@@ -306,7 +320,7 @@ export default function Billing() {
                   {canEdit && <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest text-right">Actions</th>}
                 </tr>
               ) : (
-                <tr className="bg-white/5 border-b border-white/10">
+                <tr className="bg-card border-b border-main">
                   <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Uploaded Date</th>
                   <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Document Name</th>
                   <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Parent Details</th>
@@ -314,7 +328,7 @@ export default function Billing() {
                 </tr>
               )}
             </thead>
-            <tbody className="divide-y divide-white/5 text-white">
+            <tbody className="divide-y divide-main text-main">
               {loading ? (
                 <tr><td colSpan="5" className="p-10 text-center text-dim font-bold tracking-widest uppercase text-xs">Loading data...</td></tr>
               ) : filteredRecords.length === 0 ? (
@@ -323,7 +337,7 @@ export default function Billing() {
                 filteredRecords.map(record => {
                   if (activeTab === 'Billing & PO') {
                     return (
-                      <tr key={record.id || record._id} className="hover:bg-white/5 transition-colors">
+                      <tr key={record.id || record._id} className="hover:bg-card transition-colors">
                         <td className="p-5 text-xs font-mono text-dim">
                           {record.isMasterProject ? (record.start_date || 'N/A') : (record.operationDate || new Date(record.createdAt || Date.now()).toISOString().split('T')[0])}
                         </td>
@@ -395,7 +409,7 @@ export default function Billing() {
 
                   // Render Documents Tabs
                   return (
-                    <tr key={record.id || record._id} className="hover:bg-white/5 transition-colors">
+                    <tr key={record.id || record._id} className="hover:bg-card transition-colors">
                       <td className="p-5 text-xs font-mono text-dim">
                         {new Date(record.uploaded_at).toISOString().split('T')[0]}
                       </td>
@@ -420,11 +434,11 @@ export default function Billing() {
       </div>
 
       {showModal && selectedItem && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-panel rounded-[2.5rem] w-full max-w-2xl overflow-hidden border border-white/10 shadow-2xl flex flex-col">
-            <div className="p-8 border-b border-white/10 flex justify-between items-center bg-white/5">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-panel rounded-[2.5rem] w-full max-w-2xl overflow-hidden border border-main shadow-2xl flex flex-col">
+            <div className="p-8 border-b border-main flex justify-between items-center bg-card">
               <div>
-                <h2 className="text-xl font-black text-white tracking-tight uppercase flex items-center">
+                <h2 className="text-xl font-black text-main tracking-tight uppercase flex items-center">
                   <Upload className="mr-3 text-blue-400" size={24} />
                   Attach Billing Documents
                 </h2>
@@ -432,7 +446,7 @@ export default function Billing() {
                   {selectedItem.isMasterProject ? selectedItem.name : selectedItem.issueDescription}
                 </p>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-white/10 rounded-xl text-dim hover:text-white transition-all"><X size={24} /></button>
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-dim hover:text-main transition-all"><X size={24} /></button>
             </div>
             
             <form onSubmit={handleSubmit} className="p-8 space-y-6">
@@ -450,7 +464,7 @@ export default function Billing() {
                       name="bill_number" 
                       value={formData.bill_number} 
                       onChange={(e) => setFormData(prev => ({ ...prev, bill_number: e.target.value }))}
-                      className="glass-input w-full p-3 text-xs bg-black/40 border-emerald-500/20 text-white focus:border-emerald-500" 
+                      className="glass-input w-full p-3 text-xs bg-card border-emerald-500/20 text-main focus:border-emerald-500" 
                       placeholder="e.g. INV-2026-001"
                     />
                   </div>
@@ -462,7 +476,7 @@ export default function Billing() {
                       className="w-full text-xs text-dim file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-emerald-500/20 file:text-emerald-400 hover:file:bg-emerald-500/30 cursor-pointer" 
                     />
                     {selectedItem.bill_document && !formData.bill_document && (
-                      <div className="mt-3 p-3 bg-black/20 rounded-xl border border-emerald-500/20 flex items-center justify-between">
+                      <div className="mt-3 p-3 bg-panel rounded-xl border border-emerald-500/20 flex items-center justify-between">
                         <div className="flex items-center w-full max-w-[200px]">
                           <CheckCircle size={14} className="text-emerald-400 mr-2 flex-shrink-0" />
                           <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest truncate" title={getFileName(selectedItem.bill_document)}>
@@ -496,7 +510,7 @@ export default function Billing() {
                       name="po_number" 
                       value={formData.po_number} 
                       onChange={(e) => setFormData(prev => ({ ...prev, po_number: e.target.value }))}
-                      className="glass-input w-full p-3 text-xs bg-black/40 border-purple-500/20 text-white focus:border-purple-500" 
+                      className="glass-input w-full p-3 text-xs bg-card border-purple-500/20 text-main focus:border-purple-500" 
                       placeholder="e.g. PO-998877"
                     />
                   </div>
@@ -508,7 +522,7 @@ export default function Billing() {
                       className="w-full text-xs text-dim file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-purple-500/20 file:text-purple-400 hover:file:bg-purple-500/30 cursor-pointer" 
                     />
                     {selectedItem.po_document && !formData.po_document && (
-                      <div className="mt-3 p-3 bg-black/20 rounded-xl border border-purple-500/20 flex items-center justify-between">
+                      <div className="mt-3 p-3 bg-panel rounded-xl border border-purple-500/20 flex items-center justify-between">
                         <div className="flex items-center w-full max-w-[200px]">
                           <CheckCircle size={14} className="text-purple-400 mr-2 flex-shrink-0" />
                           <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest truncate" title={getFileName(selectedItem.po_document)}>
@@ -529,7 +543,7 @@ export default function Billing() {
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-white/10">
+              <div className="flex justify-end pt-4 border-t border-main">
                 <button 
                   type="submit" 
                   disabled={submitting}

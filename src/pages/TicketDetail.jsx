@@ -10,8 +10,30 @@ import { useNotificationStore } from '../store/notificationStore';
 
 const getImageUrl = (path) => {
   if (!path) return '';
-  if (path.startsWith('http')) return path;
-  return path.startsWith('/') ? path : `/${path}`;
+  
+  try {
+    // If path is a full URL, extract just the pathname
+    const url = new URL(path);
+    path = url.pathname;
+  } catch (e) {
+    // It's already a relative path, continue
+  }
+  
+  // Clean up leading slashes
+  let cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  
+  // If it already starts with cctv/, remove it to standardize
+  if (cleanPath.startsWith('cctv/')) {
+    cleanPath = cleanPath.substring(5); // Remove 'cctv/'
+  }
+  
+  // If it's a media file but doesn't have media/ prefix, add it (Django usually includes it though)
+  if (!cleanPath.startsWith('media/') && !cleanPath.startsWith('api/')) {
+    cleanPath = 'media/' + cleanPath;
+  }
+  
+  const baseUrl = import.meta.env.BASE_URL || '/cctv/';
+  return `${baseUrl}${cleanPath}`;
 };
 
 const getFileName = (path) => {
@@ -32,6 +54,7 @@ export default function TicketDetail() {
   const [newRemark, setNewRemark] = useState('');
   const [newRemarkDate, setNewRemarkDate] = useState(new Date().toISOString().split('T')[0]);
   const [newRemarkTime, setNewRemarkTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+  const [newRemarkImage, setNewRemarkImage] = useState(null);
   
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showBillingModal, setShowBillingModal] = useState(false);
@@ -108,12 +131,19 @@ export default function TicketDetail() {
     if (!newRemark.trim() || !ticket) return;
 
     const formattedRemark = `[${newRemarkDate} ${newRemarkTime}] ${newRemark}`;
+    
+    const formData = new FormData();
+    formData.append('remark', formattedRemark);
+    if (newRemarkImage) {
+      formData.append('image', newRemarkImage);
+    }
 
     try {
-      await api.post(`/tickets/${ticket.id || ticket._id}/add_remark/`, {
-        remark: formattedRemark
+      await api.post(`/tickets/${ticket.id || ticket._id}/add_remark/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       setNewRemark('');
+      setNewRemarkImage(null);
       fetchTicketData();
       showNotification('Remark added successfully');
     } catch (err) {
@@ -358,17 +388,27 @@ export default function TicketDetail() {
                     {ticket.workImage && (
                       <div className="group relative">
                         <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">Before Work</span>
-                        <div className="aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner">
+                        <a href={getImageUrl(ticket.workImage)} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner relative">
                           <img src={getImageUrl(ticket.workImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Before" />
-                        </div>
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl text-[10px] font-black text-white flex items-center uppercase tracking-widest border border-white/20">
+                              <Eye size={12} className="mr-2" /> View Image
+                            </div>
+                          </div>
+                        </a>
                       </div>
                     )}
                     {ticket.serviceImage && (
                       <div className="group relative">
                         <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-emerald-500/80 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">After Work</span>
-                        <div className="aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner">
+                        <a href={getImageUrl(ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner relative">
                           <img src={getImageUrl(ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="After" />
-                        </div>
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="px-3 py-1.5 bg-emerald-600/80 backdrop-blur-md rounded-xl text-[10px] font-black text-white flex items-center uppercase tracking-widest border border-white/20">
+                              <Eye size={12} className="mr-2" /> View Image
+                            </div>
+                          </div>
+                        </a>
                       </div>
                     )}
                  </div>
@@ -582,13 +622,37 @@ export default function TicketDetail() {
                       placeholder="Add technical update or observation..."
                       className="glass-input relative w-full p-6 pr-16 text-sm min-h-[120px] resize-none focus:ring-4 focus:ring-blue-500/10 border-main transition-all placeholder:text-dim/40 font-bold rounded-[2rem] bg-panel/50 shadow-inner"
                     />
-                    <button
-                      type="submit"
-                      disabled={!newRemark.trim()}
-                      className="absolute right-4 bottom-4 p-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 disabled:grayscale text-white rounded-2xl transition-all shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 group/btn"
-                    >
-                      <Send size={22} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-                    </button>
+                    <div className="absolute right-4 bottom-4 flex items-center space-x-2">
+                      {newRemarkImage && (
+                        <div className="text-[10px] bg-panel/80 px-2 py-1 rounded-lg text-blue-400 truncate max-w-[120px] border border-blue-500/20 flex items-center backdrop-blur-md">
+                          <span className="truncate mr-1 font-bold">{newRemarkImage.name}</span>
+                          <button type="button" onClick={() => setNewRemarkImage(null)} className="text-blue-400 hover:text-red-400"><X size={12} /></button>
+                        </div>
+                      )}
+                      <label className="p-3 bg-panel/50 hover:bg-panel text-dim hover:text-blue-400 rounded-2xl transition-all cursor-pointer border border-transparent hover:border-blue-500/30">
+                        <Upload size={20} />
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file && file.size <= 2 * 1024 * 1024) {
+                              setNewRemarkImage(file);
+                            } else if (file) {
+                              showNotification('Image exceeds 2MB', 'error');
+                            }
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={!newRemark.trim()}
+                        className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 disabled:grayscale text-white rounded-2xl transition-all shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 group/btn"
+                      >
+                        <Send size={20} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
+                      </button>
+                    </div>
                   </div>
                 </form>
                 <div className="flex items-center justify-center space-x-3">
@@ -651,6 +715,18 @@ export default function TicketDetail() {
                       <p className={`text-sm leading-relaxed ${isSystem ? 'text-dim italic font-bold opacity-80' : 'text-main font-black'}`}>
                         {msg.remark}
                       </p>
+                      {msg.image && (
+                        <div className="mt-4 animate-slide-up">
+                          <a href={getImageUrl(msg.image)} target="_blank" rel="noopener noreferrer" className="block w-full max-w-sm rounded-2xl overflow-hidden border border-main/10 bg-panel shadow-inner relative group/img">
+                            <img src={getImageUrl(msg.image)} className="w-full object-cover group-hover/img:scale-105 transition-transform duration-500 max-h-64" alt="Activity Attachment" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                              <div className="px-3 py-1.5 bg-blue-600/80 backdrop-blur-md rounded-xl text-[10px] font-black text-white flex items-center uppercase tracking-widest border border-white/20">
+                                <Eye size={12} className="mr-2" /> View Image
+                              </div>
+                            </div>
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

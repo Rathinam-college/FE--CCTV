@@ -216,7 +216,7 @@ export default function UnifiedEditor() {
               Unified <span className="text-gradient-purple">Asset Editor</span>
             </h1>
           </div>
-          <p className="text-xs text-dim font-bold uppercase tracking-[0.2em]">Locate and modify hardware parameters across the entire infrastructure</p>
+          <p className="text-xs text-dim font-bold uppercase tracking-[0.2em]">Locate and modify hardware parameters</p>
         </div>
       </div>
 

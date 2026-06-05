@@ -28,13 +28,15 @@ import Billing from './pages/Billing';
 import ProjectTickets from './pages/ProjectTickets';
 import NetworkSwitches from './pages/NetworkSwitches';
 import Racks from './pages/Racks';
+import NvrCameraMapping from './pages/NvrCameraMapping';
 import RackDetail from './pages/RackDetail';
-import ActivityLogs from './pages/ActivityLogs';
 import MoveHistory from './pages/MoveHistory';
 import UnifiedOnboarding from './pages/UnifiedOnboarding';
 import Reports from './pages/Reports';
 import Occupation from './pages/Occupation';
 import { useNotificationStore } from './store/notificationStore';
+import { useConfirmStore } from './store/confirmStore';
+import { AlertTriangle, X } from 'lucide-react';
 
 const GlobalNotification = () => {
   const { notification } = useNotificationStore();
@@ -48,6 +50,56 @@ const GlobalNotification = () => {
     }`}>
       <div className={`w-2 h-2 rounded-full animate-pulse ${notification.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
       <span className="text-sm font-bold uppercase tracking-widest">{notification.message}</span>
+    </div>
+  );
+};
+
+const GlobalConfirmModal = () => {
+  const { isOpen, message, subMessage, onConfirm, closeConfirm } = useConfirmStore();
+
+  if (!isOpen) return null;
+
+  const handleConfirm = () => {
+    if (onConfirm) onConfirm();
+    closeConfirm();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[300] flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-card border border-rose-500/30 rounded-3xl w-full max-w-sm flex flex-col shadow-[0_0_50px_rgba(225,29,72,0.15)] animate-slide-up">
+        <div className="p-6 border-b border-main flex justify-between items-start">
+          <div className="flex items-center space-x-3 text-rose-500">
+            <div className="p-2 bg-rose-500/10 rounded-xl">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold">Confirmation Required</h3>
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-400/80">Permanent Action</p>
+            </div>
+          </div>
+          <button onClick={closeConfirm} className="text-dim hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-6 bg-panel/30 text-center">
+          <p className="text-sm font-bold text-main">{message}</p>
+          {subMessage && <p className="text-xs text-secondary mt-2">{subMessage}</p>}
+        </div>
+        <div className="p-4 border-t border-main flex space-x-3 bg-card rounded-b-3xl">
+          <button 
+            onClick={closeConfirm} 
+            className="flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-panel border border-main text-secondary hover:text-main hover:bg-panel/80 transition-all"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleConfirm} 
+            className="flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/20 transition-all"
+          >
+            Yes, Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -74,6 +126,7 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="cameras" element={hasPermission('Assets') ? <Cameras /> : <Navigate to="/" />} />
           <Route path="nvr" element={hasPermission('Storage') ? <NVR /> : <Navigate to="/" />} />
+          <Route path="nvr-mapping" element={hasPermission('Storage') ? <NvrCameraMapping /> : <Navigate to="/" />} />
           <Route path="biometrics" element={hasPermission('Identity') ? <Biometrics /> : <Navigate to="/" />} />
           <Route path="network-switches" element={hasPermission('Network') ? <NetworkSwitches /> : <Navigate to="/" />} />
           <Route path="racks" element={hasPermission('Network') ? <Racks /> : <Navigate to="/" />} />
@@ -85,7 +138,6 @@ function App() {
           <Route path="projects" element={hasPermission('Projects') ? <Projects /> : <Navigate to="/" />} />
           <Route path="projects/:id" element={hasPermission('Projects') ? <ProjectDetail /> : <Navigate to="/" />} />
           <Route path="users" element={hasPermission('Users') ? <Users /> : <Navigate to="/" />} />
-          <Route path="activity-logs" element={hasPermission('Logs') ? <ActivityLogs /> : <Navigate to="/" />} />
           <Route path="onboarding" element={<UnifiedOnboarding />} />
           <Route path="reports" element={hasPermission('Logs') ? <Reports /> : <Navigate to="/" />} />
           <Route path="occupation" element={<Occupation />} />
@@ -106,6 +158,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       <GlobalNotification />
+      <GlobalConfirmModal />
     </>
   );
 }

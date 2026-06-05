@@ -29,7 +29,7 @@ export default function Network() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="border-b border-white/10 pb-4">
-        <h1 className="text-3xl font-bold text-main tracking-tight">Network Telemetry</h1>
+        <h1 className="text-3xl font-bold text-main tracking-tight">Network Details</h1>
         <p className="text-sm text-dim mt-1">Live ping diagnostics and IP routing topology</p>
       </div>
 
@@ -85,7 +85,7 @@ export default function Network() {
                 <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Node Signature</th>
                 <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Logical Zone</th>
                 <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">IP Address</th>
-                <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Telemetry State</th>
+                <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">

@@ -243,10 +243,10 @@ export default function UnifiedOnboarding() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/10 pb-8 gap-6">
         <div>
-          <h1 className="text-5xl font-black font-['Space_Grotesk'] tracking-tighter text-main italic">
-            INFRA BUILDER
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+            <Plus className="mr-3 text-blue-500" size={28} />
+            Add New Site
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.4em] mt-2">Interactive Master Registry</p>
         </div>
         <div className="flex flex-col items-end space-y-4">
           <div className="flex items-center text-emerald-500 font-bold text-sm bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20">
@@ -334,7 +334,7 @@ export default function UnifiedOnboarding() {
               hierarchy.length === 0 ? (
                 <div className="text-center p-12 border-2 border-dashed border-main rounded-2xl">
                   <Layers size={48} className="mx-auto mb-4 text-dim" />
-                  <p className="text-dim text-xs font-bold uppercase tracking-widest">No infrastructure found</p>
+                  <p className="text-dim text-xs font-bold uppercase tracking-widest">No hardware found</p>
                   {canEdit && (
                     <button onClick={() => handleOpenPrompt('Block', null)} className="mt-4 text-blue-400 text-xs font-bold hover:text-blue-300">
                       + Create First Block

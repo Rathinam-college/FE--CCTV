@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Cctv, Activity, Users, FileBarChart, LogOut, 
   Shield, Home, Clock, MessageSquare, Gift, Settings, 
   Sun, Moon, Droplets, Zap, Menu, X, PlusCircle, Layers, Database, Fingerprint,
-  Radio, ChevronLeft, ChevronRight, MapPin, Search, RefreshCw, FileText, Server, Sunrise, Waves, Building
+  Radio, ChevronLeft, ChevronRight, MapPin, Search, RefreshCw, FileText, Server, Sunrise, Waves, Building, Gamepad2
 } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import logo from '../image/logo.png';
@@ -12,7 +12,7 @@ import logo from '../image/logo.png';
 export default function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light'); // Default to light
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'gaming');
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -30,10 +30,7 @@ export default function Layout() {
   }, [theme]);
 
   const toggleTheme = () => {
-    const themes = ['light', 'dark', 'ocean', 'sunset', 'blue'];
-    const currentIndex = themes.indexOf(theme);
-    const nextIndex = (currentIndex + 1) % themes.length;
-    setTheme(themes[nextIndex]);
+    setTheme(prev => prev === 'gaming' ? 'light' : 'gaming');
   };
 
   const [openGroups, setOpenGroups] = useState({});
@@ -71,7 +68,6 @@ export default function Layout() {
       icon: Settings, 
       permission: 'Logs',
       items: [
-        { name: 'Activity Logs', path: '/activity-logs', icon: Activity, permission: 'Logs' },
         { name: 'Reports', path: '/reports', icon: FileText, permission: 'Logs' },
         { name: 'Occupation', path: '/occupation', icon: Building, permission: 'Logs' },
         { name: 'Add New Site', path: '/onboarding', icon: PlusCircle, permission: 'Users' },
@@ -94,7 +90,7 @@ export default function Layout() {
   }), [user]);
 
   return (
-    <div className="flex h-screen relative overflow-hidden text-main bg-main font-['Inter']">
+    <div className={`flex h-screen relative overflow-hidden text-main bg-main ${theme === 'gaming' ? 'gaming-pattern' : ''}`}>
       {/* Clean Sidebar Navigation */}
       <div 
         className={`h-full fixed inset-y-0 left-0 z-[110] flex flex-col transition-all duration-500 overflow-hidden ${
@@ -106,14 +102,14 @@ export default function Layout() {
             <div className={`flex items-center justify-center shrink-0 transition-all ${
               collapsed 
                 ? 'bg-white rounded-xl shadow-sm border border-slate-200 w-12 h-12 overflow-hidden' 
-                : theme === 'dark' 
+                : (theme === 'dark' || theme === 'gaming')
                   ? 'bg-white/95 rounded-xl w-full h-16 py-1.5 px-2 shadow-sm' 
                   : 'w-full h-16'
             }`}>
               <img src={logo} alt="Rathinam Logo" className={`object-contain ${
                 collapsed 
                   ? 'w-auto h-[80%]' 
-                  : theme === 'dark' 
+                  : (theme === 'dark' || theme === 'gaming')
                     ? 'w-full h-full' 
                     : 'w-full h-full mix-blend-multiply drop-shadow-sm'
               }`} />
@@ -124,7 +120,7 @@ export default function Layout() {
           <div className="absolute -right-4 top-1/2 -translate-y-1/2 z-[130]">
             <button 
               onClick={() => sidebarOpen ? setSidebarOpen(false) : setCollapsed(!collapsed)}
-              className="w-8 h-8 bg-card border border-main rounded-full shadow-md flex items-center justify-center text-secondary hover:text-teal-600 hover:border-teal-500/30 transition-all"
+              className="w-8 h-8 bg-card border border-main rounded-full shadow-md flex items-center justify-center text-secondary hover:text-accent-primary hover:border-accent-primary/30 transition-all"
               title={sidebarOpen ? "Close Menu" : (collapsed ? "Expand Sidebar" : "Collapse Sidebar")}
             >
               {sidebarOpen ? <X size={14} /> : (collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />)}
@@ -149,14 +145,14 @@ export default function Layout() {
                       }
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 group ${
-                      isOpen ? 'bg-panel text-teal-600' : 'text-secondary hover:bg-panel hover:text-teal-600'
+                      isOpen ? 'bg-panel text-accent-primary' : 'text-secondary hover:bg-panel hover:text-accent-primary'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <item.icon size={18} strokeWidth={2} className={isOpen ? 'text-teal-600' : 'text-secondary group-hover:text-teal-600'} />
+                      <item.icon size={18} strokeWidth={2} className={isOpen ? 'text-accent-primary' : 'text-secondary group-hover:text-accent-primary'} />
                       {!collapsed && <span className="text-sm font-semibold tracking-tight">{item.name}</span>}
                     </div>
-                    {!collapsed && <ChevronRight size={14} className={`transition-transform duration-300 ${isOpen ? 'rotate-90 text-teal-600' : 'text-dim'}`} />}
+                    {!collapsed && <ChevronRight size={14} className={`transition-transform duration-300 ${isOpen ? 'rotate-90 text-accent-primary' : 'text-dim'}`} />}
                   </button>
                   
                   {isOpen && !collapsed && (
@@ -169,8 +165,8 @@ export default function Layout() {
                           className={({ isActive }) =>
                             `flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200 group ${
                               isActive
-                                ? 'bg-teal-500/10 text-teal-600 border-l-2 border-teal-500'
-                                : 'text-dim hover:text-teal-600 hover:bg-teal-500/5'
+                                ? 'bg-accent-primary/10 text-accent-primary border-l-2 border-accent-primary'
+                                : 'text-dim hover:text-accent-primary hover:bg-accent-primary/5'
                             }`
                           }
                         >
@@ -192,14 +188,14 @@ export default function Layout() {
                 className={({ isActive }) =>
                   `flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
                     isActive
-                      ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20'
-                      : 'text-secondary hover:bg-panel hover:text-teal-600'
+                      ? 'bg-gradient-to-r from-accent-secondary to-accent-primary text-white shadow-lg'
+                      : 'text-secondary hover:bg-panel hover:text-accent-primary'
                   }`
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : 'text-secondary group-hover:text-teal-600'} />
+                    <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : 'text-secondary group-hover:text-accent-primary'} />
                     {!collapsed && (
                       <span className={`text-sm font-semibold tracking-tight ${isActive ? 'text-white' : ''}`}>
                         {item.name}
@@ -212,10 +208,33 @@ export default function Layout() {
           })}
         </div>
 
-        <div className="p-4 border-t border-main">
+        <div className="p-4 border-t border-main space-y-4">
+          <div className={`flex items-center ${collapsed ? 'flex-col space-y-4' : 'justify-between'} w-full`}>
+            <div className="flex items-center space-x-3 overflow-hidden">
+              <div className="w-10 h-10 shrink-0 rounded-xl bg-teal-500 text-white flex items-center justify-center font-black text-lg shadow-lg shadow-teal-500/20 border-2 border-card">
+                {user?.name?.charAt(0).toUpperCase()}
+              </div>
+              {!collapsed && (
+                <div className="text-left overflow-hidden">
+                  <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest leading-none mb-1 truncate">{user?.role}</p>
+                  <p className="text-sm font-bold text-main leading-none truncate">{user?.name}</p>
+                </div>
+              )}
+            </div>
+            
+            <button
+              onClick={toggleTheme}
+              className={`w-10 h-10 shrink-0 flex items-center justify-center bg-panel border border-main rounded-xl text-secondary hover:text-teal-600 transition-all shadow-sm group`}
+              title="Toggle Theme"
+            >
+              {theme === 'light' ? <Moon size={20} className="group-hover:rotate-12 transition-transform" /> : 
+               <Sun size={20} className="group-hover:rotate-45 transition-transform text-orange-500" />}
+            </button>
+          </div>
+
           <button
             onClick={logout}
-            className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-all duration-200 font-bold text-xs uppercase tracking-widest"
+            className={`w-full flex items-center ${collapsed ? 'justify-center' : 'space-x-3 px-3'} py-2.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-all duration-200 font-bold text-xs uppercase tracking-widest`}
           >
             <LogOut size={18} />
             {!collapsed && <span>Logout</span>}
@@ -230,42 +249,11 @@ export default function Layout() {
       >
         
         {/* Unified Top Header */}
-        <header className="h-20 bg-card/80 backdrop-blur-md border-b border-main flex items-center justify-between px-4 lg:px-8 sticky top-0 z-[100] shadow-sm">
+        <header className="h-20 bg-card/80 backdrop-blur-md border-b border-main flex items-center px-4 lg:px-8 sticky top-0 z-[100] shadow-sm lg:hidden">
           <div className="flex items-center space-x-4">
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-secondary hover:bg-panel rounded-lg">
               <Menu size={20} />
             </button>
-            <div className="hidden md:flex items-center space-x-2 text-[10px] font-black text-secondary uppercase tracking-[0.2em]">
-              <span className="text-dim">DASHBOARD</span>
-              <span className="opacity-20">/</span>
-              <span className="text-teal-600 font-black">
-                {(menuItems.find(i => location.pathname.includes(i.path))?.name || 
-                  (location.pathname.includes('/devices/') ? 'ASSET MGMT' : 
-                   location.pathname.substring(1).split('/')[0].replace('-', ' ') || 'DASHBOARD')).toUpperCase()}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={toggleTheme}
-              className="w-10 h-10 flex items-center justify-center bg-panel border border-main rounded-xl text-secondary hover:text-teal-600 transition-all shadow-sm group"
-            >
-              {theme === 'light' ? <Moon size={20} className="group-hover:rotate-12 transition-transform" /> : 
-               theme === 'dark' ? <Droplets size={20} className="group-hover:translate-y-1 transition-transform text-cyan-400" /> : 
-               theme === 'ocean' ? <Sunrise size={20} className="group-hover:scale-110 transition-transform text-emerald-500" /> : 
-               theme === 'sunset' ? <Waves size={20} className="group-hover:translate-x-1 transition-transform text-blue-500" /> :
-               <Sun size={20} className="group-hover:rotate-45 transition-transform text-orange-500" />}
-            </button>
-            <div className="flex items-center space-x-3 pl-6 border-l border-main">
-              <div className="text-right hidden sm:block">
-                <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest leading-none mb-1">{user?.role}</p>
-                <p className="text-sm font-bold text-main leading-none">{user?.name}</p>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-teal-500 text-white flex items-center justify-center font-black text-lg shadow-lg shadow-teal-500/20 border-2 border-card">
-                {user?.name?.charAt(0).toUpperCase()}
-              </div>
-            </div>
           </div>
         </header>
 

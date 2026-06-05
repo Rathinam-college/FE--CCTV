@@ -277,7 +277,7 @@ export default function AssetRegistration() {
           <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-white">
             Universal <span className="text-gradient-cyan">Onboarding</span>
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Initialize hardware assets and infrastructure nodes</p>
+          <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Add new hardware assets</p>
         </div>
       </div>
 
@@ -285,7 +285,7 @@ export default function AssetRegistration() {
       <div className="glass-panel p-6 bg-white/[0.02] border-white/10">
         <div className="flex items-center space-x-3 text-cyan-400 mb-4">
           <MapPin size={18} />
-          <h3 className="text-xs font-black uppercase tracking-widest">Location Infrastructure</h3>
+          <h3 className="text-xs font-black uppercase tracking-widest">Location</h3>
         </div>
         <div className="flex flex-wrap gap-3">
           {existingBlocks.map(block => (

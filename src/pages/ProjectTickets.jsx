@@ -9,14 +9,31 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSiteStore } from '../store/siteStore';
 import ComboInput from '../components/ComboInput';
 
 const getImageUrl = (path) => {
   if (!path) return '';
+  
+  // Remove internal docker/local backend hosts to force it through the Vite proxy
+  if (path.includes('backend:5000')) {
+    path = path.replace(/https?:\/\/backend:5000/, '');
+  } else if (path.includes('localhost:5000')) {
+    path = path.replace(/https?:\/\/localhost:5000/, '');
+  }
+  
   if (path.startsWith('http')) return path;
-  return path.startsWith('/') ? path : `/${path}`;
+  
+  const baseUrl = import.meta.env.BASE_URL || '/cctv/';
+  let cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  
+  if (cleanPath.startsWith('cctv/')) {
+    return `/${cleanPath}`;
+  }
+  
+  return `${baseUrl}${cleanPath}`;
 };
 
 export default function ProjectTickets() {
@@ -24,6 +41,7 @@ export default function ProjectTickets() {
   const navigate = useNavigate();
   const { projectId, projectName } = useParams();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const { occupations, fetchOccupations } = useSiteStore();
   const [tickets, setTickets] = useState([]);
   const [users, setUsers] = useState([]);
@@ -131,18 +149,19 @@ export default function ProjectTickets() {
 
   const handleDeleteStaff = async (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this staff member?')) return;
-    try {
-      await api.delete(`/tickets/staff/${id}/`);
-      setStaff(staff.filter(s => (s.id || s._id) !== id));
-      setFormData(prev => ({
-        ...prev,
-        assignedStaff: prev.assignedStaff.filter(sId => sId !== id)
-      }));
-      showNotification('Staff member removed', 'success');
-    } catch (err) {
-      showNotification('Failed to delete staff member', 'error');
-    }
+    showConfirm('Are you sure?', async () => {
+      try {
+        await api.delete(`/tickets/staff/${id}/`);
+        setStaff(staff.filter(s => (s.id || s._id) !== id));
+        setFormData(prev => ({
+          ...prev,
+          assignedStaff: prev.assignedStaff.filter(sId => sId !== id)
+        }));
+        showNotification('Staff member removed', 'success');
+      } catch (err) {
+        showNotification('Failed to delete staff member', 'error');
+      }
+    });
   };
 
   const handleAddQuickStaff = async () => {
@@ -356,7 +375,7 @@ export default function ProjectTickets() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this ticket?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/tickets/${id}/`);
         showNotification('Ticket deleted successfully');
@@ -365,7 +384,7 @@ export default function ProjectTickets() {
         console.error('Error deleting ticket:', err);
         showNotification('Failed to delete ticket', 'error');
       }
-    }
+    });
   };
 
   const filteredTickets = Array.isArray(tickets) ? tickets.filter(ticket => {

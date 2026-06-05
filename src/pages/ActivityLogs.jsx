@@ -84,7 +84,6 @@ export default function ActivityLogs() {
             <History className="mr-3 text-teal-500" size={32} />
             System Audit Logs
           </h1>
-          <p className="text-sm text-secondary mt-1">Track user interactions, asset modifications, and page access history</p>
         </div>
         <div className="flex space-x-3">
           <div className="flex items-center space-x-4">

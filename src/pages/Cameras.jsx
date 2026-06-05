@@ -6,6 +6,7 @@ import { Search, Filter, Plus, Cctv as CctvIcon, Map, Building, Shield, X, Edit2
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { useActivityLogger } from '../hooks/useActivityLogger';
 import { useSiteStore } from '../store/siteStore';
 import ComboInput from '../components/ComboInput';
@@ -15,6 +16,7 @@ export default function Cameras() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   useActivityLogger('Assets');
   const [submitting, setSubmitting] = useState(false);
@@ -89,6 +91,7 @@ export default function Cameras() {
     campusZone: 'INSIDE',
     collegeName: '',
     brand: '',
+    model: '',
     dvrNvrDetails: '',
     remarks: ''
   });
@@ -353,6 +356,7 @@ export default function Cameras() {
       serialNumber: formData.serialNumber || '', // Use the hardware serial field
       campusZone: formData.campusZone || 'INSIDE',
       brand: formData.brand || '',
+      model: formData.model || '',
       dvrNvrDetails: formData.dvrNvrDetails || '',
       remarks: formData.remarks || ''
     };
@@ -393,7 +397,7 @@ export default function Cameras() {
       setFormData({
         block: '', floor: '', room: '', deviceType: '', ipAddress: '',
         ipv4Gateway: '', deviceSerialNumber: '', serialNumber: '', subnetMask: '', macAddress: '', status: 'Online',
-        collegeName: '', brand: '', dvrNvrDetails: '', remarks: ''
+        collegeName: '', brand: '', model: '', dvrNvrDetails: '', remarks: ''
       });
       fetchCameras();
     } catch (err) {
@@ -423,6 +427,7 @@ export default function Cameras() {
       campusZone: camera.campusZone || (isOutside(camera.siteName) ? 'OUTSIDE' : 'INSIDE'),
       collegeName: collegeName || '',
       brand: camera.brand || '',
+      model: camera.model || '',
       dvrNvrDetails: camera.dvrNvrDetails || '',
       remarks: camera.remarks || ''
     });
@@ -431,16 +436,16 @@ export default function Cameras() {
   };
 
   const deleteCamera = async (id) => {
-    if (window.confirm('WARNING: Are you sure you want to securely purge this asset from the database?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/cameras/${id}/`);
         showNotification('Asset purged from database');
         fetchCameras();
       } catch (err) {
         console.error(err);
-        showNotification('Error purging asset', 'error');
+        showNotification('Failed to delete asset', 'error');
       }
-    }
+    });
   };
 
   const openNewModal = async () => {
@@ -656,10 +661,10 @@ export default function Cameras() {
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
-          <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+            <CctvIcon className="mr-3 text-blue-500" size={28} />
             Cameras
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">View and manage all hardware assets</p>
         </div>
         <div className="flex space-x-3">
           <button onClick={exportToExcel} className="glass-panel flex items-center px-6 py-2 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all">
@@ -705,16 +710,7 @@ export default function Cameras() {
           </button>
         </div>
 
-        <div className="relative w-full sm:w-64 group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-teal-500 transition-colors" size={16} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Building Name..."
-                className="glass-input w-full !pl-12 pr-4 py-2.5 text-[10px] font-black uppercase tracking-widest placeholder:text-secondary bg-panel"
-              />
-        </div>
+
       </div>
       
       {/* Top Stats & Chart Row (Visible for all views) */}
@@ -1236,7 +1232,7 @@ export default function Cameras() {
           <div className="glass-panel overflow-hidden border border-main bg-card shadow-sm">
             <div className="p-5 border-b border-main bg-panel flex items-center justify-between">
               <h3 className="text-sm font-bold text-main uppercase tracking-widest flex items-center">
-                <Building className="mr-2 text-teal-600" size={18} /> Building-Level Infrastructure Summary
+                <Building className="mr-2 text-teal-600" size={18} /> Building-Level Summary
               </h3>
             </div>
             <div className="overflow-x-auto">
@@ -1298,9 +1294,8 @@ export default function Cameras() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black text-main uppercase tracking-tight">
-                    {editingId ? 'Modify CCTV Configuration' : 'Register New Asset'}
+                    {editingId ? 'Modify Camera' : 'Camera'}
                   </h2>
-                  <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Visual Infrastructure Protocol</p>
                 </div>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-secondary hover:text-main transition-all">
@@ -1312,7 +1307,6 @@ export default function Cameras() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 {/* Location Information */}
                 <div className="space-y-6">
-                  <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Location & Routing</h3>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                       College / Institution Name
@@ -1326,15 +1320,28 @@ export default function Cameras() {
                       placeholder="Select or Type College..." 
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Designation</label>
-                    <ComboInput 
-                      name="brand" 
-                      value={formData.brand} 
-                      onChange={handleInputChange} 
-                      options={uniqueBrands} 
-                      placeholder="Select or Type Brand..." 
-                    />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Designation</label>
+                      <ComboInput 
+                        name="brand" 
+                        value={formData.brand} 
+                        onChange={handleInputChange} 
+                        options={uniqueBrands} 
+                        placeholder="Select or Type Brand..." 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Model Number</label>
+                      <input 
+                        type="text" 
+                        name="model" 
+                        value={formData.model} 
+                        onChange={handleInputChange} 
+                        className="glass-input w-full p-[14px] text-sm text-secondary bg-panel border-main shadow-inner" 
+                        placeholder="e.g. DS-2CD2043G2" 
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -1398,7 +1405,6 @@ export default function Cameras() {
                 </div>
 
                 <div className="space-y-6">
-                  <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Device Specifications</h3>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Hardware Logic (Camera Type)</label>
                     <select 
@@ -1427,7 +1433,7 @@ export default function Cameras() {
 
               {/* Network Information */}
               <div className="space-y-6 mt-10">
-                <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Network Architecture</h3>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IP Protocol</label>
@@ -1548,7 +1554,7 @@ export default function Cameras() {
 
               {/* Maintenance History */}
               <div className="space-y-6 mt-10">
-                <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Operational Remarks</h3>
+
                 <textarea
                   name="remarks"
                   value={formData.remarks}
@@ -1559,13 +1565,13 @@ export default function Cameras() {
               </div>
 
               <div className="flex justify-end space-x-6 mt-10 pt-8 border-t border-main shrink-0 px-2 pb-2">
-                <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black text-secondary hover:text-main uppercase tracking-[0.2em] transition-colors">Abort Protocol</button>
+                <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black text-secondary hover:text-main uppercase tracking-[0.2em] transition-colors">Cancel</button>
                 <button 
                   type="submit" 
                   disabled={submitting}
                   className="glass-button px-12 py-4 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl"
                 >
-                  {submitting ? 'COMMITTING...' : (editingId ? 'SAVE ASSET' : 'INITIALIZE ASSET')}
+                  {submitting ? 'Saving...' : (editingId ? 'Update' : 'Save')}
                 </button>
               </div>
             </form>

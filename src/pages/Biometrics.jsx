@@ -5,6 +5,7 @@ import { Search, Plus, Fingerprint, MapPin, Shield, X, Edit2, Trash2, Download, 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import ComboInput from '../components/ComboInput';
 
@@ -12,11 +13,12 @@ export default function Biometrics() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   const [devices, setDevices] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Identity:EDIT');
-  
+
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -28,6 +30,7 @@ export default function Biometrics() {
     room: '',
     type: 'Fingerprint',
     brand: 'ZKTECO',
+    model: '',
     ipAddress: '',
     serverIp: '',
     serialNumber: '',
@@ -48,8 +51,8 @@ export default function Biometrics() {
       const existingNumbers = devices
         .filter(d => (d.serialNumber || '').startsWith(prefix))
         .map(d => {
-            const parts = (d.serialNumber || '').split('/');
-            return parseInt(parts[parts.length - 1]) || 0;
+          const parts = (d.serialNumber || '').split('/');
+          return parseInt(parts[parts.length - 1]) || 0;
         });
       const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
       const formattedNumber = nextNumber.toString().padStart(2, '0');
@@ -130,22 +133,33 @@ export default function Biometrics() {
 
     let newValue = value;
 
-    if (name === 'ipAddress') {
-      const cleaned = value.replace(/[^0-9.]/g, '');
+    const applyIPMask = (val) => {
+      const cleaned = val.replace(/[^0-9.]/g, '');
       const parts = cleaned.split('.');
-      if (parts[parts.length - 1].length === 3 && parts.length < 4 && !value.endsWith('.')) {
-        newValue = cleaned + '.';
-      } else {
-        newValue = cleaned;
+      if (parts[parts.length - 1].length === 3 && parts.length < 4 && !val.endsWith('.')) {
+        return cleaned + '.';
       }
+      return cleaned;
+    };
+
+    const applyMACMask = (val) => {
+      const cleaned = val.replace(/[^0-9A-Fa-f]/g, '')?.toUpperCase() || '';
+      const parts = cleaned.match(/.{1,2}/g) || [];
+      return parts.slice(0, 6).join(':');
+    };
+
+    if (['ipAddress', 'serverIp', 'ipv4Gateway', 'subnetMask'].includes(name)) {
+      newValue = applyIPMask(value);
+    } else if (name === 'macAddress') {
+      newValue = applyMACMask(value);
     }
 
     setFormData(prev => {
       const nextData = { ...prev, [name]: newValue };
-      
+
       // Auto-populate brand if location is found in Master Registry
       if (['collegeName', 'block', 'floor', 'room'].includes(name)) {
-        const matchingLoc = allLocations.find(loc => 
+        const matchingLoc = allLocations.find(loc =>
           (loc.collegeName || '') === (name === 'collegeName' ? newValue : (prev.collegeName || '')) &&
           (loc.block || '') === (name === 'block' ? newValue : (prev.block || '')) &&
           (loc.floor || '') === (name === 'floor' ? newValue : (prev.floor || '')) &&
@@ -169,9 +183,9 @@ export default function Biometrics() {
     const room = currentSite?.room || '';
 
 
-    setFormData({ 
-      name: '', collegeName: college, block: block, floor: floor, room: room, 
-      type: 'Fingerprint', brand: 'ZKTECO', ipAddress: '', serverIp: '', serialNumber: '', macAddress: '', status: 'Online' 
+    setFormData({
+      name: '', collegeName: college, block: block, floor: floor, room: room,
+      type: 'Fingerprint', brand: 'ZKTECO', model: '', ipAddress: '', ipv4Gateway: '', subnetMask: '', serverIp: '', serialNumber: '', macAddress: '', status: 'Online'
     });
     setShowModal(true);
   };
@@ -182,6 +196,7 @@ export default function Biometrics() {
       const submitData = {
         ...formData,
         location: formData.room || formData.block || 'Unknown',
+        gateway: formData.ipv4Gateway || '',
       };
 
       if (editingId) {
@@ -191,7 +206,7 @@ export default function Biometrics() {
         await api.post('/cameras/biometrics/', submitData);
         showNotification('New identity device registered');
       }
-      
+
       await ensureLocationExists({
         collegeName: submitData.collegeName,
         block: submitData.block,
@@ -199,12 +214,12 @@ export default function Biometrics() {
         room: submitData.room,
         brand: submitData.brand
       });
-      
+
       setShowModal(false);
       setEditingId(null);
-      setFormData({ 
-        name: '', collegeName: '', block: '', floor: '', room: '', 
-        type: 'Fingerprint', brand: 'ZKTECO', ipAddress: '', serverIp: '', serialNumber: '', macAddress: '', status: 'Online' 
+      setFormData({
+        name: '', collegeName: '', block: '', floor: '', room: '',
+        type: 'Fingerprint', brand: 'ZKTECO', model: '', ipAddress: '', ipv4Gateway: '', subnetMask: '', serverIp: '', serialNumber: '', macAddress: '', status: 'Online'
       });
       fetchDevices();
     } catch (err) {
@@ -222,7 +237,10 @@ export default function Biometrics() {
       room: device.room || '',
       type: device.type,
       brand: device.brand,
-      ipAddress: device.ipAddress,
+      model: device.model || '',
+      ipAddress: device.ipAddress || '',
+      ipv4Gateway: device.gateway || '',
+      subnetMask: device.subnetMask || '',
       serverIp: device.serverIp || '',
       serialNumber: device.serialNumber,
       macAddress: device.macAddress || '',
@@ -233,16 +251,16 @@ export default function Biometrics() {
   };
 
   const deleteDevice = async (id) => {
-    if (window.confirm('WARNING: Securely purge this biometric identity node?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/cameras/biometrics/${id}/`);
         showNotification('Identity node purged');
         fetchDevices();
-      } catch (err) {
-        console.error(err);
-        alert('Error removing asset');
+      } catch (error) {
+        console.error('Error deleting device:', error);
+        showNotification('Failed to purge node', 'error');
       }
-    }
+    });
   };
 
   const handleFileUpload = async (e) => {
@@ -269,7 +287,7 @@ export default function Biometrics() {
   };
 
   const filteredDevices = useMemo(() => {
-    return devices.filter(d => 
+    return devices.filter(d =>
       (d.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (d.collegeName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (d.block || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -308,7 +326,7 @@ export default function Biometrics() {
 
   const exportToExcel = () => {
     const headers = ['S.No', 'Serial Number', 'Usage', 'Brand', 'College', 'Block', 'Floor', 'Room', 'IP Address', 'MAC Address', 'Type', 'Status'];
-    
+
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
       const str = String(val);
@@ -333,11 +351,11 @@ export default function Biometrics() {
       escapeCSV(d.status || 'N/A')
     ]);
 
-    const csvContent = "\uFEFF" + [ 
-      headers.join(","), 
+    const csvContent = "\uFEFF" + [
+      headers.join(","),
       ...dataRows.map(row => row.join(","))
     ].join("\n");
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -353,10 +371,10 @@ export default function Biometrics() {
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+            <Fingerprint className="mr-3 text-purple-500" size={28} />
             Biometric
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Manage attendance hardware and biometric devices</p>
         </div>
         <div className="flex space-x-3">
           <button onClick={exportToExcel} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all shadow-lg">
@@ -386,7 +404,7 @@ export default function Biometrics() {
           </div>
           <div>
             <h3 className="text-3xl font-black text-teal-600 tracking-tighter">{stats.total}</h3>
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em]">Total Nodes</p>
+            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em]">Total </p>
           </div>
         </div>
 
@@ -487,11 +505,11 @@ export default function Biometrics() {
               />
             </div>
             <div className="flex items-center justify-between text-[10px] text-secondary px-2 font-black uppercase tracking-[0.15em]">
-                <div className="flex items-center">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
-                  System Status: <span className="text-emerald-600 ml-1">Operational</span>
-                </div>
-                <span>Last Synchronized: Just now</span>
+              <div className="flex items-center">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
+                System Status: <span className="text-emerald-600 ml-1">Operational</span>
+              </div>
+              <span>Last Synchronized: Just now</span>
             </div>
           </div>
         </div>
@@ -514,7 +532,7 @@ export default function Biometrics() {
             <thead>
               <tr className="bg-panel border-b border-main text-main">
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest">Device Identity</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest">Serial Key</th>
+                <th className="p-5 text-[10px] font-black uppercase tracking-widest">Asset Number</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest">Hardware Vendor</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest">Geographic Node</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest">Network Endpoint</th>
@@ -524,8 +542,8 @@ export default function Biometrics() {
             </thead>
             <tbody className="divide-y border-main">
               {filteredDevices.map((device) => (
-                <tr 
-                  key={device.id || device._id} 
+                <tr
+                  key={device.id || device._id}
                   className="hover:bg-panel group transition-all cursor-pointer"
                   onClick={(e) => {
                     if (!e.target.closest('button')) {
@@ -559,10 +577,9 @@ export default function Biometrics() {
                     <span className="text-[9px] text-secondary font-mono tracking-widest uppercase">{device.macAddress || 'NO MAC'}</span>
                   </td>
                   <td className="p-5">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                      device.status === 'Online' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
-                      'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                    }`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${device.status === 'Online' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                        'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                      }`}>
                       {device.status}
                     </span>
                   </td>
@@ -605,9 +622,8 @@ export default function Biometrics() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black text-main uppercase tracking-tight">
-                    {editingId ? 'Modify Biometric Asset' : 'Register New Biometric'}
+                    {editingId ? 'Modify Biometric' : 'Biometric'}
                   </h2>
-                  <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Identity Verification Protocol</p>
                 </div>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-secondary hover:text-main transition-all">
@@ -618,8 +634,8 @@ export default function Biometrics() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 {/* Column 1: Identity & Location */}
                 <div className="space-y-6">
-                  <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Location & Details</h3>
-                  
+
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Device Designation (Name)</label>
                     <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="glass-input w-full p-4 text-sm bg-panel border-main shadow-inner" placeholder="e.g. Main Entry Gate" />
@@ -631,13 +647,13 @@ export default function Biometrics() {
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         College / Institution
                       </label>
-                      <ComboInput 
-                        required 
-                        name="collegeName" 
-                        value={formData.collegeName} 
-                        onChange={handleInputChange} 
-                        options={uniqueColleges} 
-                        placeholder="Select or Type College..." 
+                      <ComboInput
+                        required
+                        name="collegeName"
+                        value={formData.collegeName}
+                        onChange={handleInputChange}
+                        options={uniqueColleges}
+                        placeholder="Select or Type College..."
                       />
                     </div>
 
@@ -646,13 +662,13 @@ export default function Biometrics() {
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Block
                         </label>
-                        <ComboInput 
-                          required 
-                          name="block" 
-                          value={formData.block} 
-                          onChange={handleInputChange} 
-                          options={uniqueBlocks} 
-                          placeholder="Block name..." 
+                        <ComboInput
+                          required
+                          name="block"
+                          value={formData.block}
+                          onChange={handleInputChange}
+                          options={uniqueBlocks}
+                          placeholder="Block name..."
                         />
                       </div>
 
@@ -660,26 +676,26 @@ export default function Biometrics() {
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                           Floor Level
                         </label>
-                        <ComboInput 
-                          required 
-                          name="floor" 
-                          value={formData.floor} 
-                          onChange={handleInputChange} 
-                          options={uniqueFloors} 
-                          placeholder="Floor level..." 
+                        <ComboInput
+                          required
+                          name="floor"
+                          value={formData.floor}
+                          onChange={handleInputChange}
+                          options={uniqueFloors}
+                          placeholder="Floor level..."
                         />
                       </div>
                     </div>
-                     <div className="space-y-2">
+                    <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
                         Room / Specific Location
                       </label>
-                      <ComboInput 
-                        name="room" 
-                        value={formData.room} 
-                        onChange={handleInputChange} 
-                        options={uniqueRooms} 
-                        placeholder="Select or Type Room..." 
+                      <ComboInput
+                        name="room"
+                        value={formData.room}
+                        onChange={handleInputChange}
+                        options={uniqueRooms}
+                        placeholder="Select or Type Room..."
                       />
                     </div>
                   </div>
@@ -687,41 +703,60 @@ export default function Biometrics() {
 
                 {/* Column 2: Specs & Hardware */}
                 <div className="space-y-6">
-                  <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Hardware & Status</h3>
-                  
+
+
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Name</label>
-                      <ComboInput 
-                        name="brand" 
-                        value={formData.brand} 
-                        onChange={handleInputChange} 
-                        options={uniqueBrands} 
-                        placeholder="Select or Type Brand..." 
+                      <ComboInput
+                        name="brand"
+                        value={formData.brand}
+                        onChange={handleInputChange}
+                        options={uniqueBrands}
+                        placeholder="Select or Type Brand..."
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Device IP Protocol</label>
-                      <input required type="text" name="ipAddress" value={formData.ipAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="192.168.1.100" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Server IP Address</label>
-                      <input type="text" name="serverIp" value={formData.serverIp} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-blue-500 bg-panel border-main shadow-inner" placeholder="192.168.1.200" />
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Model</label>
+                      <input type="text" name="model" value={formData.model} onChange={handleInputChange} className="glass-input w-full p-4 text-sm bg-panel border-main shadow-inner" placeholder="e.g. F22" />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <div className="flex justify-between items-center ml-1">
-                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Serial Number</label>
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Asset Number</label>
                       </div>
                       <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="BIO/01" />
                     </div>
                     <div className="space-y-2">
                       <div className="flex justify-between items-center ml-1">
-                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest">MAC Address</label>
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Server IP Address</label>
                       </div>
-                      <input type="text" name="macAddress" value={formData.macAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="00:1A:2B:3C:4D:5E" />
+                      <input type="text" name="serverIp" value={formData.serverIp} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="192.168.1.200" />
+                    </div>
+                  </div>
+
+                  {/* Network Information */}
+                  <div className="space-y-6 mt-10">
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IP Protocol</label>
+                        <input required type="text" name="ipAddress" value={formData.ipAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="192.168.1.100" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IPv4 Gateway</label>
+                        <input type="text" name="ipv4Gateway" value={formData.ipv4Gateway} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="192.168.1.1" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Subnet Mask</label>
+                        <input type="text" name="subnetMask" value={formData.subnetMask} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="255.255.255.0" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">MAC Interface</label>
+                        <input type="text" name="macAddress" value={formData.macAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="00:1A:2B:3C:4D:5E" />
+                      </div>
                     </div>
                   </div>
 
@@ -732,12 +767,11 @@ export default function Biometrics() {
                         <button
                           key={s}
                           type="button"
-                          onClick={() => setFormData({...formData, status: s})}
-                          className={`px-4 py-4 text-[10px] font-black uppercase tracking-widest rounded-2xl border transition-all ${
-                            formData.status === s 
-                              ? 'bg-teal-600 text-white border-teal-500 shadow-lg shadow-teal-500/20' 
+                          onClick={() => setFormData({ ...formData, status: s })}
+                          className={`px-4 py-4 text-[10px] font-black uppercase tracking-widest rounded-2xl border transition-all ${formData.status === s
+                              ? 'bg-teal-600 text-white border-teal-500 shadow-lg shadow-teal-500/20'
                               : 'bg-panel border-main text-secondary hover:text-main hover:bg-card shadow-inner'
-                          }`}
+                            }`}
                         >
                           {s}
                         </button>
@@ -748,12 +782,12 @@ export default function Biometrics() {
               </div>
 
               <div className="flex justify-end space-x-6 mt-10 pt-8 border-t border-main shrink-0 px-2 pb-2">
-                <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black text-secondary hover:text-main uppercase tracking-[0.2em] transition-colors">Abort Protocol</button>
-                <button 
-                  type="submit" 
+                <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black text-secondary hover:text-main uppercase tracking-[0.2em] transition-colors">Cancel</button>
+                <button
+                  type="submit"
                   className="glass-button px-12 py-4 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl"
                 >
-                  {editingId ? 'SAVE ASSET' : 'INITIALIZE ASSET'}
+                  {editingId ? 'Update' : 'Save'}
                 </button>
               </div>
             </form>

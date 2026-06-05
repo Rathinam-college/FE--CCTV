@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import { useNavigate } from 'react-router-dom';
 import ComboInput from '../components/ComboInput';
@@ -16,6 +17,7 @@ export default function Upgrades() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const [tickets, setTickets] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -184,7 +186,7 @@ export default function Upgrades() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this upgrade record?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/tickets/${id}/`);
         showNotification('Record deleted');
@@ -192,7 +194,7 @@ export default function Upgrades() {
       } catch (err) {
         showNotification('Failed to delete', 'error');
       }
-    }
+    });
   };
 
   const filteredTickets = upgradeTickets.filter(ticket => {
@@ -211,7 +213,6 @@ export default function Upgrades() {
             <Shield className="mr-3 text-purple-400" size={28} />
             Upgrades
           </h1>
-          <p className="text-sm text-dim mt-1">Track hardware and software upgradations</p>
         </div>
         <div className="flex items-center space-x-3 w-full md:w-auto">
           <div className="flex items-center space-x-2">
@@ -418,8 +419,9 @@ export default function Upgrades() {
                   </select>
                 </div>
               </div>
-              <div className="flex justify-end pt-6 border-t border-main">
-                <button type="submit" className="glass-button px-12 py-3">{editingId ? 'SAVE CHANGES' : 'REGISTER UPGRADE'}</button>
+              <div className="flex justify-end items-center space-x-6 pt-6 border-t border-main">
+                <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black text-secondary hover:text-main uppercase tracking-[0.2em] transition-colors">Cancel</button>
+                <button type="submit" className="glass-button px-12 py-3">{editingId ? 'Update' : 'Save'}</button>
               </div>
             </form>
           </div>

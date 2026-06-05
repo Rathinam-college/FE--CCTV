@@ -421,7 +421,7 @@ export default function Maintenance() {
                     <div>
                       <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Asset Category</label>
                       <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
-                        <option value="Assets">Assets / Infrastructure</option>
+                        <option value="Assets">Assets</option>
                         <option value="Storage">Storage Units</option>
                         <option value="Identity">Identity Access</option>
                         <option value="Network">Network Nodes</option>

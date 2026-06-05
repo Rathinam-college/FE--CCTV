@@ -8,12 +8,14 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { useNavigate } from 'react-router-dom';
 
 export default function Projects() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -82,7 +84,7 @@ export default function Projects() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this project? All associated tickets will be affected.')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/tickets/projects/${id}/`);
         showNotification('Project deleted successfully');
@@ -91,7 +93,7 @@ export default function Projects() {
         console.error('Error deleting project:', err);
         showNotification('Failed to delete project', 'error');
       }
-    }
+    });
   };
 
   const handleFileUpload = async (e) => {
@@ -238,7 +240,6 @@ export default function Projects() {
             <Briefcase className="mr-3 text-teal-500" size={28} />
             Project
           </h1>
-          <p className="text-sm text-secondary mt-1">Organize maintenance tasks into specific contracts and initiatives</p>
         </div>
         <div className="flex items-center space-x-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
@@ -362,9 +363,8 @@ export default function Projects() {
             <div className="p-8 border-b border-main bg-panel flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-2xl font-black text-main tracking-tight uppercase">
-                  {editingId ? 'Modify Project' : 'Initialize Project'}
+                  {editingId ? 'Modify Project' : 'Project'}
                 </h2>
-                <p className="text-xs text-secondary mt-1 uppercase tracking-widest font-black">Strategic Maintenance Contract</p>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-dim hover:text-main transition-all">
                 <X size={24} />
@@ -447,14 +447,14 @@ export default function Projects() {
                   onClick={() => setShowModal(false)}
                   className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-secondary hover:text-main transition-all"
                 >
-                  Abort Initialization
+                  Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={submitting}
                   className="glass-button px-12 py-3"
                 >
-                  {submitting ? 'PROCESSING...' : (editingId ? 'COMMIT CHANGES' : 'INITIALIZE PROJECT')}
+                  {submitting ? 'PROCESSING...' : (editingId ? 'Update' : 'Save')}
                 </button>
               </div>
             </form>

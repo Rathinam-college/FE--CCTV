@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { Search, Filter, Plus, Server, HardDrive, Cpu, X, Edit2, Trash2, Building, Activity, ShieldCheck, ShieldAlert, Download, Upload, Info, ChevronRight } from 'lucide-react';
+import { Search, Filter, Plus, Server, HardDrive, Cpu, X, Edit2, Trash2, Building, Activity, ShieldCheck, ShieldAlert, Download, Upload, Info, ChevronRight, Network } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import ComboInput from '../components/ComboInput';
 
@@ -12,6 +13,7 @@ export default function NVR() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   const [nvrs, setNvrs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,8 +23,10 @@ export default function NVR() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    sNo: '',
     ipAddress: '',
+    ipv4Gateway: '',
+    subnetMask: '',
+    macAddress: '',
     nvrName: '',
     collegeName: '',
     block: '',
@@ -132,16 +136,25 @@ export default function NVR() {
     const { name, value } = e.target;
 
 
-    let newValue = value;
-
-    if (name === 'ipAddress') {
-      const cleaned = value.replace(/[^0-9.]/g, '');
+    const applyIPMask = (val) => {
+      const cleaned = val.replace(/[^0-9.]/g, '');
       const parts = cleaned.split('.');
-      if (parts[parts.length - 1].length === 3 && parts.length < 4 && !value.endsWith('.')) {
-        newValue = cleaned + '.';
-      } else {
-        newValue = cleaned;
+      if (parts[parts.length - 1].length === 3 && parts.length < 4 && !val.endsWith('.')) {
+        return cleaned + '.';
       }
+      return cleaned;
+    };
+
+    const applyMACMask = (val) => {
+      const cleaned = val.replace(/[^0-9A-Fa-f]/g, '')?.toUpperCase() || '';
+      const parts = cleaned.match(/.{1,2}/g) || [];
+      return parts.slice(0, 6).join(':');
+    };
+
+    if (['ipAddress', 'ipv4Gateway', 'subnetMask'].includes(name)) {
+      newValue = applyIPMask(value);
+    } else if (name === 'macAddress') {
+      newValue = applyMACMask(value);
     }
 
     setFormData(prev => {
@@ -175,6 +188,7 @@ export default function NVR() {
         ...formData,
         hardDisk: finalHardDisk,
         location: formData.room || formData.block || 'Unknown',
+        gateway: formData.ipv4Gateway || '',
       };
       delete payload.storageList;
       
@@ -201,7 +215,7 @@ export default function NVR() {
       setShowModal(false);
       setEditingId(null);
       setFormData({ 
-        sNo: '', ipAddress: '', nvrName: '', collegeName: '', block: '', floor: '', room: '', 
+        ipAddress: '', ipv4Gateway: '', subnetMask: '', macAddress: '', nvrName: '', collegeName: '', block: '', floor: '', room: '', 
         brand: '', model: '', hardDisk: '', storageList: [{ size: '', unit: 'TB' }], channel: '', serialNumber: '', status: 'Online' 
       });
       fetchNVRs();
@@ -222,7 +236,7 @@ export default function NVR() {
 
 
     setFormData({ 
-      sNo: '', ipAddress: '', nvrName: '', collegeName: college, block: block, floor: floor, room: room, 
+      ipAddress: '', ipv4Gateway: '', subnetMask: '', macAddress: '', nvrName: '', collegeName: college, block: block, floor: floor, room: room, 
       brand: '', model: '', hardDisk: '', storageList: [{ size: '', unit: 'TB' }], channel: '', serialNumber: '', status: 'Online' 
     });
     setShowModal(true);
@@ -271,8 +285,10 @@ export default function NVR() {
 
   const editNVR = (nvr) => {
     setFormData({
-      sNo: nvr.sNo || '',
       ipAddress: nvr.ipAddress || '',
+      ipv4Gateway: nvr.gateway || '',
+      subnetMask: nvr.subnetMask || '',
+      macAddress: nvr.macAddress || '',
       nvrName: nvr.nvrName || '',
       collegeName: nvr.collegeName || '',
       block: nvr.block || '',
@@ -294,15 +310,16 @@ export default function NVR() {
   };
 
   const deleteNVR = async (id) => {
-    if (window.confirm('WARNING: Are you sure you want to securely purge this NVR from the database?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/cameras/nvrs/${id}/`);
         fetchNVRs();
-      } catch (err) {
-        console.error(err);
-        showNotification('Error purging NVR', 'error');
+        showNotification('NVR purged from database');
+      } catch (error) {
+        console.error('Error deleting NVR:', error);
+        showNotification('Failed to delete NVR', 'error');
       }
-    }
+    });
   };
 
   const handleFileUpload = async (e) => {
@@ -424,12 +441,15 @@ export default function NVR() {
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+            <HardDrive className="mr-3 text-emerald-500" size={28} />
             NVR
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Manage network storage and recording nodes</p>
         </div>
         <div className="flex space-x-3">
+          <button onClick={() => navigate('/nvr-mapping')} className="glass-panel flex items-center px-5 py-2.5 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-lg">
+            <Network size={16} className="mr-2" /> Camera Mapping
+          </button>
           <button onClick={exportToExcel} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all shadow-lg">
             <Download size={18} className="mr-2" /> Export CSV
           </button>
@@ -536,7 +556,6 @@ export default function NVR() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-panel border-b border-main">
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">S NO</th>
                 <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Asset Number</th>
                 <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Info</th>
                 <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Location & Brand</th>
@@ -556,9 +575,6 @@ export default function NVR() {
                     }
                   }}
                 >
-                  <td className="p-5">
-                    <span className="text-sm font-bold text-dim">{nvr.sNo || index + 1}</span>
-                  </td>
                   <td className="p-5">
                     <span className="text-sm font-mono text-indigo-300 font-bold">{nvr.serialNumber || '—'}</span>
                   </td>
@@ -652,9 +668,8 @@ export default function NVR() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black text-main uppercase tracking-tight">
-                    {editingId ? 'Modify NVR Asset' : 'Register New NVR'}
+                    {editingId ? 'Modify NVR' : 'NVR'}
                   </h2>
-                  <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Storage Infrastructure Protocol</p>
                 </div>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-secondary hover:text-main transition-all">
@@ -666,16 +681,23 @@ export default function NVR() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Column 1: Identity & Location */}
                 <div className="space-y-5">
-                  <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Location & Details</h3>
-                  
-                  <div className="grid grid-cols-2 gap-4">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">S.No</label>
-                      <input type="text" name="sNo" value={formData.sNo} onChange={handleInputChange} className="glass-input w-full p-4 text-sm bg-panel border-main shadow-inner" placeholder="e.g. 1" />
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IP Protocol</label>
+                      <input required type="text" name="ipAddress" value={formData.ipAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="192.168.1.100" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IP Protocol Address</label>
-                      <input required type="text" name="ipAddress" value={formData.ipAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-teal-500 bg-panel border-main shadow-inner" placeholder="192.168.1.100" />
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">IPv4 Gateway</label>
+                      <input type="text" name="ipv4Gateway" value={formData.ipv4Gateway} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="192.168.1.1" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Subnet Mask</label>
+                      <input type="text" name="subnetMask" value={formData.subnetMask} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="255.255.255.0" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">MAC Interface</label>
+                      <input type="text" name="macAddress" value={formData.macAddress} onChange={handleInputChange} className="glass-input w-full p-4 text-sm font-mono text-secondary bg-panel shadow-inner" placeholder="00:1A:2B:3C:4D:5E" />
                     </div>
                   </div>
 
@@ -747,8 +769,6 @@ export default function NVR() {
 
                 {/* Column 2: Specs & Vendor */}
                 <div className="space-y-6">
-                  <h3 className="text-[11px] font-black text-teal-500 uppercase tracking-[0.4em] border-b border-main pb-3">Hardware & Vendor</h3>
-                  
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Designation</label>
@@ -853,10 +873,10 @@ export default function NVR() {
 
               <div className="flex justify-end space-x-6 pt-10 border-t border-main shrink-0">
                 <button type="button" onClick={() => setShowModal(false)} className="text-xs font-black tracking-[0.2em] text-secondary hover:text-main uppercase transition-all">
-                  Abort Protocol
+                  Cancel
                 </button>
                 <button type="submit" className="glass-button px-12 py-4 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl">
-                  {editingId ? 'COMMIT ASSET' : 'INITIALIZE ASSET'}
+                  {editingId ? 'Update' : 'Save'}
                 </button>
               </div>
             </form>

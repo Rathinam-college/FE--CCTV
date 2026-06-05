@@ -4,10 +4,12 @@ import api from '../services/api';
 import { Plus, Edit2, Trash2, Users as UsersIcon, ShieldAlert, Upload } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 
 export default function Users() {
   const { user } = useAuthStore();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const [users, setUsers] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -117,16 +119,16 @@ export default function Users() {
   };
 
   const deleteUser = async (id) => {
-    if (window.confirm('WARNING: Are you sure you want to securely purge this user?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/users/${id}/`);
         showNotification('User purged successfully');
         fetchUsers();
       } catch (err) {
         console.error(err);
-        showNotification('Error purging user', 'error');
+        showNotification('Failed to purge user', 'error');
       }
-    }
+    });
   };
 
   if (user?.role !== 'Super Admin' && user?.role !== 'Admin') {
@@ -143,10 +145,10 @@ export default function Users() {
     <div className="space-y-6 animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 border-b border-main pb-6">
         <div>
-          <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main uppercase">
-            Identities
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+            <UsersIcon className="mr-3 text-teal-500" size={28} />
+            User Management
           </h1>
-          <p className="text-[10px] text-teal-600 font-black uppercase tracking-[0.2em] mt-1">Administrative Control & Clearance Protocols ({users.length} Records)</p>
         </div>
         <div className="flex space-x-3">
           <label className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/20 transition-all cursor-pointer">
@@ -460,14 +462,14 @@ export default function Users() {
               </div>
               <div className="flex justify-end space-x-3 mt-10 pt-8 border-t border-main">
                 <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-secondary hover:text-main hover:bg-panel rounded-2xl transition-all">
-                  Abort Session
+                  Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={submitting}
                   className={`neon-button px-10 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  {submitting ? 'Processing...' : (editingId ? 'Update Identity' : 'Authorize Identity')}
+                  {submitting ? 'Processing...' : (editingId ? 'Update' : 'Save')}
                 </button>
               </div>
             </form>

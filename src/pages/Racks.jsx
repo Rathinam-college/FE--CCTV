@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { 
-  Search, Filter, Plus, Server, Hash, Cpu, X, 
-  Edit2, Trash2, Building, Activity, ShieldCheck, 
+import {
+  Search, Filter, Plus, Server, Hash, Cpu, X,
+  Edit2, Trash2, Building, Activity, ShieldCheck,
   ShieldAlert, Download, Network, Database, Upload,
   Info, ChevronRight
 } from 'lucide-react';
@@ -11,18 +11,20 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } 
 import { useSiteStore } from '../store/siteStore';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useConfirmStore } from '../store/confirmStore';
 import ComboInput from '../components/ComboInput';
 
 export default function Racks() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
+  const { showConfirm } = useConfirmStore();
   const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, occupations, fetchOccupations } = useSiteStore();
   const [racks, setRacks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Network:EDIT');
-  
+
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
@@ -52,8 +54,8 @@ export default function Racks() {
       const existingNumbers = racks
         .filter(r => (r.serialNumber || '').startsWith(prefix))
         .map(r => {
-            const parts = (r.serialNumber || '').split('/');
-            return parseInt(parts[parts.length - 1]) || 0;
+          const parts = (r.serialNumber || '').split('/');
+          return parseInt(parts[parts.length - 1]) || 0;
         });
       const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
       const formattedNumber = nextNumber.toString().padStart(2, '0');
@@ -133,9 +135,9 @@ export default function Racks() {
 
     setFormData(prev => {
       const nextData = { ...prev, [name]: value };
-      
+
       if (['collegeName', 'block', 'floor', 'room'].includes(name)) {
-        const matchingLoc = allLocations.find(loc => 
+        const matchingLoc = allLocations.find(loc =>
           (loc.collegeName || '') === (name === 'collegeName' ? value : (prev.collegeName || '')) &&
           (loc.block || '') === (name === 'block' ? value : (prev.block || '')) &&
           (loc.floor || '') === (name === 'floor' ? value : (prev.floor || '')) &&
@@ -164,7 +166,7 @@ export default function Racks() {
         await api.post('/cameras/racks/', submitData);
         showNotification('New rack registered successfully');
       }
-      
+
       await ensureLocationExists({
         collegeName: submitData.collegeName,
         block: submitData.block,
@@ -172,7 +174,7 @@ export default function Racks() {
         room: submitData.room,
         brand: submitData.brand
       });
-      
+
       setShowModal(false);
       resetForm();
       fetchRacks();
@@ -229,16 +231,16 @@ export default function Racks() {
   };
 
   const deleteRack = async (id) => {
-    if (window.confirm('WARNING: Are you sure you want to remove this rack?')) {
+    showConfirm('Are you sure?', async () => {
       try {
         await api.delete(`/cameras/racks/${id}/`);
         showNotification('Rack removed successfully');
         fetchRacks();
       } catch (err) {
         console.error(err);
-        showNotification('Error deleting rack', 'error');
+        showNotification('Failed to remove rack', 'error');
       }
-    }
+    });
   };
 
   const filteredRacks = useMemo(() => {
@@ -246,9 +248,9 @@ export default function Racks() {
       const matchesSearch = !searchQuery || [
         r.name, r.collegeName, r.block, r.room, r.brand, r.model, r.serialNumber
       ].some(val => (val || '').toLowerCase().includes(searchQuery.toLowerCase()));
-      
+
       const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [racks, searchQuery, statusFilter]);
@@ -274,7 +276,6 @@ export default function Racks() {
             <Server className="mr-3 text-blue-400" size={32} />
             Racks
           </h1>
-          <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em] mt-1">Manage infrastructure racks</p>
         </div>
         <div className="flex space-x-3">
           {canEdit && (
@@ -294,7 +295,7 @@ export default function Racks() {
           </div>
           <div>
             <h3 className="text-2xl font-bold text-main">{stats.total}</h3>
-            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Total Units</p>
+            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Total </p>
           </div>
         </div>
 
@@ -304,7 +305,7 @@ export default function Racks() {
           </div>
           <div>
             <h3 className="text-2xl font-bold text-main">{stats.online}</h3>
-            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Active Racks</p>
+            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Active </p>
           </div>
         </div>
 
@@ -314,7 +315,7 @@ export default function Racks() {
           </div>
           <div>
             <h3 className="text-2xl font-bold text-main">{stats.offline}</h3>
-            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Offline Racks</p>
+            <p className="text-[10px] font-bold text-dim uppercase tracking-widest">Offline </p>
           </div>
         </div>
 
@@ -334,7 +335,7 @@ export default function Racks() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <RechartsTooltip 
+                <RechartsTooltip
                   contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
                   itemStyle={{ color: '#fff' }}
                 />
@@ -369,11 +370,10 @@ export default function Racks() {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  statusFilter === status 
-                    ? 'bg-blue-600 text-main shadow-lg' 
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${statusFilter === status
+                    ? 'bg-blue-600 text-main shadow-lg'
                     : 'text-dim hover:text-main hover:bg-white/5'
-                }`}
+                  }`}
               >
                 {status}
               </button>
@@ -394,8 +394,8 @@ export default function Racks() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredRacks.map((r) => (
-                <tr 
-                  key={r._id || r.id} 
+                <tr
+                  key={r._id || r.id}
                   className="hover:bg-white/5 transition-all group cursor-pointer"
                   onClick={(e) => {
                     if (!e.target.closest('button')) {
@@ -436,11 +436,10 @@ export default function Racks() {
                     </span>
                   </td>
                   <td className="p-5">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
-                      r.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' :
-                      r.status === 'Offline' ? 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]' :
-                      'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                    }`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${r.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' :
+                        r.status === 'Offline' ? 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]' :
+                          'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                      }`}>
                       <span className={`w-1.5 h-1.5 rounded-full mr-2 ${r.status === 'Online' ? 'bg-emerald-400' : r.status === 'Offline' ? 'bg-red-400' : 'bg-orange-400'}`}></span>
                       {r.status}
                     </span>
@@ -480,7 +479,7 @@ export default function Racks() {
           <div className="bg-card rounded-[2.5rem] w-full max-w-3xl overflow-hidden border border-main shadow-2xl my-8">
             <div className="p-6 border-b border-main bg-panel flex justify-between items-center">
               <h2 className="text-xl font-bold text-main flex items-center">
-                <Server className="mr-3 text-teal-500" /> {editingId ? 'Edit Rack' : 'Register New Rack'}
+                <Server className="mr-3 text-teal-500" /> {editingId ? 'Edit Rack' : 'Rack'}
               </h2>
               <button onClick={() => setShowModal(false)} className="text-secondary hover:text-main transition-colors">
                 <X size={24} />
@@ -497,67 +496,67 @@ export default function Racks() {
                   <div className="space-y-4 pt-2">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">College / Institution</label>
-                      <ComboInput 
-                        required 
-                        name="collegeName" 
-                        value={formData.collegeName} 
-                        onChange={handleInputChange} 
-                        options={uniqueColleges} 
-                        placeholder="Select or Type College..." 
+                      <ComboInput
+                        required
+                        name="collegeName"
+                        value={formData.collegeName}
+                        onChange={handleInputChange}
+                        options={uniqueColleges}
+                        placeholder="Select or Type College..."
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Block</label>
-                        <ComboInput 
-                          required 
-                          name="block" 
-                          value={formData.block} 
-                          onChange={handleInputChange} 
-                          options={uniqueBlocks} 
-                          placeholder="Block name..." 
+                        <ComboInput
+                          required
+                          name="block"
+                          value={formData.block}
+                          onChange={handleInputChange}
+                          options={uniqueBlocks}
+                          placeholder="Block name..."
                         />
                       </div>
 
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Floor</label>
-                        <ComboInput 
-                          required 
-                          name="floor" 
-                          value={formData.floor} 
-                          onChange={handleInputChange} 
-                          options={uniqueFloors} 
-                          placeholder="Floor..." 
+                        <ComboInput
+                          required
+                          name="floor"
+                          value={formData.floor}
+                          onChange={handleInputChange}
+                          options={uniqueFloors}
+                          placeholder="Floor..."
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Room / specific location</label>
-                      <ComboInput 
-                        name="room" 
-                        value={formData.room} 
-                        onChange={handleInputChange} 
-                        options={uniqueRooms} 
-                        placeholder="Select or Type Room..." 
+                      <ComboInput
+                        name="room"
+                        value={formData.room}
+                        onChange={handleInputChange}
+                        options={uniqueRooms}
+                        placeholder="Select or Type Room..."
                       />
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-5">
-                  <h3 className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] border-b border-main pb-2">Hardware Info</h3>
-                  
+
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Brand Name</label>
-                      <ComboInput 
-                        name="brand" 
-                        value={formData.brand} 
-                        onChange={handleInputChange} 
-                        options={uniqueBrands} 
-                        placeholder="Select or Type Brand..." 
+                      <ComboInput
+                        name="brand"
+                        value={formData.brand}
+                        onChange={handleInputChange}
+                        options={uniqueBrands}
+                        placeholder="Select or Type Brand..."
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -587,12 +586,11 @@ export default function Racks() {
                           <button
                             key={s}
                             type="button"
-                            onClick={() => setFormData({...formData, status: s})}
-                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg border transition-all ${
-                              formData.status === s 
-                                ? 'bg-teal-600/20 border-teal-500/50 text-teal-400 shadow-[0_0_10px_rgba(13,148,136,0.2)]' 
+                            onClick={() => setFormData({ ...formData, status: s })}
+                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg border transition-all ${formData.status === s
+                                ? 'bg-teal-600/20 border-teal-500/50 text-teal-400 shadow-[0_0_10px_rgba(13,148,136,0.2)]'
                                 : 'border-main text-secondary hover:text-main hover:bg-white/5'
-                            }`}
+                              }`}
                           >
                             {s}
                           </button>
@@ -608,7 +606,7 @@ export default function Racks() {
                   Cancel
                 </button>
                 <button type="submit" className="neon-button min-w-[180px]">
-                  {editingId ? 'Save Changes' : 'Register Rack'}
+                  {editingId ? 'Update' : 'Save'}
                 </button>
               </div>
             </form>

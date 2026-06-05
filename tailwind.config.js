@@ -8,12 +8,18 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Outfit', 'Inter', 'sans-serif'],
+        sans: ['"Times New Roman"', 'Times', 'serif'],
       },
       colors: {
         glass: 'rgba(255, 255, 255, 0.03)',
         glassBorder: 'rgba(255, 255, 255, 0.08)',
-        primary: '#3b82f6',
+        primary: 'var(--bg-primary)',
+        secondary: 'var(--bg-secondary)',
+        'accent-primary': 'var(--accent-primary)',
+        'accent-secondary': 'var(--accent-secondary)',
+        'accent-violet': 'var(--accent-violet)',
+        'text-main': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
       },
       animation: {
         'fade-in': 'fadeIn 0.6s ease-out forwards',
