@@ -43,24 +43,31 @@ export default function NvrCameraMapping() {
 
   const handleAssignCamera = async (camera) => {
     try {
+      const currentNvrs = camera.dvrNvrDetails ? camera.dvrNvrDetails.split(',').map(n => n.trim()).filter(Boolean) : [];
+      if (!currentNvrs.includes(selectedNvr.nvrName)) {
+        currentNvrs.push(selectedNvr.nvrName);
+      }
+      
       await api.put(`/cameras/${camera.id}/`, {
         ...camera,
-        dvrNvrDetails: selectedNvr.nvrName // Store NVR name in this field
+        dvrNvrDetails: currentNvrs.join(', ')
       });
-      showNotification('Camera assigned to NVR', 'success');
+      showNotification('Camera linked to NVR', 'success');
       fetchData(); // Refresh list
-      setShowAssignModal(false);
     } catch (err) {
       console.error('Error assigning camera:', err);
-      showNotification('Failed to assign camera', 'error');
+      showNotification('Failed to link camera', 'error');
     }
   };
 
   const handleRemoveCamera = async (camera) => {
     try {
+      const currentNvrs = camera.dvrNvrDetails ? camera.dvrNvrDetails.split(',').map(n => n.trim()).filter(Boolean) : [];
+      const newNvrs = currentNvrs.filter(n => n !== selectedNvr.nvrName);
+
       await api.put(`/cameras/${camera.id}/`, {
         ...camera,
-        dvrNvrDetails: '' // Clear mapping
+        dvrNvrDetails: newNvrs.join(', ')
       });
       showNotification('Camera unlinked from NVR', 'success');
       fetchData();
@@ -72,14 +79,17 @@ export default function NvrCameraMapping() {
 
   const mappedCameras = useMemo(() => {
     if (!selectedNvr) return [];
-    return cameras.filter(c => c.dvrNvrDetails === selectedNvr.nvrName);
+    return cameras.filter(c => {
+      if (!c.dvrNvrDetails) return false;
+      const nvrList = c.dvrNvrDetails.split(',').map(n => n.trim()).filter(Boolean);
+      return nvrList.includes(selectedNvr.nvrName);
+    });
   }, [cameras, selectedNvr]);
 
-  const unassignedCameras = useMemo(() => {
+  const filteredAllCameras = useMemo(() => {
     const term = assignSearch.toLowerCase();
     return cameras.filter(c => 
-      (!c.dvrNvrDetails || c.dvrNvrDetails === '') &&
-      (c.name?.toLowerCase().includes(term) || c.cameraId?.toLowerCase().includes(term))
+      c.name?.toLowerCase().includes(term) || c.cameraId?.toLowerCase().includes(term)
     );
   }, [cameras, assignSearch]);
 
@@ -112,10 +122,13 @@ export default function NvrCameraMapping() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* NVR List Sidebar */}
         <div className="glass-panel p-6 bg-panel border border-main rounded-3xl h-[600px] flex flex-col">
-          <h3 className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-4">Storage Nodes</h3>
+          <h3 className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-4">Storage Assets</h3>
           <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
             {nvrs.map(nvr => {
-               const count = cameras.filter(c => c.dvrNvrDetails === nvr.nvrName).length;
+               const count = cameras.filter(c => {
+                 if (!c.dvrNvrDetails) return false;
+                 return c.dvrNvrDetails.split(',').map(n => n.trim()).filter(Boolean).includes(nvr.nvrName);
+               }).length;
                return (
                 <div 
                   key={nvr.id} 
@@ -223,7 +236,7 @@ export default function NvrCameraMapping() {
             <div className="p-6 border-b border-main flex justify-between items-center">
               <div>
                 <h2 className="text-lg font-bold text-main">Link Camera to {selectedNvr?.nvrName}</h2>
-                <p className="text-[10px] font-black text-secondary uppercase tracking-widest mt-1">Select from unassigned nodes</p>
+                <p className="text-[10px] font-black text-secondary uppercase tracking-widest mt-1">Select from unassigned assets</p>
               </div>
               <button onClick={() => setShowAssignModal(false)} className="text-dim hover:text-white transition-colors">
                 <X size={24} />
@@ -244,33 +257,47 @@ export default function NvrCameraMapping() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-              {unassignedCameras.length === 0 ? (
-                <div className="p-8 text-center text-dim text-sm">No unassigned cameras found matching search.</div>
+              {filteredAllCameras.length === 0 ? (
+                <div className="p-8 text-center text-dim text-sm">No cameras found matching search.</div>
               ) : (
                 <div className="space-y-1">
-                  {unassignedCameras.map(cam => (
+                  {filteredAllCameras.map(cam => {
+                    const currentNvrs = cam.dvrNvrDetails ? cam.dvrNvrDetails.split(',').map(n => n.trim()).filter(Boolean) : [];
+                    const isLinked = currentNvrs.includes(selectedNvr?.nvrName);
+                    
+                    return (
                     <div key={cam.id} className="flex items-center justify-between p-4 hover:bg-panel rounded-xl transition-colors group">
                       <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isLinked ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
                           <CctvIcon size={18} />
                         </div>
                         <div>
                           <p className="text-sm font-bold text-main">{cam.name}</p>
                           <p className="text-[10px] font-black text-secondary uppercase tracking-widest flex items-center space-x-2">
-                            <span className="text-emerald-400">ID: {cam.cameraId || 'N/A'}</span>
+                            <span className={isLinked ? "text-emerald-400" : "text-blue-400"}>ID: {cam.cameraId || 'N/A'}</span>
                             <span>•</span>
                             <span className="text-dim">{cam.ipAddress || '0.0.0.0'}</span>
+                            {currentNvrs.length > 0 && (
+                              <>
+                                <span>•</span>
+                                <span className="text-amber-500">Linked to {currentNvrs.length} NVR(s)</span>
+                              </>
+                            )}
                           </p>
                         </div>
                       </div>
                       <button 
-                        onClick={() => handleAssignCamera(cam)}
-                        className="opacity-0 group-hover:opacity-100 px-6 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-emerald-500 hover:text-white transition-all"
+                        onClick={() => isLinked ? handleRemoveCamera(cam) : handleAssignCamera(cam)}
+                        className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-full transition-all border ${
+                          isLinked 
+                            ? 'bg-rose-500/10 text-rose-500 border-rose-500/30 hover:bg-rose-500 hover:text-white' 
+                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500 hover:text-white'
+                        }`}
                       >
-                        Link
+                        {isLinked ? 'Unlink' : 'Link'}
                       </button>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
             </div>

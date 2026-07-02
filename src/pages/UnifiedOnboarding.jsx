@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { 
-  Building, MapPin, Plus, Trash2, X, ShieldAlert, ChevronRight, ChevronDown, LayoutGrid, Layers
+  Building, MapPin, Plus, Trash2, X, ShieldAlert, ChevronRight, ChevronDown, LayoutGrid, Layers, Server, Cctv, Fingerprint, Network, Download, Upload
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -9,6 +10,7 @@ import { useSiteStore } from '../store/siteStore';
 
 export default function UnifiedOnboarding() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
   const { 
     allLocations,
@@ -21,31 +23,69 @@ export default function UnifiedOnboarding() {
   const [activeBlockId, setActiveBlockId] = useState(null);
   const [activeFloorId, setActiveFloorId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [occupations, setOccupations] = useState([]);
+  const { divisions, fetchDivisions } = useSiteStore();
   
   // Prompt Modal State
   const [promptModal, setPromptModal] = useState({ isOpen: false, type: '', parentData: null, value: '', secondaryValue: '', floorMode: 'bulk', selectedCollege: '' });
+  const [devices, setDevices] = useState([]);
+
+  // Device-specific filters for the active block view
+  const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState('ALL');
+
+  // Reset filters when changing active block
+  useEffect(() => {
+    setDeviceSearchQuery('');
+    setDeviceTypeFilter('ALL');
+  }, [activeBlockId]);
 
   useEffect(() => {
     fetchAllLocations();
-    fetchOccupations();
+    fetchDivisions();
+    fetchDevices();
   }, []);
 
-  const fetchOccupations = async () => {
+  const fetchDevices = async () => {
     try {
-      const res = await api.get('/cameras/occupations/');
-      setOccupations(res.data);
+      const [camRes, nvrRes, bioRes, swRes] = await Promise.all([
+        api.get('/cameras/').catch(() => ({ data: [] })),
+        api.get('/cameras/nvrs/').catch(() => ({ data: [] })),
+        api.get('/cameras/biometrics/').catch(() => ({ data: [] })),
+        api.get('/cameras/switches/').catch(() => ({ data: [] }))
+      ]);
+      const cams = (camRes.data || []).map(d => ({ ...d, deviceType: 'Camera' }));
+      const nvrs = (nvrRes.data || []).map(d => ({ ...d, deviceType: 'NVR' }));
+      const bios = (bioRes.data || []).map(d => ({ ...d, deviceType: 'Biometric' }));
+      const sws = (swRes.data || []).map(d => ({ ...d, deviceType: 'Switch' }));
+      setDevices([...cams, ...nvrs, ...bios, ...sws]);
     } catch (err) {
-      console.error('Failed to fetch occupations', err);
+      console.error('Failed to fetch devices', err);
     }
   };
 
+  const parseLocation = (device) => {
+    if (!device) return { block: '—', floor: '—', room: '—' };
+    let block = device.block || '';
+    let floor = device.floor || '';
+    let room = device.room || '';
+    const raw = (device.siteName || (device.block?.includes('|') ? device.block : '')).trim();
+    if (raw && raw.includes('|')) {
+      const parts = raw.split('|').map(p => p.trim());
+      block = parts[1] || block;
+      floor = parts[2] || floor;
+      room = parts[3] || room;
+    }
+    return { block: block || '—', floor: floor || '—', room: room || '—' };
+  };
+
+
+
+  // Process flat locations into a nested hierarchy
   // Process flat locations into a nested hierarchy
   const hierarchy = useMemo(() => {
     const blocks = [];
     
-    // Filter by search query first if needed (though filtering a tree is complex, 
-    // we'll apply a basic filter at the flat level before building the tree)
+    // Filter by search query first if needed
     const filteredLocs = allLocations.filter(loc => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
@@ -56,28 +96,34 @@ export default function UnifiedOnboarding() {
 
     filteredLocs.forEach(loc => {
       if (!loc.block) return;
+      const blockName = String(loc.block).trim().toUpperCase();
       
-      let block = blocks.find(b => b.name === loc.block);
+      let block = blocks.find(b => b.name.toUpperCase() === blockName);
       if (!block) {
-        block = { name: loc.block, id: loc.id, collegeName: loc.collegeName || '', floors: [] };
+        block = { name: String(loc.block).trim(), id: loc.id, divisionName: loc.divisionName || '', floors: [] };
         blocks.push(block);
       } else if (!loc.floor && !loc.room) {
         block.id = loc.id; // Pure block record
       }
       
       if (!loc.floor) return;
+      const floorName = String(loc.floor).trim().toUpperCase();
       
-      let floor = block.floors.find(f => f.name === loc.floor);
+      let floor = block.floors.find(f => f.name.toUpperCase() === floorName);
       if (!floor) {
-        floor = { name: loc.floor, id: loc.id, rooms: [] };
+        floor = { name: String(loc.floor).trim(), id: loc.id, rooms: [] };
         block.floors.push(floor);
       } else if (!loc.room) {
         floor.id = loc.id; // Pure floor record
       }
       
       if (!loc.room) return;
+      const roomName = String(loc.room).trim().toUpperCase();
       
-      floor.rooms.push({ name: loc.room, id: loc.id, assignee: loc.assignedTo });
+      let room = floor.rooms.find(r => r.name.toUpperCase() === roomName);
+      if (!room) {
+        floor.rooms.push({ name: String(loc.room).trim(), id: loc.id, assignee: loc.assignedTo });
+      }
     });
     
     blocks.forEach(block => {
@@ -103,6 +149,9 @@ export default function UnifiedOnboarding() {
       });
     });
 
+    // Sort blocks A-Z
+    blocks.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
     return blocks;
   }, [allLocations, searchQuery]);
 
@@ -119,7 +168,7 @@ export default function UnifiedOnboarding() {
       setIsSubmitting(true);
 
       if (type === 'Block') {
-        await addLocation({ collegeName: promptModal.selectedCollege, block: value.trim(), floor: '', room: '' });
+        await addLocation({ divisionName: '', block: value.trim(), floor: '', room: '' });
       } else if (type === 'Floor') {
         if (floorMode === 'bulk') {
           const val = value.trim().toUpperCase();
@@ -156,10 +205,10 @@ export default function UnifiedOnboarding() {
           }
           
           await Promise.all(Array.from(floorsToCreate).map(f => 
-            addLocation({ collegeName: parentData.collegeName, block: parentData.block, floor: f, room: '' })
+            addLocation({ divisionName: parentData?.divisionName || '', block: parentData?.block || '', floor: f, room: '' })
           ));
         } else {
-          await addLocation({ collegeName: parentData.collegeName, block: parentData.block, floor: value.trim(), room: '' });
+          await addLocation({ divisionName: parentData?.divisionName || '', block: parentData?.block || '', floor: value.trim(), room: '' });
         }
       } else if (type === 'Room') {
         if (floorMode === 'bulk') {
@@ -185,21 +234,19 @@ export default function UnifiedOnboarding() {
           }
           
           await Promise.all(Array.from(roomsToCreate).map(r => 
-            addLocation({ collegeName: parentData.collegeName, block: parentData.block, floor: parentData.floor, room: r })
+            addLocation({ divisionName: parentData?.divisionName || '', block: parentData?.block || '', floor: parentData?.floor || '', room: r })
           ));
         } else {
-          await addLocation({ collegeName: parentData.collegeName, block: parentData.block, floor: parentData.floor, room: value.trim() });
+          await addLocation({ divisionName: parentData?.divisionName || '', block: parentData?.block || '', floor: parentData?.floor || '', room: value.trim() });
         }
       }
 
       showNotification(`${type} created successfully`, 'success');
-      await fetchAllLocations();
-      // If we just created a Block, we could auto-navigate into it, but staying on the list is fine
-      // If we are currently in a block, our activeBlockId will re-find the updated block from hierarchy automatically
       
       setPromptModal({ isOpen: false, type: '', parentData: null, value: '', secondaryValue: '', floorMode: 'bulk', selectedCollege: '' });
     } catch (err) {
-      showNotification(`Failed to create ${type}`, 'error');
+      const errorMsg = err.response?.data?.message || err.response?.data?.name?.[0] || `Failed to create ${type}`;
+      showNotification(errorMsg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -207,20 +254,50 @@ export default function UnifiedOnboarding() {
 
   const handleDelete = async (e, id, type) => {
     e.stopPropagation();
-    if (!id) {
-       return showNotification('This node does not have a dedicated registry ID. Delete its children first.', 'error');
+    if (!id || String(id).startsWith('legacy')) {
+       return showNotification('This asset does not have a dedicated registry ID. Please remove or reassign the devices assigned to it first.', 'error');
     }
     
     if (window.confirm(`Are you sure you want to delete this ${type}?`)) {
-      const success = await deleteLocation(id);
-      if (success) {
+      const result = await deleteLocation(id);
+      if (result.success) {
         showNotification(`${type} deleted`, 'success');
-        fetchAllLocations();
+        if (type === 'Block' && activeBlockId === id) {
+          setActiveBlockId(null);
+          setActiveFloorId(null);
+        }
       } else {
-        showNotification(`Failed to delete ${type}`, 'error');
+        showNotification(result.message || `Failed to delete ${type}`, 'error');
       }
     }
   };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setIsSubmitting(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await api.post('/cameras/locations/upload_excel/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const msg = response.data.skipped > 0 
+        ? `Imported ${response.data.created} locations. Skipped ${response.data.skipped} duplicates.` 
+        : `Imported ${response.data.created} locations successfully!`;
+      showNotification(msg, response.data.skipped > 0 ? 'warning' : 'success');
+      await fetchAllLocations();
+    } catch (err) {
+      showNotification(err.response?.data?.message || 'Failed to import locations', 'error');
+    } finally {
+      setIsSubmitting(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
 
   const canView = user?.role === 'Super Admin' || user?.permissions?.includes('Onboarding:VIEW');
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Onboarding:EDIT');
@@ -238,6 +315,70 @@ export default function UnifiedOnboarding() {
   const activeBlockObj = activeBlockId ? hierarchy.find(b => b.name === activeBlockId) : null;
   const activeFloorObj = activeBlockObj && activeFloorId ? activeBlockObj.floors.find(f => f.name === activeFloorId) : null;
 
+  const activeBlockDevices = useMemo(() => {
+    if (!activeBlockObj) return [];
+    return devices.filter(d => {
+      const parsedLoc = parseLocation(d);
+      return parsedLoc.block && activeBlockObj.name && parsedLoc.block.trim().toUpperCase() === activeBlockObj.name.trim().toUpperCase();
+    });
+  }, [devices, activeBlockObj]);
+
+  const filteredBlockDevices = useMemo(() => {
+    return activeBlockDevices.filter(d => {
+      // Filter by type
+      if (deviceTypeFilter !== 'ALL' && d.deviceType !== deviceTypeFilter) return false;
+      
+      // Filter by search query
+      if (!deviceSearchQuery) return true;
+      const q = deviceSearchQuery.toLowerCase();
+      const loc = parseLocation(d);
+      const name = d.name || d.cameraName || d.nvrName || d.biometricName || d.switchName || '';
+      const serial = d.serialNumber || d.serialNo || d.sno || '';
+      
+      return (
+        name.toLowerCase().includes(q) ||
+        serial.toLowerCase().includes(q) ||
+        (d.ipAddress || '').toLowerCase().includes(q) ||
+        (loc.floor || '').toLowerCase().includes(q) ||
+        (loc.room || '').toLowerCase().includes(q)
+      );
+    });
+  }, [activeBlockDevices, deviceSearchQuery, deviceTypeFilter]);
+
+  const exportLocationsCSV = () => {
+    if (hierarchy.length === 0) {
+      showNotification('No locations to export', 'error');
+      return;
+    }
+    
+    const headers = ['Division', 'Block', 'Floor', 'Room'];
+    const csvContent = [headers.join(',')];
+
+    hierarchy.forEach(block => {
+      if (block.floors.length === 0) {
+        csvContent.push(`"${block.divisionName || ''}","${block.name}","",""`);
+      } else {
+        block.floors.forEach(floor => {
+          if (floor.rooms.length === 0) {
+            csvContent.push(`"${block.divisionName || ''}","${block.name}","${floor.name}",""`);
+          } else {
+            floor.rooms.forEach(room => {
+              csvContent.push(`"${block.divisionName || ''}","${block.name}","${floor.name}","${room.name}"`);
+            });
+          }
+        });
+      }
+    });
+
+    const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Locations_List_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-10 pb-20 animate-fade-in relative">
       {/* Header Section */}
@@ -253,14 +394,30 @@ export default function UnifiedOnboarding() {
             <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
             ACTIVE HIERARCHY MODE
           </div>
-          {canEdit && (
+          <div className="flex space-x-3">
             <button
-              onClick={() => handleOpenPrompt('Block', null)}
-              className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] transform hover:-translate-y-1 flex items-center"
+              onClick={exportLocationsCSV}
+              disabled={hierarchy.length === 0}
+              className="px-6 py-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all flex items-center disabled:opacity-50"
             >
-              <Plus size={16} className="mr-2" /> Add Block
+              <Download size={16} className="mr-2" /> Export CSV
             </button>
-          )}
+            {canEdit && (
+              <>
+                <label className="px-6 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 border border-indigo-500/30 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all flex items-center cursor-pointer disabled:opacity-50">
+                  <Upload size={16} className="mr-2" /> Upload CSV
+                  <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} disabled={isSubmitting} />
+                </label>
+                <button
+                  onClick={() => handleOpenPrompt('Block', null)}
+                  className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] transform hover:-translate-y-1 flex items-center disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  <Plus size={16} className="mr-2" /> Add Block
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -312,7 +469,7 @@ export default function UnifiedOnboarding() {
             
             {activeBlockObj && !activeFloorObj && canEdit && (
                <button 
-                 onClick={() => handleOpenPrompt('Floor', { collegeName: activeBlockObj.collegeName, block: activeBlockObj.name })}
+                 onClick={() => handleOpenPrompt('Floor', { divisionName: activeBlockObj.divisionName, block: activeBlockObj.name })}
                  className="px-4 py-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border border-blue-500/20 flex items-center"
                >
                  <Plus size={14} className="mr-2" /> Add Floor
@@ -321,7 +478,7 @@ export default function UnifiedOnboarding() {
 
             {activeFloorObj && canEdit && (
                <button 
-                 onClick={() => handleOpenPrompt('Room', { collegeName: activeBlockObj.collegeName, block: activeBlockObj.name, floor: activeFloorObj.name })}
+                 onClick={() => handleOpenPrompt('Room', { divisionName: activeBlockObj.divisionName, block: activeBlockObj.name, floor: activeFloorObj.name })}
                  className="px-4 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border border-emerald-500/20 flex items-center"
                >
                  <Plus size={14} className="mr-2" /> Add Room
@@ -342,21 +499,33 @@ export default function UnifiedOnboarding() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {hierarchy.map(block => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {hierarchy.map(block => {
+                    const blockDevices = devices.filter(d => {
+                      const blockName = parseLocation(d).block;
+                      return blockName && block.name && blockName.trim().toUpperCase() === block.name.trim().toUpperCase();
+                    });
+                    const camsCount = blockDevices.filter(d => d.deviceType === 'Camera').length;
+                    const nvrsCount = blockDevices.filter(d => d.deviceType === 'NVR').length;
+                    const biosCount = blockDevices.filter(d => d.deviceType === 'Biometric').length;
+                    const swsCount = blockDevices.filter(d => d.deviceType === 'Switch').length;
+
+                    return (
                     <div 
                       key={block.name} 
-                      className="bg-panel border border-main rounded-2xl p-6 hover:shadow-lg transition-all cursor-pointer group hover:border-blue-500/30 flex flex-col justify-between"
+                      className="hud-panel p-6 hover:shadow-lg transition-all cursor-pointer group hover:border-blue-500/30 flex flex-col justify-between relative overflow-hidden"
                       onClick={() => setActiveBlockId(block.name)}
                     >
-                      <div className="flex justify-between items-start mb-6">
+                      <div className="hud-corner-tr"></div>
+                      <div className="hud-corner-bl"></div>
+                      <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center">
                           <div className="p-3 bg-teal-500/10 rounded-xl mr-4 group-hover:bg-teal-500/20 transition-colors">
                             <Building size={24} className="text-teal-500" />
                           </div>
                           <div>
                             <h4 className="text-lg font-black text-main tracking-widest uppercase">{block.name}</h4>
-                            <p className="text-xs text-dim font-bold uppercase tracking-widest">{block.floors.length} Floors</p>
+                            <p className="text-xs text-dim font-bold uppercase tracking-widest">{block.floors.length} Floors | {blockDevices.length} Devices</p>
                           </div>
                         </div>
                         {canEdit && block.id && (
@@ -368,12 +537,37 @@ export default function UnifiedOnboarding() {
                           </button>
                         )}
                       </div>
+
+                      {/* Device type breakdown */}
+                      <div className="flex flex-wrap gap-2 mb-6">
+                        {camsCount > 0 && (
+                          <span className="inline-flex items-center text-[10px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
+                            <Cctv size={12} className="mr-1" /> {camsCount}
+                          </span>
+                        )}
+                        {nvrsCount > 0 && (
+                          <span className="inline-flex items-center text-[10px] font-bold text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                            <Server size={12} className="mr-1" /> {nvrsCount}
+                          </span>
+                        )}
+                        {biosCount > 0 && (
+                          <span className="inline-flex items-center text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                            <Fingerprint size={12} className="mr-1" /> {biosCount}
+                          </span>
+                        )}
+                        {swsCount > 0 && (
+                          <span className="inline-flex items-center text-[10px] font-bold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
+                            <Network size={12} className="mr-1" /> {swsCount}
+                          </span>
+                        )}
+                      </div>
+
                       <div className="flex items-center justify-between text-xs font-bold text-blue-500 uppercase tracking-widest">
                         <span>Enter Block</span>
                         <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )
             ) : activeBlockObj && !activeFloorObj ? (
@@ -418,6 +612,145 @@ export default function UnifiedOnboarding() {
                      ))}
                    </div>
                  )}
+
+                  {/* Devices connected to this block */}
+                  <div className="mt-12 bg-panel border border-main rounded-3xl overflow-hidden shadow-sm">
+                    <div className="p-6 border-b border-main flex flex-col md:flex-row justify-between items-start md:items-center bg-panel gap-4">
+                      <div>
+                        <h3 className="text-base font-black text-main uppercase tracking-widest flex items-center">
+                          <Cctv className="mr-3 text-blue-500" size={20} />
+                          Devices in Block {activeBlockObj.name}
+                        </h3>
+                        <p className="text-xs text-dim font-bold uppercase tracking-widest mt-1">
+                          Showing {filteredBlockDevices.length} of {activeBlockDevices.length} Devices
+                        </p>
+                      </div>
+                      
+                      {/* Search and type filters */}
+                      <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <select
+                          value={deviceTypeFilter}
+                          onChange={(e) => setDeviceTypeFilter(e.target.value)}
+                          className="glass-input p-2.5 text-xs bg-panel border-main focus:border-blue-500 text-main font-bold uppercase tracking-wider rounded-xl cursor-pointer"
+                        >
+                          <option value="ALL">All Types</option>
+                          <option value="Camera">Cameras</option>
+                          <option value="NVR">NVRs</option>
+                          <option value="Biometric">Biometrics</option>
+                          <option value="Switch">Switches</option>
+                        </select>
+                        
+                        <input
+                          type="text"
+                          value={deviceSearchQuery}
+                          onChange={(e) => setDeviceSearchQuery(e.target.value)}
+                          placeholder="Search devices by name, IP, serial..."
+                          className="glass-input p-2.5 text-xs bg-panel border-main focus:border-blue-500 transition-all text-main w-full sm:w-64 rounded-xl font-medium"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-main bg-main/50 text-[10px] font-black text-secondary uppercase tracking-[0.2em]">
+                            <th className="p-5">Device</th>
+                            <th className="p-5">Type</th>
+                            <th className="p-5">Location</th>
+                            <th className="p-5">Network & Serial</th>
+                            <th className="p-5">Status</th>
+                            <th className="p-5 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredBlockDevices.map((device) => {
+                            const loc = parseLocation(device);
+                            const deviceName = device.name || device.cameraName || device.nvrName || device.biometricName || device.switchName || 'Unnamed Device';
+                            const serialNo = device.serialNumber || device.serialNo || device.sno || '—';
+                            
+                            let detailUrl = '';
+                            if (device.deviceType === 'Camera') detailUrl = `/devices/cameras/${device.id || device._id}`;
+                            else if (device.deviceType === 'NVR') detailUrl = `/devices/nvr/${device.id || device._id}`;
+                            else if (device.deviceType === 'Biometric') detailUrl = `/devices/biometrics/${device.id || device._id}`;
+                            else if (device.deviceType === 'Switch') detailUrl = `/devices/switches/${device.id || device._id}`;
+
+                            return (
+                              <tr key={`${device.deviceType}-${device.id || device._id}`} className="border-b border-main/50 hover:bg-main/20 transition-all group">
+                                <td className="p-5">
+                                  <div className="flex items-center space-x-3">
+                                    <div className={`p-2.5 rounded-xl border ${
+                                      device.deviceType === 'Camera' ? 'bg-blue-500/10 border-blue-500/20 text-blue-500' :
+                                      device.deviceType === 'NVR' ? 'bg-purple-500/10 border-purple-500/20 text-purple-500' :
+                                      device.deviceType === 'Biometric' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
+                                      'bg-orange-500/10 border-orange-500/20 text-orange-500'
+                                    }`}>
+                                      {device.deviceType === 'Camera' && <Cctv size={16} />}
+                                      {device.deviceType === 'NVR' && <Server size={16} />}
+                                      {device.deviceType === 'Biometric' && <Fingerprint size={16} />}
+                                      {device.deviceType === 'Switch' && <Network size={16} />}
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-black text-main uppercase tracking-wider">{deviceName}</div>
+                                      <div className="text-[9px] font-mono text-secondary mt-0.5">{serialNo}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-5">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${
+                                    device.deviceType === 'Camera' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                                    device.deviceType === 'NVR' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
+                                    device.deviceType === 'Biometric' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                                    'bg-orange-500/10 text-orange-500 border-orange-500/20'
+                                  }`}>
+                                    {device.deviceType}
+                                  </span>
+                                </td>
+                                <td className="p-5">
+                                  <div className="text-xs font-black text-main uppercase tracking-tight flex items-center">
+                                    <MapPin size={12} className="mr-1.5 text-secondary" />
+                                    {loc.floor !== '—' ? `Floor ${loc.floor}` : '—'}
+                                    {loc.room !== '—' && <span className="mx-1.5 text-secondary">•</span>}
+                                    {loc.room !== '—' ? `Room ${loc.room}` : ''}
+                                  </div>
+                                </td>
+                                <td className="p-5">
+                                  <div className="text-xs font-mono text-main font-bold">{device.ipAddress || '—'}</div>
+                                  <div className="text-[9px] font-mono text-secondary uppercase tracking-widest mt-0.5">{device.macAddress || 'NO MAC'}</div>
+                                </td>
+                                <td className="p-5">
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                                    device.status === 'Online' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                                    device.status === 'Offline' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                                    device.status === 'Maintenance' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                                    'bg-slate-500/10 text-slate-600 border-slate-500/20'
+                                  }`}>
+                                    {device.status || 'Offline'}
+                                  </span>
+                                </td>
+                                <td className="p-5 text-right">
+                                  {detailUrl && (
+                                    <button
+                                      onClick={() => navigate(detailUrl)}
+                                      className="px-3 py-1.5 bg-main hover:bg-panel border border-main text-secondary hover:text-main rounded-lg text-[10px] font-black uppercase tracking-widest transition-all inline-flex items-center"
+                                    >
+                                      View Details
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {filteredBlockDevices.length === 0 && (
+                            <tr>
+                              <td colSpan="6" className="p-10 text-center text-dim font-bold uppercase tracking-widest text-[10px]">
+                                No devices found matching filters
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
               </div>
             ) : activeFloorObj ? (
               <div className="space-y-6">
@@ -473,7 +806,7 @@ export default function UnifiedOnboarding() {
                 <div className="bg-main p-3 rounded-xl border border-main text-[9px] font-mono text-dim uppercase">
                   Creating under:<br/>
                   <span className="text-main">
-                    {promptModal.parentData.collegeName}
+                    {promptModal.parentData.divisionName}
                     {promptModal.parentData.block && ` > ${promptModal.parentData.block}`}
                     {promptModal.parentData.floor && ` > ${promptModal.parentData.floor}`}
                   </span>
@@ -494,6 +827,8 @@ export default function UnifiedOnboarding() {
                   </label>
                 </div>
               )}
+
+
 
               <div>
                 <label className="block text-[10px] font-black text-secondary uppercase tracking-widest mb-2">

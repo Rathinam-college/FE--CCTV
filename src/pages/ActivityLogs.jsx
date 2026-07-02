@@ -115,7 +115,7 @@ export default function ActivityLogs() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Filter by user, action, page, or details..."
-              className="glass-input w-full pl-12 pr-4 py-2.5 text-sm"
+              className="glass-input w-full !pl-12 pr-4 py-2.5 text-sm"
             />
           </div>
 

@@ -64,7 +64,9 @@ export default function Reports() {
       
       const [ticketRes, projectRes, camRes, nvrRes, swRes, bioRes] = results;
 
-      setTickets(ticketRes.status === 'fulfilled' && Array.isArray(ticketRes.value.data) ? ticketRes.value.data : []);
+      const allTickets = ticketRes.status === 'fulfilled' && Array.isArray(ticketRes.value.data) ? ticketRes.value.data : [];
+      const sortedTickets = [...allTickets].sort((a, b) => (b.id || 0) - (a.id || 0));
+      setTickets(sortedTickets);
       setProjects(projectRes.status === 'fulfilled' && Array.isArray(projectRes.value.data) ? projectRes.value.data : []);
       setCameras(camRes.status === 'fulfilled' && Array.isArray(camRes.value.data) ? camRes.value.data : []);
       setNvrs(nvrRes.status === 'fulfilled' && Array.isArray(nvrRes.value.data) ? nvrRes.value.data : []);
@@ -126,7 +128,7 @@ export default function Reports() {
         data: safeTickets.map(t => [
           t.id || t._id,
           t.operationDate || t.createdAt?.split('T')[0] || 'N/A',
-          t.collegeName, t.block, t.floor, t.room,
+          t.divisionName, t.block, t.floor, t.room,
           t.category || 'CCTV', t.issueDescription, t.actionTaken,
           t.assignedTo?.name, (t.assignedStaff || []).map(s => s.name).join(' & '),
           t.receivedTime, t.endTime, t.totalTime, t.status
@@ -146,7 +148,7 @@ export default function Reports() {
         headers: ['Camera ID', 'Name', 'Model', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Status', 'DB Store Date'],
         data: safeCameras.map(c => [
           c.cameraId || c.id || c._id,
-          c.name, c.model, c.ipAddress, c.collegeName, c.block, c.floor, c.room, c.status,
+          c.name, c.model, c.ipAddress, c.divisionName, c.block, c.floor, c.room, c.status,
           c.createdAt ? new Date(c.createdAt).toLocaleDateString() : (c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : 'N/A')
         ])
       },
@@ -154,7 +156,7 @@ export default function Reports() {
         name: 'NVRs',
         headers: ['NVR ID', 'NVR Name', 'IP Address', 'Brand', 'Total Channels', 'Storage Capacity', 'Location', 'Status', 'DB Store Date'],
         data: safeNvrs.map(n => [
-          n.id || n._id, n.nvrName, n.ipAddress, n.brand, n.channel, n.hardDisk, `${n.collegeName || ''} ${n.block || ''}`,
+          n.id || n._id, n.nvrName, n.ipAddress, n.brand, n.channel, n.hardDisk, `${n.divisionName || ''} ${n.block || ''}`,
           n.status, n.createdAt ? new Date(n.createdAt).toLocaleDateString() : (n.updatedAt ? new Date(n.updatedAt).toLocaleDateString() : 'N/A')
         ])
       },
@@ -162,7 +164,7 @@ export default function Reports() {
         name: 'Switches',
         headers: ['Switch ID', 'Switch Name', 'IP Address', 'Ports', 'Brand', 'Location', 'Status', 'DB Store Date'],
         data: safeSwitches.map(s => [
-          s.id || s._id, s.name, s.ipAddress, s.portCount, s.brand, `${s.collegeName || ''} ${s.block || ''}`,
+          s.id || s._id, s.name, s.ipAddress, s.portCount, s.brand, `${s.divisionName || ''} ${s.block || ''}`,
           s.status, s.createdAt ? new Date(s.createdAt).toLocaleDateString() : (s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : 'N/A')
         ])
       },
@@ -170,7 +172,7 @@ export default function Reports() {
         name: 'Biometrics',
         headers: ['Unit ID', 'Name', 'Model', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Status', 'DB Store Date'],
         data: safeBiometrics.map(b => [
-          b.serialNumber || b.id || b._id, b.name, b.model, b.ipAddress, b.collegeName, b.block, b.floor, b.room, b.status,
+          b.serialNumber || b.id || b._id, b.name, b.model, b.ipAddress, b.divisionName, b.block, b.floor, b.room, b.status,
           b.createdAt ? new Date(b.createdAt).toLocaleDateString() : (b.updatedAt ? new Date(b.updatedAt).toLocaleDateString() : 'N/A')
         ])
       }
@@ -266,7 +268,7 @@ export default function Reports() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end border-b border-main pb-8 gap-6 no-print">
         <div>
-          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <FileText className="mr-3 text-blue-500" size={28} />
             Reports
           </h1>
@@ -354,25 +356,25 @@ export default function Reports() {
               <tr>
                 {reportType === 'Ticket' ? (
                   <>
-                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest">Ticket ID</th>
-                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest">Subject</th>
-                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest text-center">Status</th>
-                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest text-right">DB Store Date</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Ticket ID</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Subject</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">Status</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-right">DB Store Date</th>
                   </>
                 ) : reportType === 'Project' ? (
                   <>
-                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest">Project Name</th>
-                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest">Client</th>
-                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest text-center">Status</th>
-                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest text-right">DB Store Date</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Project Name</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Client</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">Status</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-right">DB Store Date</th>
                   </>
                 ) : (
                   <>
-                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest">Device Name</th>
-                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest">IP Address</th>
-                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest">Identity / Brand</th>
-                    <th className="p-5 text-[10px] font-black text-secondary uppercase tracking-widest text-center">Operational State</th>
-                    <th className="p-5 text-[10px] font-black text-dim uppercase tracking-widest text-right">DB Store Date</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Name</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">IP Address</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Identity / Brand</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">Operational State</th>
+                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-right">DB Store Date</th>
                   </>
                 )}
               </tr>
@@ -390,7 +392,7 @@ export default function Reports() {
                   if (reportType === 'Ticket') {
                     return (
                       <React.Fragment key={id}>
-                        <tr className="hover:bg-card transition-all group border-b border-main/50">
+                       <tr className="hover:bg-white/5 transition-all group border-b border-white/5">
                           <td className="p-5 text-xs font-mono text-dim">#{ String(id).slice(-6).toUpperCase() }</td>
                           <td className="p-5 text-xs font-bold text-main">{item.issueDescription || 'No Description'}</td>
                           <td className="p-5 text-center">
@@ -408,7 +410,7 @@ export default function Reports() {
                         </tr>
                         {item.documents && item.documents.length > 0 && (
                           <tr className="bg-blue-500/[0.02]">
-                            <td colSpan={4} className="p-4 pl-8 border-b border-main/50">
+                            <td colSpan={4} className="p-4 pl-8 border-b border-main">
                               <div className="flex flex-col space-y-3">
                                 <div className="flex items-center space-x-2">
                                   <FileText size={14} className="text-blue-500" />
@@ -431,7 +433,7 @@ export default function Reports() {
                   } else if (reportType === 'Project') {
                     return (
                       <React.Fragment key={id}>
-                        <tr className="hover:bg-card transition-all group border-b border-main/50">
+                        <tr className="hover:bg-white/5 transition-all group border-b border-white/5">
                           <td className="p-5 text-xs font-bold text-main">{item.name || 'Untitled Project'}</td>
                           <td className="p-5 text-xs font-bold text-main">{item.client_name || 'Internal'}</td>
                           <td className="p-5 text-center">
@@ -449,7 +451,7 @@ export default function Reports() {
                         </tr>
                         {item.documents && item.documents.length > 0 && (
                           <tr className="bg-blue-500/[0.02]">
-                            <td colSpan={4} className="p-4 pl-8 border-b border-main/50">
+                            <td colSpan={4} className="p-4 pl-8 border-b border-main">
                               <div className="flex flex-col space-y-3">
                                 <div className="flex items-center space-x-2">
                                   <Briefcase size={14} className="text-blue-500" />
@@ -480,21 +482,21 @@ export default function Reports() {
                     const isActive = item.status === 'Active' || item.status === 'Online' || !item.status;
 
                     return (
-                      <tr key={id} className="hover:bg-card transition-all group">
-                        <td className="p-5 text-xs font-bold text-main">{name}</td>
-                        <td className="p-5 text-xs font-mono text-blue-400">{item.ipAddress || '0.0.0.0'}</td>
-                        <td className="p-5 text-xs font-bold text-secondary uppercase">{sub}</td>
-                        <td className="p-5 text-center">
-                          <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${
-                            isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                          }`}>
-                            {item.status || (reportType === 'Camera' ? 'Active' : 'Online')}
-                          </span>
-                        </td>
-                        <td className="p-5 text-right text-[10px] font-bold text-dim">
-                          {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : (item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'N/A')}
-                        </td>
-                      </tr>
+                       <tr key={id} className="hover:bg-white/5 transition-all group border-b border-white/5">
+                         <td className="p-5 text-xs font-bold text-main">{name}</td>
+                         <td className="p-5 text-xs font-mono text-blue-400">{item.ipAddress || '0.0.0.0'}</td>
+                         <td className="p-5 text-xs font-bold text-secondary uppercase">{sub}</td>
+                         <td className="p-5 text-center">
+                           <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${
+                             isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                           }`}>
+                             {item.status || (reportType === 'Camera' ? 'Active' : 'Online')}
+                           </span>
+                         </td>
+                         <td className="p-5 text-right text-[10px] font-bold text-dim">
+                           {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : (item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'N/A')}
+                         </td>
+                       </tr>
                     );
                   }
                 })

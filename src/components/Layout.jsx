@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Cctv, Activity, Users, FileBarChart, LogOut, 
   Shield, Home, Clock, MessageSquare, Gift, Settings, 
   Sun, Moon, Droplets, Zap, Menu, X, PlusCircle, Layers, Database, Fingerprint,
-  Radio, ChevronLeft, ChevronRight, MapPin, Search, RefreshCw, FileText, Server, Sunrise, Waves, Building, Gamepad2
+  Radio, ChevronLeft, ChevronRight, MapPin, Search, RefreshCw, FileText, Server, Sunrise, Waves, Building, Gamepad2, Tag
 } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import logo from '../image/logo.png';
@@ -12,7 +12,11 @@ import logo from '../image/logo.png';
 export default function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'gaming');
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('cctv_theme');
+    // Default to white (non-gaming) theme
+    return saved || 'light';
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -26,7 +30,7 @@ export default function Layout() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    localStorage.setItem('cctv_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -43,11 +47,11 @@ export default function Layout() {
       icon: Server, 
       permission: 'Assets', // This permission will be checked in the filter, but Super Admin bypasses it. Sub-items have their own.
       items: [
-        { name: 'Camera', path: '/cameras', icon: Cctv, permission: 'Assets' },
-        { name: 'NVR', path: '/nvr', icon: Database, permission: 'Storage' },
-        { name: 'Biometric', path: '/biometrics', icon: Fingerprint, permission: 'Identity' },
-        { name: 'Switches', path: '/network-switches', icon: Zap, permission: 'Network' },
-        { name: 'Racks', path: '/racks', icon: Layers, permission: 'Network' },
+        { name: 'Camera', path: '/cameras', icon: Cctv, permission: 'Cameras' },
+        { name: 'NVR', path: '/nvr', icon: Database, permission: 'NVRs' },
+        { name: 'Biometric', path: '/biometrics', icon: Fingerprint, permission: 'Biometrics' },
+        { name: 'Switches', path: '/network-switches', icon: Zap, permission: 'Network Switches' },
+        { name: 'Racks', path: '/racks', icon: Layers, permission: 'Racks' },
       ]
     },
     { 
@@ -56,10 +60,24 @@ export default function Layout() {
       icon: FileBarChart, 
       permission: 'Maintenance',
       items: [
-        { name: 'Ticket', path: '/tickets', icon: FileBarChart, permission: 'Maintenance' },
-        { name: 'Upgrades', path: '/upgrades', icon: Shield, permission: 'Maintenance' },
+        { name: 'Ticket', path: '/tickets', icon: FileBarChart, permission: 'Tickets' },
+        { name: 'Ticket Dashboard', path: '/tickets-dashboard', icon: LayoutDashboard, permission: 'Tickets' },
+        { name: 'Upgrades', path: '/upgrades', icon: Shield, permission: 'Upgrades' },
         { name: 'Projects', path: '/projects', icon: Home, permission: 'Projects' },
-        { name: 'Billing & PO', path: '/billing', icon: FileText, permission: 'Maintenance' },
+        { name: 'Billing & PO', path: '/billing', icon: FileText, permission: 'Billing & PO' },
+      ]
+    },
+    { 
+      name: 'Master Data', 
+      isGroup: true,
+      icon: Layers, 
+      permission: 'Logs',
+      items: [
+        { name: 'General Billing', path: '/general-billing', icon: FileText, permission: 'General Billing' },
+        { name: 'Reports', path: '/reports', icon: FileText, permission: 'Reports' },
+        { name: 'Division', path: '/division', icon: Building, permission: 'Divisions' },
+        { name: 'Brands', path: '/brands', icon: Tag, permission: 'Brands' },
+        { name: 'Add New Site', path: '/onboarding', icon: PlusCircle, permission: 'Onboarding' },
       ]
     },
     { 
@@ -68,10 +86,9 @@ export default function Layout() {
       icon: Settings, 
       permission: 'Logs',
       items: [
-        { name: 'Reports', path: '/reports', icon: FileText, permission: 'Logs' },
-        { name: 'Occupation', path: '/occupation', icon: Building, permission: 'Logs' },
-        { name: 'Add New Site', path: '/onboarding', icon: PlusCircle, permission: 'Users' },
-        { name: 'User Management', path: '/users', icon: Users, permission: 'Users' },
+        { name: 'Entry View', path: '/entry-view', icon: Activity, permission: 'Activity Logs' },
+        { name: 'Backup & Restore', path: '/backup', icon: Database, permission: 'Database Backup' },
+        { name: 'User Management', path: '/users', icon: Users, permission: 'User Management' },
       ]
     },
   ].map(item => {
@@ -90,7 +107,7 @@ export default function Layout() {
   }), [user]);
 
   return (
-    <div className={`flex h-screen relative overflow-hidden text-main bg-main ${theme === 'gaming' ? 'gaming-pattern' : ''}`}>
+    <div className={`flex h-screen relative overflow-hidden ${theme === 'gaming' ? 'text-white bg-[#082f49] gaming-pattern' : 'text-slate-900 bg-[#f0f4f8]'}`}>
       {/* Clean Sidebar Navigation */}
       <div 
         className={`h-full fixed inset-y-0 left-0 z-[110] flex flex-col transition-all duration-500 overflow-hidden ${
@@ -212,7 +229,7 @@ export default function Layout() {
           <div className={`flex items-center ${collapsed ? 'flex-col space-y-4' : 'justify-between'} w-full`}>
             <div className="flex items-center space-x-3 overflow-hidden">
               <div className="w-10 h-10 shrink-0 rounded-xl bg-teal-500 text-white flex items-center justify-center font-black text-lg shadow-lg shadow-teal-500/20 border-2 border-card">
-                {user?.name?.charAt(0).toUpperCase()}
+                {String(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
               </div>
               {!collapsed && (
                 <div className="text-left overflow-hidden">
@@ -245,7 +262,7 @@ export default function Layout() {
       {/* Main Content Area */}
       <div 
         ref={scrollContainerRef}
-        className={`flex-1 flex flex-col h-screen overflow-y-auto transition-all duration-500 ${collapsed ? 'lg:pl-20' : 'lg:pl-64'} bg-main custom-scrollbar`}
+        className={`flex-1 flex flex-col h-screen overflow-y-auto transition-all duration-500 ${collapsed ? 'lg:pl-20' : 'lg:pl-64'} ${theme === 'gaming' ? 'bg-[#082f49]' : 'bg-[#f0f4f8]'} custom-scrollbar`}
       >
         
         {/* Unified Top Header */}
@@ -265,6 +282,44 @@ export default function Layout() {
         </main>
       </div>
 
+
+      {/* Mobile Floating Action Button */}
+      <button
+        onClick={() => navigate('/tickets')}
+        className="lg:hidden fixed bottom-24 right-4 z-[100] w-14 h-14 bg-teal-600 hover:bg-teal-500 text-white rounded-2xl shadow-[0_8px_30px_rgb(13,148,136,0.3)] flex items-center justify-center transition-transform active:scale-95"
+        style={{ borderRadius: '1.2rem' }}
+      >
+        <PlusCircle size={28} />
+      </button>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 h-20 bg-card/95 backdrop-blur-lg border-t border-main z-[100] flex items-center justify-around px-2 pb-1 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+        {[
+          { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'Tickets', path: '/tickets', icon: FileBarChart },
+          { name: 'Devices', path: '/cameras', icon: Cctv },
+          { name: 'Settings', path: '/users', icon: Settings }
+        ].map(item => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center w-16 h-full transition-all ${
+                isActive ? 'text-teal-600' : 'text-secondary hover:text-teal-500'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-teal-500/10' : ''}`}>
+                  <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                </div>
+                <span className={`text-[9px] mt-1 uppercase tracking-widest ${isActive ? 'font-black' : 'font-bold'}`}>{item.name}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
 
       {/* Mobile Backdrop */}
       {sidebarOpen && (

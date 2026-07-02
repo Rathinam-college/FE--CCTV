@@ -51,18 +51,23 @@ export default function NVRDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     nvrName: '',
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
     ipAddress: '',
-    company: '',
+    subnetMask: '',
+    gateway: '',
+    macAddress: '',
+    portNumber: '',
+    brand: '',
+    model: '',
     hardDisk: '',
     channel: '',
     status: 'Online'
   });
 
-  const { fetchAllLocations, allLocations } = useSiteStore();
+  const { fetchAllLocations, allLocations, divisions, fetchDivisions } = useSiteStore();
 
   const unifiedActivity = useMemo(() => {
     if (!nvr) return [];
@@ -76,7 +81,7 @@ export default function NVRDetail() {
     const moves = (nvr.relocations || []).map(move => ({
       ...move,
       type: 'move',
-      remark: `Storage Node relocated from ${move.old_location} to ${move.new_location}`,
+      remark: `Storage Asset relocated from ${move.old_location} to ${move.new_location}`,
       timestamp: move.date ? new Date(`${move.date} 00:00`).getTime() : 0
     }));
 
@@ -86,6 +91,7 @@ export default function NVRDetail() {
   useEffect(() => {
     fetchNVRDetails();
     fetchAllLocations();
+    fetchDivisions();
   }, [id]);
 
   const fetchNVRDetails = async () => {
@@ -95,12 +101,17 @@ export default function NVRDetail() {
       setNvr(res.data);
       setFormData({
         nvrName: res.data.nvrName || '',
-        collegeName: res.data.collegeName || '',
+        divisionName: res.data.divisionName || '',
         block: res.data.block || '',
         floor: res.data.floor || '',
         room: res.data.room || '',
         ipAddress: res.data.ipAddress || '',
-        company: res.data.company || '',
+        subnetMask: res.data.subnetMask || '',
+        gateway: res.data.gateway || '',
+        macAddress: res.data.macAddress || '',
+        portNumber: res.data.portNumber || '',
+        brand: res.data.brand || '',
+        model: res.data.model || '',
         hardDisk: res.data.hardDisk || '',
         channel: res.data.channel || '',
         status: res.data.status || 'Online'
@@ -155,13 +166,18 @@ export default function NVRDetail() {
 
       const payload = {
         nvrName: formData.nvrName,
-        collegeName: formData.collegeName,
+        divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
         location: formData.room || formData.block || 'Unknown',
         ipAddress: formData.ipAddress,
-        company: formData.company,
+        subnetMask: formData.subnetMask,
+        gateway: formData.gateway,
+        macAddress: formData.macAddress,
+        portNumber: formData.portNumber,
+        brand: formData.brand,
+        model: formData.model,
         hardDisk: formData.hardDisk,
         channel: formData.channel,
         status: formData.status
@@ -217,10 +233,12 @@ export default function NVRDetail() {
       ['HARDWARE SPECIFICATIONS'],
       ['NVR Name', nvr.nvrName],
       ['IP Address', nvr.ipAddress],
+      ['Port Number', nvr.portNumber],
       ['Status', nvr.status],
       ['Serial Number', nvr.serialNumber],
-      ['Company/Brand', nvr.company],
-      ['College', nvr.collegeName],
+      ['Company/Brand', nvr.brand],
+      ['Model', nvr.model],
+      ['College', nvr.divisionName],
       ['Block', nvr.block],
       ['Floor', nvr.floor],
       ['Room', nvr.room],
@@ -248,9 +266,134 @@ export default function NVRDetail() {
     link.setAttribute("href", url);
     link.setAttribute("download", filename);
     document.body.appendChild(link);
-    link.click();
     document.body.removeChild(link);
     showNotification('Detailed NVR audit report generated');
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>NVR Details - ${nvr.nvrName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+            h1 { color: #1a56db; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+            .section { margin-bottom: 30px; }
+            .section-title { font-size: 14px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+            .grid { display: flex; flex-wrap: wrap; margin: -10px; }
+            .grid-item { flex: 1 1 45%; padding: 10px; }
+            .label { font-size: 11px; color: #9ca3af; text-transform: uppercase; font-weight: bold; }
+            .value { font-size: 15px; font-weight: bold; color: #111827; }
+            .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+            .status-online { background-color: #d1fae5; color: #047857; }
+            .status-maintenance { background-color: #ffedd5; color: #c2410c; }
+            .status-offline { background-color: #fee2e2; color: #b91c1c; }
+          </style>
+        </head>
+        <body>
+          <h1>NVR Details - ${nvr.nvrName || 'N/A'}</h1>
+          
+          <div class="section">
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Status</div>
+                <div class="value">
+                  <span class="badge ${nvr.status === 'Online' ? 'status-online' : nvr.status === 'Maintenance' ? 'status-maintenance' : 'status-offline'}">
+                    ${nvr.status || 'N/A'}
+                  </span>
+                </div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Serial Number</div>
+                <div class="value">${nvr.serialNumber || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Deployment Context</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Division</div>
+                <div class="value">${nvr.divisionName || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Block Assignment</div>
+                <div class="value">${nvr.block || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Level / Floor</div>
+                <div class="value">${nvr.floor || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Room / Area</div>
+                <div class="value">${nvr.room || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Hardware Specifications</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Hardware Brand</div>
+                <div class="value">${nvr.brand || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Hardware Model</div>
+                <div class="value">${nvr.model || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Channel Count</div>
+                <div class="value">${nvr.channel || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Storage Capacity</div>
+                <div class="value">${nvr.hardDisk || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Network Configuration</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Static IPv4</div>
+                <div class="value">${nvr.ipAddress || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Port Number</div>
+                <div class="value">${nvr.portNumber || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Subnet Mask</div>
+                <div class="value">${nvr.subnetMask || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Gateway</div>
+                <div class="value">${nvr.gateway || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">MAC Address</div>
+                <div class="value">${nvr.macAddress || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 50px; font-size: 12px; color: #9ca3af; text-align: center;">
+            Generated from CCTV System on ${new Date().toLocaleString()}
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   if (loading) {
@@ -322,7 +465,7 @@ export default function NVRDetail() {
               <Download size={20} />
             </button>
             <button 
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="p-2.5 rounded-lg text-secondary hover:text-blue-400 hover:bg-blue-500/10 transition-all"
               title="Export PDF"
             >
@@ -354,7 +497,7 @@ export default function NVRDetail() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <IntelligenceCard 
           icon={Globe} 
-          label="Network Node" 
+          label="IP Address" 
           value={nvr.ipAddress} 
           color="blue"
         />
@@ -400,14 +543,14 @@ export default function NVRDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Target Institution</label>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Target Division</label>
                       <select 
-                        value={formData.collegeName} 
-                        onChange={(e) => setFormData({...formData, collegeName: e.target.value})}
+                        value={formData.divisionName} 
+                        onChange={(e) => setFormData({...formData, divisionName: e.target.value})}
                         className="glass-input w-full p-3 text-sm"
                       >
-                        <option value="">Select College</option>
-                        {Array.from(new Set(allLocations.map(l => l.collegeName))).map(c => (
+                        <option value="">Select Division</option>
+                        {divisions && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
@@ -420,10 +563,40 @@ export default function NVRDetail() {
                         className="glass-input w-full p-3 text-sm"
                       >
                         <option value="">Select Block</option>
-                        {Array.from(new Set(allLocations.filter(l => l.collegeName === formData.collegeName).map(l => l.block))).map(b => (
+                        {Array.from(new Set(allLocations.filter(l => l.divisionName === formData.divisionName).map(l => l.block))).map(b => (
                           <option key={b} value={b}>{b}</option>
                         ))}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">IPv4 Protocol</label>
+                      <input 
+                        type="text" 
+                        value={formData.ipAddress} 
+                        onChange={(e) => setFormData({...formData, ipAddress: e.target.value})} 
+                        placeholder="192.168.1.100"
+                        className="glass-input w-full p-3 text-sm font-mono text-secondary" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Subnet Mask</label>
+                      <input 
+                        type="text" 
+                        value={formData.subnetMask} 
+                        onChange={(e) => setFormData({...formData, subnetMask: e.target.value})} 
+                        placeholder="255.255.255.0"
+                        className="glass-input w-full p-3 text-sm font-mono text-secondary" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Gateway</label>
+                      <input 
+                        type="text" 
+                        value={formData.gateway} 
+                        onChange={(e) => setFormData({...formData, gateway: e.target.value})} 
+                        placeholder="192.168.1.1"
+                        className="glass-input w-full p-3 text-sm font-mono text-secondary" 
+                      />
                     </div>
                   </div>
                   <div className="space-y-6">
@@ -467,6 +640,26 @@ export default function NVRDetail() {
                         <option value="Maintenance">Maintenance</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Port Number</label>
+                      <input 
+                        type="text" 
+                        value={formData.portNumber} 
+                        onChange={(e) => setFormData({...formData, portNumber: e.target.value})} 
+                        placeholder="e.g. 8080"
+                        className="glass-input w-full p-3 text-sm font-mono text-secondary" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">MAC Address</label>
+                      <input 
+                        type="text" 
+                        value={formData.macAddress} 
+                        onChange={(e) => setFormData({...formData, macAddress: e.target.value})} 
+                        placeholder="00:1A:2B:3C:4D:5E"
+                        className="glass-input w-full p-3 text-sm font-mono text-secondary" 
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -501,8 +694,9 @@ export default function NVRDetail() {
                     <div className="h-px bg-blue-500/10 flex-1"></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <DetailRow label="Node Designation" value={nvr.nvrName} />
-                    <DetailRow label="Hardware Brand" value={nvr.company} />
+                    <DetailRow label="Asset Designation" value={nvr.nvrName} />
+                    <DetailRow label="Hardware Brand" value={nvr.brand} />
+                    <DetailRow label="Hardware Model" value={nvr.model} />
                     <DetailRow label="Channel Count" value={nvr.channel} />
                     <DetailRow label="Storage Capacity" value={nvr.hardDisk} />
                     <DetailRow label="Serial Number" value={nvr.serialNumber} mono />
@@ -515,11 +709,15 @@ export default function NVRDetail() {
                     <div className="h-px bg-emerald-500/10 flex-1"></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <DetailRow label="Institution" value={nvr.collegeName} />
+                    <DetailRow label="Division" value={nvr.divisionName} />
                     <DetailRow label="Block Assignment" value={nvr.block} />
                     <DetailRow label="Level / Floor" value={nvr.floor} />
                     <DetailRow label="Room / Area" value={nvr.room} />
                     <DetailRow label="Static IPv4" value={nvr.ipAddress} mono />
+                    <DetailRow label="Subnet Mask" value={nvr.subnetMask} mono />
+                    <DetailRow label="Gateway" value={nvr.gateway} mono />
+                    <DetailRow label="MAC Address" value={nvr.macAddress} mono />
+                    <DetailRow label="Port Number" value={nvr.portNumber} mono />
                   </div>
                 </section>
               </div>
@@ -647,7 +845,7 @@ export default function NVRDetail() {
                    <span className="text-[9px] font-bold text-dim uppercase">Back</span>
                 </button>
                 <button 
-                  onClick={() => window.print()}
+                  onClick={handlePrint}
                   className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center space-y-2 hover:bg-white/10 transition-all"
                 >
                    <FileText size={16} className="text-blue-400" />

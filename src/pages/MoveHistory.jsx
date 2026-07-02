@@ -105,7 +105,7 @@ export default function MoveHistory() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by device, remark, or user..."
-              className="glass-input w-full pl-12 pr-4 py-2.5 text-sm"
+              className="glass-input w-full !pl-12 pr-4 py-2.5 text-sm"
             />
           </div>
           <div className="flex items-center space-x-3">

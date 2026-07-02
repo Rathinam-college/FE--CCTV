@@ -31,14 +31,14 @@ export default function Launcher() {
   const allApps = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', color: 'from-blue-500 to-indigo-600', shadow: 'shadow-blue-500/50', desc: 'Real-time analytics and system overview' },
     { name: 'Assets', icon: Cctv, path: '/cameras', color: 'from-orange-400 to-red-500', shadow: 'shadow-orange-500/50', desc: 'Hardware asset inventory and management' },
-    { name: 'Storage', icon: HardDrive, path: '/nvr', color: 'from-gray-600 to-slate-800', shadow: 'shadow-gray-500/50', desc: 'Digital storage and recording nodes' },
+    { name: 'Storage', icon: HardDrive, path: '/nvr', color: 'from-gray-600 to-slate-800', shadow: 'shadow-gray-500/50', desc: 'Digital storage and recording assets' },
     { name: 'Identity', icon: Fingerprint, path: '/biometrics', color: 'from-purple-500 to-pink-600', shadow: 'shadow-purple-500/50', desc: 'Identity verification and access control' },
     ...(user?.role === 'Super Admin' ? [
       { name: 'Maintenance', icon: Wrench, path: '/maintenance', color: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/50', desc: 'Hardware repair and ticket workflow' },
       { name: 'Routes', icon: MapPin, path: '/routes', color: 'from-blue-400 to-cyan-500', shadow: 'shadow-blue-500/50', desc: 'Campus site and patrol path mapping' },
       { name: 'Network', icon: Zap, path: '/network-switches', color: 'from-cyan-400 to-blue-500', shadow: 'shadow-cyan-500/50', desc: 'Network switch monitoring' },
       { name: 'Reports', icon: FileBarChart, path: '/reports', color: 'from-rose-400 to-red-500', shadow: 'shadow-rose-500/50', desc: 'Compliance and audit documentation' },
-      { name: 'Onboarding', icon: LayoutGrid, path: '/onboarding', color: 'from-cyan-500 to-blue-600', shadow: 'shadow-cyan-500/50', desc: 'Batch register hardware and nodes' },
+      { name: 'Onboarding', icon: LayoutGrid, path: '/onboarding', color: 'from-cyan-500 to-blue-600', shadow: 'shadow-cyan-500/50', desc: 'Batch register hardware and assets' },
       { name: 'Unified Editor', icon: RefreshCw, path: '/asset-editor', color: 'from-indigo-500 to-purple-600', shadow: 'shadow-indigo-500/50', desc: 'Modify hardware across all modules' },
       { name: 'Users', icon: Users, path: '/users', color: 'from-violet-500 to-fuchsia-600', shadow: 'shadow-violet-500/50', desc: 'Role-based access and permissions' }
     ] : [])

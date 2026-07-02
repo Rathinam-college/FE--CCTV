@@ -23,6 +23,7 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
+import TicketDashboard from './pages/TicketDashboard';
 import Upgrades from './pages/Upgrades';
 import Billing from './pages/Billing';
 import ProjectTickets from './pages/ProjectTickets';
@@ -33,7 +34,11 @@ import RackDetail from './pages/RackDetail';
 import MoveHistory from './pages/MoveHistory';
 import UnifiedOnboarding from './pages/UnifiedOnboarding';
 import Reports from './pages/Reports';
-import Occupation from './pages/Occupation';
+import Division from './pages/Division';
+import Brands from './pages/Brands';
+import GeneralBilling from './pages/GeneralBilling';
+import DatabaseBackup from './pages/DatabaseBackup';
+import EntryView from './pages/EntryView';
 import { useNotificationStore } from './store/notificationStore';
 import { useConfirmStore } from './store/confirmStore';
 import { AlertTriangle, X } from 'lucide-react';
@@ -124,23 +129,28 @@ function App() {
         <Route path="/" element={isAuthenticated ? <Layout /> : <Navigate to="/login" />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="cameras" element={hasPermission('Assets') ? <Cameras /> : <Navigate to="/" />} />
-          <Route path="nvr" element={hasPermission('Storage') ? <NVR /> : <Navigate to="/" />} />
-          <Route path="nvr-mapping" element={hasPermission('Storage') ? <NvrCameraMapping /> : <Navigate to="/" />} />
-          <Route path="biometrics" element={hasPermission('Identity') ? <Biometrics /> : <Navigate to="/" />} />
-          <Route path="network-switches" element={hasPermission('Network') ? <NetworkSwitches /> : <Navigate to="/" />} />
-          <Route path="racks" element={hasPermission('Network') ? <Racks /> : <Navigate to="/" />} />
-          <Route path="maintenance" element={hasPermission('Maintenance') ? <Maintenance /> : <Navigate to="/" />} />
-          <Route path="tickets" element={hasPermission('Maintenance') ? <Tickets /> : <Navigate to="/" />} />
-          <Route path="tickets/:id" element={hasPermission('Maintenance') ? <TicketDetail /> : <Navigate to="/" />} />
-          <Route path="upgrades" element={hasPermission('Maintenance') ? <Upgrades /> : <Navigate to="/" />} />
-          <Route path="billing" element={hasPermission('Maintenance') ? <Billing /> : <Navigate to="/" />} />
+          <Route path="cameras" element={hasPermission('Cameras') ? <Cameras /> : <Navigate to="/" />} />
+          <Route path="nvr" element={hasPermission('NVRs') ? <NVR /> : <Navigate to="/" />} />
+          <Route path="nvr-mapping" element={hasPermission('NVRs') ? <NvrCameraMapping /> : <Navigate to="/" />} />
+          <Route path="biometrics" element={hasPermission('Biometrics') ? <Biometrics /> : <Navigate to="/" />} />
+          <Route path="network-switches" element={hasPermission('Network Switches') ? <NetworkSwitches /> : <Navigate to="/" />} />
+          <Route path="racks" element={hasPermission('Racks') ? <Racks /> : <Navigate to="/" />} />
+          <Route path="maintenance" element={hasPermission('Tickets') ? <Maintenance /> : <Navigate to="/" />} />
+          <Route path="tickets" element={hasPermission('Tickets') ? <Tickets /> : <Navigate to="/" />} />
+          <Route path="tickets-dashboard" element={hasPermission('Tickets') ? <TicketDashboard /> : <Navigate to="/" />} />
+          <Route path="tickets/:id" element={hasPermission('Tickets') ? <TicketDetail /> : <Navigate to="/" />} />
+          <Route path="upgrades" element={hasPermission('Upgrades') ? <Upgrades /> : <Navigate to="/" />} />
+          <Route path="billing" element={hasPermission('Billing & PO') ? <Billing /> : <Navigate to="/" />} />
           <Route path="projects" element={hasPermission('Projects') ? <Projects /> : <Navigate to="/" />} />
           <Route path="projects/:id" element={hasPermission('Projects') ? <ProjectDetail /> : <Navigate to="/" />} />
-          <Route path="users" element={hasPermission('Users') ? <Users /> : <Navigate to="/" />} />
-          <Route path="onboarding" element={<UnifiedOnboarding />} />
-          <Route path="reports" element={hasPermission('Logs') ? <Reports /> : <Navigate to="/" />} />
-          <Route path="occupation" element={<Occupation />} />
+          <Route path="users" element={hasPermission('User Management') ? <Users /> : <Navigate to="/" />} />
+          <Route path="onboarding" element={hasPermission('Onboarding') ? <UnifiedOnboarding /> : <Navigate to="/" />} />
+          <Route path="reports" element={hasPermission('Reports') ? <Reports /> : <Navigate to="/" />} />
+          <Route path="division" element={<Division />} />
+          <Route path="brands" element={<Brands />} />
+          <Route path="general-billing" element={hasPermission('General Billing') ? <GeneralBilling /> : <Navigate to="/" />} />
+          <Route path="entry-view" element={hasPermission('Activity Logs') ? <EntryView /> : <Navigate to="/" />} />
+          <Route path="backup" element={isSuperAdmin || hasPermission('Database Backup') ? <DatabaseBackup /> : <Navigate to="/" />} />
           
           {/* Details & Sub-pages */}
           <Route path="devices/detail/:type/:id" element={<DeviceDetail />} />

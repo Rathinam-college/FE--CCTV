@@ -32,7 +32,7 @@ export default function DeviceManagement() {
   // Unified Form State for Adding/Editing
   const [formData, setFormData] = useState({
     name: '', 
-    collegeName: '',
+    divisionName: '',
     block: '', 
     floor: '', 
     room: '',
@@ -45,7 +45,7 @@ export default function DeviceManagement() {
     deviceSerialNumber: '', subnetMask: '', macAddress: ''
   });
 
-  const { allLocations, fetchAllLocations } = useSiteStore();
+  const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
 
   useEffect(() => {
     fetchCameras();
@@ -53,8 +53,14 @@ export default function DeviceManagement() {
     fetchBiometrics();
     fetchBarriers();
     fetchAllLocations();
+    fetchDivisions();
   }, []);
 
+  useEffect(() => {
+    if (showModal && !editingId) {
+      localStorage.setItem(`cctv_draft_devicemanagement_${activeTab}`, JSON.stringify(formData));
+    }
+  }, [formData, showModal, editingId, activeTab]);
 
   const fetchCameras = async () => {
     try {
@@ -63,7 +69,7 @@ export default function DeviceManagement() {
         id: c.id,
         name: c.deviceType || c.name || `CAM-${c.id}`,
         cameraId: c.cameraId || c.serialNumber || `CAM-${c.id}`,
-        location: c.siteName || `${c.collegeName} | ${c.block} | ${c.floor} | ${c.room}` || 'Unknown',
+        location: c.siteName || `${c.divisionName} | ${c.block} | ${c.floor} | ${c.room}` || 'Unknown',
         ipAddress: c.ipAddress || '—',
         brand: c.brand || 'Hikvision',
         recordingStatus: c.recordingStatus || 'Recording',
@@ -87,7 +93,7 @@ export default function DeviceManagement() {
       setNvrs(res.data.map(n => ({
         id: n.id,
         name: n.nvrName || `NVR-${n.id}`,
-        location: n.location || `${n.collegeName} | ${n.block} | ${n.floor} | ${n.room}` || 'Unknown',
+        location: n.location || `${n.divisionName} | ${n.block} | ${n.floor} | ${n.room}` || 'Unknown',
         ipAddress: n.ipAddress || '—',
         channels: n.channel || '16ch',
         hardDisk: n.hardDisk || '4TB',
@@ -113,13 +119,18 @@ export default function DeviceManagement() {
   };
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type } = e.target;
+    let newValue = value;
+    if (type === 'text') {
+      newValue = value.toUpperCase();
+    }
+    setFormData({ ...formData, [name]: newValue });
   };
 
   const openNewModal = () => {
     setEditingId(null);
     setFormData({
-      name: '', collegeName: '', block: '', floor: '', room: '',
+      name: '', divisionName: '', block: '', floor: '', room: '',
       ipAddress: '', brand: 'Hikvision', status: 'Online',
       recordingStatus: 'Recording', lastActive: 'Just Now',
       channels: '16', hardDisk: '8TB', connectedCameras: '12', storageStatus: 'Healthy',
@@ -137,8 +148,8 @@ export default function DeviceManagement() {
       const payload = {
         cameraId: formData.deviceSerialNumber || `CAM-${Date.now()}`,
         name: formData.deviceType || formData.name || 'Unknown Device',
-        siteName: `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
-        collegeName: formData.collegeName,
+        siteName: `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
+        divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
@@ -152,7 +163,11 @@ export default function DeviceManagement() {
       };
       try {
         if (editingId) await api.put(`/cameras/${editingId}/`, payload);
-        else await api.post('/cameras/', payload);
+        else {
+          await api.post('/cameras/', payload);
+          localStorage.setItem('cctv_last_devicemanagement_CAMERAS', JSON.stringify(formData));
+          localStorage.removeItem('cctv_draft_devicemanagement_CAMERAS');
+        }
         fetchCameras();
       } catch (e) { alert('Error saving camera.'); }
     } 
@@ -160,11 +175,11 @@ export default function DeviceManagement() {
       const payload = {
         ipAddress: formData.ipAddress,
         nvrName: formData.name,
-        collegeName: formData.collegeName,
+        divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
-        location: `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
+        location: `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
         channel: formData.channels,
         hardDisk: formData.hardDisk,
         status: formData.status,
@@ -172,18 +187,22 @@ export default function DeviceManagement() {
       };
       try {
         if (editingId) await api.put(`/cameras/nvrs/${editingId}/`, payload);
-        else await api.post('/cameras/nvrs/', payload);
+        else {
+          await api.post('/cameras/nvrs/', payload);
+          localStorage.setItem('cctv_last_devicemanagement_STORAGE', JSON.stringify(formData));
+          localStorage.removeItem('cctv_draft_devicemanagement_STORAGE');
+        }
         fetchNVRs();
       } catch (e) { alert('Error saving NVR.'); }
     } 
     else if (activeTab === 'IDENTITY') {
       const payload = {
         name: formData.name,
-        collegeName: formData.collegeName,
+        divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
-        location: `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
+        location: `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
         type: formData.type,
         brand: formData.brand,
         ipAddress: formData.ipAddress,
@@ -193,7 +212,11 @@ export default function DeviceManagement() {
       };
       try {
         if (editingId) await api.put(`/cameras/biometrics/${editingId}/`, payload);
-        else await api.post('/cameras/biometrics/', payload);
+        else {
+          await api.post('/cameras/biometrics/', payload);
+          localStorage.setItem('cctv_last_devicemanagement_IDENTITY', JSON.stringify(formData));
+          localStorage.removeItem('cctv_draft_devicemanagement_IDENTITY');
+        }
         fetchBiometrics();
       } catch (e) { alert('Error saving biometric device.'); }
     } 
@@ -209,7 +232,11 @@ export default function DeviceManagement() {
       };
       try {
         if (editingId) await api.put(`/cameras/barriers/${editingId}/`, payload);
-        else await api.post('/cameras/barriers/', payload);
+        else {
+          await api.post('/cameras/barriers/', payload);
+          localStorage.setItem('cctv_last_devicemanagement_NETWORK', JSON.stringify(formData));
+          localStorage.removeItem('cctv_draft_devicemanagement_NETWORK');
+        }
         fetchBarriers();
       } catch (e) { alert('Error saving gate barrier.'); }
     }
@@ -251,7 +278,7 @@ export default function DeviceManagement() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="border-b border-white/10 pb-4">
-        <h1 className="text-3xl font-bold text-main tracking-tight">Device Management</h1>
+        <h1 className="text-3xl font-bold text-main tracking-tight uppercase">Device Management</h1>
         <p className="text-sm text-dim mt-1">Track, configure, and organize deployment assets.</p>
       </div>
 
@@ -289,7 +316,7 @@ export default function DeviceManagement() {
 
         <button onClick={() => setActiveTab('NETWORK')} className={`glass-panel p-5 flex flex-col items-center justify-center text-center transition-all ${activeTab === 'NETWORK' ? 'ring-2 ring-emerald-500 bg-emerald-500/10' : 'hover:bg-white/5'}`}>
           <Lock size={28} className={`${activeTab === 'NETWORK' ? 'text-emerald-400' : 'text-dim'}`} strokeWidth={1.5} />
-          <span className={`mt-3 font-bold text-[13px] ${activeTab === 'NETWORK' ? 'text-emerald-400' : 'text-dim'}`}>Network Nodes</span>
+          <span className={`mt-3 font-bold text-[13px] ${activeTab === 'NETWORK' ? 'text-emerald-400' : 'text-dim'}`}>Network Assets</span>
           <div className="mt-2 flex space-x-3 text-[10px] font-bold uppercase tracking-widest">
             <span className="text-dim">TOTAL: {barriers.length}</span>
             <span className="text-emerald-500">LIVE: {barriers.filter(b => b.status === 'Online').length}</span>
@@ -491,22 +518,65 @@ export default function DeviceManagement() {
       {showModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="glass-panel w-full max-w-xl overflow-hidden p-6 space-y-4 border-white/20 shadow-2xl">
-            <h2 className="text-lg font-bold text-main flex items-center space-x-2">
-              <Shield className="text-blue-600" /> <span>{editingId ? 'Modify Device' : 'Register New Device'}</span>
-            </h2>
+            <div className="flex justify-between items-center w-full">
+              <h2 className="text-lg font-bold text-main flex items-center space-x-2">
+                <Shield className="text-blue-600" /> <span>{editingId ? 'Modify Device' : 'Register New Device'}</span>
+              </h2>
+              {!editingId && (
+                <div className="flex items-center space-x-2">
+                  {localStorage.getItem(`cctv_last_devicemanagement_${activeTab}`) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          const last = JSON.parse(localStorage.getItem(`cctv_last_devicemanagement_${activeTab}`));
+                          setFormData(prev => ({
+                            ...prev,
+                            ...last,
+                            deviceSerialNumber: '',
+                            serialNumber: ''
+                          }));
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all"
+                    >
+                      Reuse Last
+                    </button>
+                  )}
+                  {localStorage.getItem(`cctv_draft_devicemanagement_${activeTab}`) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          const draft = JSON.parse(localStorage.getItem(`cctv_draft_devicemanagement_${activeTab}`));
+                          setFormData(prev => ({ ...prev, ...draft }));
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all"
+                    >
+                      Restore Draft
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 col-span-2">
                   <div>
                     <label className="block text-xs font-bold text-dim uppercase tracking-wider mb-1">COLLEGE</label>
                     <select 
-                      name="collegeName" 
-                      value={formData.collegeName} 
+                      name="divisionName" 
+                      value={formData.divisionName} 
                       onChange={handleInputChange} 
                       className="glass-input w-full p-2 text-sm"
                     >
-                      <option value="">Select College</option>
-                      {Array.from(new Set(allLocations.map(l => l.collegeName))).map(c => (
+                      <option value="">Select Division</option>
+                      {divisions && Array.from(new Set(divisions.map(d => d.name?.toUpperCase()))).filter(Boolean).map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
@@ -520,7 +590,7 @@ export default function DeviceManagement() {
                       className="glass-input w-full p-2 text-sm"
                     >
                       <option value="">Select Block</option>
-                      {Array.from(new Set(allLocations.filter(l => l.collegeName === formData.collegeName).map(l => l.block))).map(b => (
+                      {Array.from(new Set(allLocations.filter(l => (l.divisionName || '').toUpperCase() === (formData.divisionName || '').toUpperCase()).map(l => l.block?.toUpperCase()))).filter(Boolean).map(b => (
                         <option key={b} value={b}>{b}</option>
                       ))}
                     </select>
@@ -534,7 +604,7 @@ export default function DeviceManagement() {
                       className="glass-input w-full p-2 text-sm"
                     >
                       <option value="">Select Floor</option>
-                      {Array.from(new Set(allLocations.filter(l => l.block === formData.block).map(l => l.floor))).map(f => (
+                      {Array.from(new Set(allLocations.filter(l => (l.block || '').toUpperCase() === (formData.block || '').toUpperCase()).map(l => l.floor?.toUpperCase()))).filter(Boolean).map(f => (
                         <option key={f} value={f}>{f}</option>
                       ))}
                     </select>
@@ -548,7 +618,7 @@ export default function DeviceManagement() {
                       className="glass-input w-full p-2 text-sm"
                     >
                       <option value="">Select Room</option>
-                      {Array.from(new Set(allLocations.filter(l => l.floor === formData.floor).map(l => l.room))).map(r => (
+                      {Array.from(new Set(allLocations.filter(l => (l.floor || '').toUpperCase() === (formData.floor || '').toUpperCase()).map(l => l.room?.toUpperCase()))).filter(Boolean).map(r => (
                         <option key={r} value={r}>{r}</option>
                       ))}
                     </select>
@@ -615,6 +685,19 @@ export default function DeviceManagement() {
                       <select name="type" value={formData.type} onChange={handleInputChange} className="glass-input w-full p-2 text-sm [&>option]:bg-gray-900 [&>option]:text-main cursor-pointer">
                         <option value="Fingerprint">Fingerprint</option>
                         <option value="Face">Face</option>
+                        <option value="Palm">Palm</option>
+                        <option value="Card">Card</option>
+                        <option value="Face + Fingerprint">Face + Fingerprint</option>
+                        <option value="Face + Palm">Face + Palm</option>
+                        <option value="Fingerprint + Palm">Fingerprint + Palm</option>
+                        <option value="Card + Face">Card + Face</option>
+                        <option value="Card + Fingerprint">Card + Fingerprint</option>
+                        <option value="Card + Palm">Card + Palm</option>
+                        <option value="Face + Fingerprint + Palm">Face + Fingerprint + Palm</option>
+                        <option value="Card + Face + Fingerprint">Card + Face + Fingerprint</option>
+                        <option value="Card + Face + Palm">Card + Face + Palm</option>
+                        <option value="Card + Fingerprint + Palm">Card + Fingerprint + Palm</option>
+                        <option value="Card + Face + Fingerprint + Palm">Card + Face + Fingerprint + Palm</option>
                       </select>
                     </div>
                     <div>

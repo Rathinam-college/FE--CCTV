@@ -37,7 +37,12 @@ export default function Users() {
   };
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    let newValue = value;
+    if (typeof newValue === 'string' && !['email', 'password', 'role'].includes(name)) {
+      newValue = newValue.toUpperCase();
+    }
+    setFormData({ ...formData, [name]: newValue });
   };
 
   const handleFileUpload = async (e) => {
@@ -198,6 +203,11 @@ export default function Users() {
                         <div>
                           <div className="font-bold text-main tracking-wide">{usr.name}</div>
                           <div className="text-xs text-secondary mt-0.5">{usr.email}</div>
+                          {user?.role === 'Super Admin' && (
+                            <div className="text-[10px] text-amber-500 font-mono mt-1">
+                              Pass: {usr.raw_password || 'Not Set'}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -352,9 +362,10 @@ export default function Users() {
                 <div className="space-y-4">
                   {(() => {
                     const pages = [
-                      'Dashboard', 'Assets', 'Maintenance', 'Storage', 
-                      'Identity', 'Network', 'Projects', 
-                      'Routes', 'Logs', 'Reports', 'Users', 'Onboarding'
+                      'Dashboard', 'Cameras', 'NVRs', 'Biometrics', 'Network Switches', 'Racks',
+                      'Tickets', 'Upgrades', 'Projects', 'Billing & PO', 'General Billing',
+                      'Reports', 'Divisions', 'Brands', 'Onboarding', 'Activity Logs',
+                      'Database Backup', 'User Management'
                     ];
 
                     const toggleAll = (type) => {
@@ -406,7 +417,9 @@ export default function Users() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-3 custom-scrollbar p-1">
                           {pages.map(page => (
                             <div key={page} className="flex items-center justify-between p-3 bg-panel rounded-2xl border border-main hover:border-teal-500/30 transition-all group">
-                              <span className="text-[11px] font-bold text-secondary group-hover:text-main transition-colors uppercase tracking-tight">{page}</span>
+                              <span className="text-[11px] font-bold text-secondary group-hover:text-main transition-colors uppercase tracking-tight">
+                                {page}
+                              </span>
                               <div className="flex space-x-4">
                                 {/* VIEW Toggle */}
                                 <button 

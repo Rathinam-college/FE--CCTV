@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../services/api';
 import { 
   Folder, Plus, Search, Filter, MoreHorizontal, 
-  Calendar, User, CheckCircle, Clock, AlertCircle, 
-  ChevronRight, X, Edit2, Trash2, LayoutGrid, Briefcase, Download, Upload
+  Calendar, User, CheckCircle, Clock, AlertCircle, Activity,
+  ChevronRight, X, Edit2, Trash2, LayoutGrid, Briefcase, Download, Upload, ChevronLeft
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -22,6 +22,10 @@ export default function Projects() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [startMonth, setStartMonth] = useState('');
+  const [endMonth, setEndMonth] = useState('');
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Projects:EDIT');
 
   const [formData, setFormData] = useState({
@@ -30,8 +34,11 @@ export default function Projects() {
     description: '',
     start_date: new Date().toISOString().split('T')[0],
     end_date: '',
-    status: 'Active'
+    status: 'Active',
+    instructionBy: ''
   });
+
+
 
 
 
@@ -62,7 +69,8 @@ export default function Projects() {
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
         client_name: formData.client_name || null,
-        description: formData.description || null
+        description: formData.description || null,
+        instructionBy: formData.instructionBy || null
       };
 
       if (editingId) {
@@ -96,42 +104,6 @@ export default function Projects() {
     });
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target.result;
-      const rows = text.split('\n').map(row => row.split(','));
-      const headers = rows[0].map(h => h.trim());
-      const data = rows.slice(1).filter(row => row.length > 1).map(row => {
-        const obj = {};
-        headers.forEach((header, index) => {
-          let val = row[index]?.trim() || '';
-          if (header.toLowerCase() === 'project name') obj['name'] = val;
-          else if (header.toLowerCase() === 'client name') obj['client_name'] = val;
-          else if (header.toLowerCase() === 'description') obj['description'] = val;
-          else if (header.toLowerCase() === 'start date') obj['start_date'] = val;
-          else if (header.toLowerCase() === 'end date') obj['end_date'] = val;
-          else if (header.toLowerCase() === 'status') obj['status'] = val || 'Active';
-          else obj[header] = val;
-        });
-        if (!obj.name) obj.name = 'New Project';
-        return obj;
-      });
-
-      try {
-        await api.post('/tickets/projects/bulk_create/', data);
-        showNotification(`Successfully imported ${data.length} projects`);
-        fetchData();
-      } catch (err) {
-        console.error(err);
-        showNotification('Failed to import data. Check CSV format.', 'error');
-      }
-    };
-    reader.readAsText(file);
-  };
 
   const handleEdit = (project) => {
     setEditingId(project.id || project._id);
@@ -141,7 +113,8 @@ export default function Projects() {
       description: project.description || '',
       start_date: project.start_date || '',
       end_date: project.end_date || '',
-      status: project.status || 'Active'
+      status: project.status || 'Active',
+      instructionBy: project.instructionBy || ''
     });
     setShowModal(true);
   };
@@ -154,7 +127,8 @@ export default function Projects() {
       description: '',
       start_date: new Date().toISOString().split('T')[0],
       end_date: '',
-      status: 'Active'
+      status: 'Active',
+      instructionBy: ''
     });
   };
 
@@ -162,10 +136,27 @@ export default function Projects() {
     navigate(`/projects/${encodeURIComponent(project.name)}/${project.id || project._id}/tickets`);
   };
 
-  const filteredProjects = projects.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.client_name && p.client_name.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredProjects = useMemo(() => {
+    return projects.filter(p => {
+      if (startMonth || endMonth) {
+        const pDate = p.start_date || '';
+        if (!pDate) return false;
+        const pMonth = pDate.substring(0, 7);
+        if (startMonth && pMonth < startMonth) return false;
+        if (endMonth && pMonth > endMonth) return false;
+      }
+      
+      return p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+             (p.client_name && p.client_name.toLowerCase().includes(searchQuery.toLowerCase()));
+    });
+  }, [projects, startMonth, endMonth, searchQuery]);
+
+  const summaryStats = useMemo(() => ({
+    total: filteredProjects.length,
+    active: filteredProjects.filter(p => p.status === 'Active').length,
+    onHold: filteredProjects.filter(p => p.status === 'On Hold').length,
+    completed: filteredProjects.filter(p => p.status === 'Completed').length
+  }), [filteredProjects]);
 
   const handleDownload = () => {
     if (filteredProjects.length === 0) {
@@ -236,12 +227,30 @@ export default function Projects() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-main pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <Briefcase className="mr-3 text-teal-500" size={28} />
             Project
           </h1>
         </div>
         <div className="flex items-center space-x-3 w-full md:w-auto">
+          <div className="flex items-center space-x-2">
+            <Calendar size={16} className="text-dim" />
+            <input 
+              type="month" 
+              value={startMonth}
+              onChange={(e) => setStartMonth(e.target.value)}
+              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
+              title="From Month"
+            />
+            <span className="text-secondary text-xs">to</span>
+            <input 
+              type="month" 
+              value={endMonth}
+              onChange={(e) => setEndMonth(e.target.value)}
+              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
+              title="To Month"
+            />
+          </div>
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
             <input 
@@ -261,29 +270,122 @@ export default function Projects() {
           </button>
           <div className="flex space-x-3">
           {canEdit && (
-            <>
-              <label className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/20 transition-all cursor-pointer">
-                <Upload size={18} className="mr-2" /> Upload CSV
-                <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-              </label>
               <button onClick={() => { setEditingId(null); resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2.5 text-sm">
                 <Plus size={18} className="mr-2" />
                 New Project
               </button>
-            </>
           )}
         </div>
       </div>
     </div>
 
+      {/* Summary Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 mt-6">
+        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+          <div className="hud-corner-tr"></div>
+          <div className="hud-corner-bl"></div>
+          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#10b981', opacity: 0.1, filter: 'blur(20px)' }}></div>
+          <div className="flex justify-between items-start">
+            <h3 className="text-[10px] font-bold text-emerald-500 tracking-[0.2em] uppercase">[Active Projects]</h3>
+            <Activity size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="flex flex-col space-y-3 mt-4 text-left">
+            <div className="flex items-end space-x-2 font-mono">
+              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>{summaryStats.active}</span>
+              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">In Progress</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+          <div className="hud-corner-tr"></div>
+          <div className="hud-corner-bl"></div>
+          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f59e0b', opacity: 0.1, filter: 'blur(20px)' }}></div>
+          <div className="flex justify-between items-start">
+            <h3 className="text-[10px] font-bold text-amber-500 tracking-[0.2em] uppercase">[On Hold]</h3>
+            <AlertCircle size={18} className="text-amber-500 opacity-50 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="flex flex-col space-y-3 mt-4 text-left">
+            <div className="flex items-end space-x-2 font-mono">
+              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.6)' }}>{summaryStats.onHold}</span>
+              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Paused</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+          <div className="hud-corner-tr"></div>
+          <div className="hud-corner-bl"></div>
+          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#3b82f6', opacity: 0.1, filter: 'blur(20px)' }}></div>
+          <div className="flex justify-between items-start">
+            <h3 className="text-[10px] font-bold text-blue-500 tracking-[0.2em] uppercase">[Completed]</h3>
+            <CheckCircle size={18} className="text-blue-500 opacity-50 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="flex flex-col space-y-3 mt-4 text-left">
+            <div className="flex items-end space-x-2 font-mono">
+              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>{summaryStats.completed}</span>
+              <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Finished</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+          <div className="hud-corner-tr"></div>
+          <div className="hud-corner-bl"></div>
+          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#8b5cf6', opacity: 0.1, filter: 'blur(20px)' }}></div>
+          <div className="flex justify-between items-start">
+            <h3 className="text-[10px] font-bold text-purple-500 tracking-[0.2em] uppercase">[Total Projects]</h3>
+            <Briefcase size={18} className="text-purple-500 opacity-50 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="flex flex-col space-y-3 mt-4 text-left">
+            <div className="flex items-end space-x-2 font-mono">
+              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(139, 92, 246, 0.6)' }}>{summaryStats.total}</span>
+              <span className="text-[10px] font-bold text-purple-500 uppercase tracking-widest pb-1">All Projects</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 mr-2">
+            <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
+            >
+              <option value={10}>10</option>
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="flex items-center space-x-1">
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
+              {filteredProjects.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredProjects.length)}-${Math.min(currentPage * itemsPerPage, filteredProjects.length)} of ${filteredProjects.length}`}
+            </span>
+            <button disabled={currentPage >= Math.ceil(filteredProjects.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Projects Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProjects.map((project, index) => (
+        {filteredProjects.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((project, index) => (
           <div 
             key={project.id || project._id} 
-            className="glass-panel p-6 bg-card border-main hover:border-teal-500/30 transition-all group animate-slide-up"
+            className="hud-panel p-6 hover:border-teal-500/30 transition-all group animate-slide-up relative overflow-hidden"
             style={{ animationDelay: `${index * 50}ms` }}
           >
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
             <div className="flex justify-between items-start mb-4">
               <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border ${getStatusColor(project.status)}`}>
                 {project.status}
@@ -300,8 +402,9 @@ export default function Projects() {
               )}
             </div>
             
-            <h3 className="text-xl font-bold text-main mb-2 group-hover:text-teal-500 transition-colors">
-              {project.name}
+            <h3 className="text-xl font-bold text-main mb-2 group-hover:text-teal-500 transition-colors flex items-center space-x-2">
+              <span className="text-sm text-dim bg-panel px-2 py-0.5 rounded-md border border-main">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
+              <span>{project.name}</span>
             </h3>
             <p className="text-sm text-secondary line-clamp-2 mb-6 h-10">
               {project.description || 'No description provided.'}
@@ -311,6 +414,10 @@ export default function Projects() {
               <div className="flex items-center justify-between text-xs font-medium">
                 <span className="text-secondary uppercase tracking-wider">Client</span>
                 <span className="text-main">{project.client_name || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs font-medium mt-2">
+                <span className="text-secondary uppercase tracking-wider">Instruction By</span>
+                <span className="text-main">{project.instructionBy || 'N/A'}</span>
               </div>
               <button 
                 onClick={() => navigate(`/projects/${project.id || project._id}`)}
@@ -408,6 +515,18 @@ export default function Projects() {
                     <option value="On Hold">On Hold</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-secondary uppercase tracking-widest mb-2">Instruction By</label>
+                  <input
+                    type="text"
+                    value={formData.instructionBy}
+                    onChange={(e) => setFormData({...formData, instructionBy: e.target.value})}
+                    className="glass-input w-full p-3 bg-panel border-main"
+                    placeholder="Name of authorize officer"
+                  />
+                </div>
+
 
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-secondary uppercase tracking-widest mb-2">Scope of Operations (Description)</label>

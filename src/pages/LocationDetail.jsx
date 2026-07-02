@@ -37,7 +37,7 @@ export default function LocationDetail() {
   };
 
   const parseNetworkDetails = (details) => {
-    if (!details) return { ipv4Gateway: '', subnetMask: '', macAddress: '', collegeName: '' };
+    if (!details) return { ipv4Gateway: '', subnetMask: '', macAddress: '', divisionName: '' };
     const gwMatch = details.match(/Gateway:\s*([^|]+)/);
     const subMatch = details.match(/Subnet:\s*([^|]+)/);
     const macMatch = details.match(/MAC:\s*([^|]+)/);
@@ -46,7 +46,7 @@ export default function LocationDetail() {
       ipv4Gateway: gwMatch ? gwMatch[1].trim() : '',
       subnetMask: subMatch ? subMatch[1].trim() : '',
       macAddress: macMatch ? macMatch[1].trim() : '',
-      collegeName: collMatch ? collMatch[1].trim() : ''
+      divisionName: collMatch ? collMatch[1].trim() : ''
     };
   };
 
@@ -59,7 +59,7 @@ export default function LocationDetail() {
 
   const exportToExcel = () => {
     const headers = [
-      'S.No', 'College Name', 'Block', 'Floor', 'Campus Zone', 
+      'S.No', 'Division Name', 'Block', 'Floor', 'Campus Zone', 
       'Device Type', 'IP Address', 'IPv4 Gateway', 
       'Serial Number', 'Subnet Mask', 'MAC Address', 'Status'
     ];
@@ -75,12 +75,12 @@ export default function LocationDetail() {
 
     const dataRows = filteredCameras.map((camera, idx) => {
       const { block, floor } = parseSiteName(camera.siteName);
-      const { ipv4Gateway, subnetMask, macAddress, collegeName } = parseNetworkDetails(camera.dvrNvrDetails);
+      const { ipv4Gateway, subnetMask, macAddress, divisionName } = parseNetworkDetails(camera.dvrNvrDetails);
       const zone = camera.campusZone || (isOutside(camera.siteName) ? 'OUTSIDE' : 'INSIDE');
       
       return [
         idx + 1,
-        escapeCSV(collegeName || 'N/A'),
+        escapeCSV(divisionName || 'N/A'),
         escapeCSV(block || 'N/A'),
         escapeCSV(floor || 'N/A'),
         escapeCSV(zone),
@@ -184,7 +184,7 @@ export default function LocationDetail() {
           <div>
             <h1 className="text-3xl font-bold text-main tracking-tight">{locationName}</h1>
             <p className="text-sm text-secondary mt-1 flex items-center">
-              <Map size={14} className="mr-2" /> Detailed Building Inventory & Surveillance Node Map
+              <Map size={14} className="mr-2" /> Detailed Building Inventory & Surveillance Asset Map
             </p>
           </div>
         </div>

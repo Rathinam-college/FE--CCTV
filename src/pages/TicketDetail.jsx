@@ -2,32 +2,30 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Info, MessageSquare, Clock, CheckCircle, 
-  Send, Shield, Activity, X, Upload, FileText, Hash, File, Eye, Trash2
+  Send, Shield, Activity, X, Upload, FileText, Hash, File, Eye, Trash2, Plus, Camera, Image as ImageIcon, Printer, MapPin, User
 } from 'lucide-react';
 import api from '../services/api';
+import { compressImage } from '../utils/imageCompression';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import pptxgen from 'pptxgenjs';
 
 const getImageUrl = (path) => {
   if (!path) return '';
   
   try {
-    // If path is a full URL, extract just the pathname
     const url = new URL(path);
     path = url.pathname;
   } catch (e) {
-    // It's already a relative path, continue
+    // Relative path
   }
   
-  // Clean up leading slashes
   let cleanPath = path.startsWith('/') ? path.substring(1) : path;
   
-  // If it already starts with cctv/, remove it to standardize
   if (cleanPath.startsWith('cctv/')) {
-    cleanPath = cleanPath.substring(5); // Remove 'cctv/'
+    cleanPath = cleanPath.substring(5);
   }
   
-  // If it's a media file but doesn't have media/ prefix, add it (Django usually includes it though)
   if (!cleanPath.startsWith('media/') && !cleanPath.startsWith('api/')) {
     cleanPath = 'media/' + cleanPath;
   }
@@ -48,6 +46,8 @@ export default function TicketDetail() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { showNotification } = useNotificationStore();
+  
+  const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Maintenance:EDIT');
 
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -56,29 +56,30 @@ export default function TicketDetail() {
   const [newRemarkTime, setNewRemarkTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   const [newRemarkImage, setNewRemarkImage] = useState(null);
   
+  const [showInProgressModal, setShowInProgressModal] = useState(false);
+  const [inProgressData, setInProgressData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    image: null,
+    video: null
+  });
+
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [showDocModal, setShowDocModal] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
-  const [docData, setDocData] = useState({ name: '', file: null });
+  const [formData, setFormData] = useState({
+    new_bill: { number: '', amount: '', file: null },
+    new_po: { number: '', amount: '', file: null }
+  });
+  const [docFormData, setDocFormData] = useState({ name: '', file: null });
   const [submitting, setSubmitting] = useState(false);
-  const [completionStep, setCompletionStep] = useState(1);
   const [completionData, setCompletionData] = useState({
     remark: '',
     endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
     date: new Date().toISOString().split('T')[0],
-    beforeImage: null,
-    afterImage: null,
-    beforeRemark: '',
-    beforeDate: new Date().toISOString().split('T')[0],
-    beforeTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  });
-
-  const [billingData, setBillingData] = useState({
-    bill_number: '',
-    po_number: '',
-    bill_document: null,
-    po_document: null
+    images: [],
+    video: null
   });
 
   useEffect(() => {
@@ -115,12 +116,42 @@ export default function TicketDetail() {
     }
   };
 
+  const cleanRemarkText = (text) => {
+    if (!text) return '';
+    return text.replace(/^\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s*/, '');
+  };
+
+  const calculateAdvancedTimeDiff = (sDate, sTime, eDate, eTime) => {
+    if (!sDate || !sTime || !eDate || !eTime) return 'N/A';
+    try {
+      const start = new Date(`${sDate}T${sTime}`);
+      const end = new Date(`${eDate}T${eTime}`);
+      if (isNaN(start) || isNaN(end)) return 'N/A';
+      
+      let diffMs = end - start;
+      if (diffMs < 0) return 'N/A';
+      
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      
+      const parts = [];
+      if (days > 0) parts.push(`${days}d`);
+      if (hours > 0) parts.push(`${hours}h`);
+      if (mins > 0 || parts.length === 0) parts.push(`${mins}m`);
+      
+      return parts.join(' ');
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
   const calculateTotalTime = (start, end) => {
     if (!start || !end) return '';
     const [sH, sM] = start.split(':').map(Number);
     const [eH, eM] = end.split(':').map(Number);
     let diff = (eH * 60 + eM) - (sH * 60 + sM);
-    if (diff < 0) diff += 24 * 60; // Handle overnight
+    if (diff < 0) diff += 24 * 60;
     const h = Math.floor(diff / 60);
     const m = diff % 60;
     return `${h}h ${m}m`;
@@ -139,9 +170,7 @@ export default function TicketDetail() {
     }
 
     try {
-      await api.post(`/tickets/${ticket.id || ticket._id}/add_remark/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await api.post(`/tickets/${ticket.id || ticket._id}/add_remark/`, formData);
       setNewRemark('');
       setNewRemarkImage(null);
       fetchTicketData();
@@ -152,6 +181,34 @@ export default function TicketDetail() {
     }
   };
 
+  const transitionToInProgress = async () => {
+    try {
+      setSubmitting(true);
+      const formDataToSend = new FormData();
+      formDataToSend.append('status', 'In Progress');
+      formDataToSend.append('inProgressDate', inProgressData.date);
+      formDataToSend.append('inProgressTime', inProgressData.time);
+      if (inProgressData.image) {
+        formDataToSend.append('inProgressImage', inProgressData.image);
+      }
+      if (inProgressData.video) {
+        formDataToSend.append('inProgressVideo', inProgressData.video);
+      }
+      formDataToSend.append('remark', 'Status updated to In Progress (Staff on Site)');
+
+      await api.patch(`/tickets/${ticket.id || ticket._id}/`, formDataToSend);
+
+      showNotification('Ticket status changed to In Progress', 'success');
+      setShowInProgressModal(false);
+      fetchTicketData();
+    } catch (err) {
+      console.error(err);
+      showNotification('Failed to update ticket status', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const finalizeTicket = async () => {
     if (!completionData.remark.trim()) {
       showNotification('Please provide a completion remark', 'error');
@@ -159,142 +216,110 @@ export default function TicketDetail() {
     }
     try {
       setSubmitting(true);
-      const meta = parseMetadata(ticket.remarks);
-      
-      const updatedMeta = {
-        ...meta,
-        endTime: completionData.endTime,
-        manualDate: completionData.date,
-        totalTime: calculateTotalTime(ticket.projectId ? meta.workStartTime : completionData.beforeTime, completionData.endTime),
-        workRemarks: ticket.projectId ? meta.workRemarks : completionData.beforeRemark,
-        workStartTime: ticket.projectId ? meta.workStartTime : completionData.beforeTime,
-        workStartDate: ticket.projectId ? meta.workStartDate : completionData.beforeDate
-      };
-
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'Completed');
-      formDataToSend.append('remarks', JSON.stringify(updatedMeta));
-      formDataToSend.append('remark', ticket.projectId ? `Final Resolution: ${completionData.remark}` : `Final: ${completionData.remark} | Before: ${completionData.beforeRemark}`);
-      
-      if (!ticket.projectId) {
-        formDataToSend.append('workRemarks', completionData.beforeRemark);
-        if (completionData.beforeImage) {
-          formDataToSend.append('workImage', completionData.beforeImage);
-        }
+      formDataToSend.append('completedDate', completionData.date);
+      formDataToSend.append('completedTime', completionData.endTime);
+      formDataToSend.append('actionTaken', completionData.remark);
+      formDataToSend.append('endTime', completionData.endTime);
+      const startDate = ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null);
+      const startTime = ticket.receivedTime || ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null);
+      formDataToSend.append('totalTime', calculateAdvancedTimeDiff(startDate, startTime, completionData.date, completionData.endTime));
+      formDataToSend.append('remark', `Completed: ${completionData.remark}`);
+      if (completionData.images && completionData.images.length > 0) {
+        completionData.images.forEach(img => {
+          formDataToSend.append('completedImages', img);
+        });
       }
-      if (completionData.afterImage) {
-        formDataToSend.append('serviceImage', completionData.afterImage);
+      if (completionData.video) {
+        formDataToSend.append('completedVideo', completionData.video);
       }
 
-      await api.patch(`/tickets/${ticket.id || ticket._id}/`, formDataToSend, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await api.patch(`/tickets/${ticket.id || ticket._id}/`, formDataToSend);
 
-      showNotification('Ticket finalized with before/after records', 'success');
+      showNotification('Ticket status changed to Completed', 'success');
       setShowCompletionModal(false);
       fetchTicketData();
     } catch (err) {
       console.error(err);
-      showNotification('Failed to finalize ticket', 'error');
+      showNotification('Failed to complete ticket', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const submitBillingDocs = async (e) => {
-    e.preventDefault();
+  const handleAddBillingRecord = async (type) => {
     if (!ticket) return;
+    const isBill = type === 'Bill';
+    const data = isBill ? formData.new_bill : formData.new_po;
+    if (!data.number && !data.file) return;
 
     const formDataToSend = new FormData();
-    formDataToSend.append('bill_number', billingData.bill_number);
-    formDataToSend.append('po_number', billingData.po_number);
-    
-    if (billingData.bill_document) {
-      formDataToSend.append('bill_document', billingData.bill_document);
-    }
-    if (billingData.po_document) {
-      formDataToSend.append('po_document', billingData.po_document);
-    }
+    formDataToSend.append('ticket', ticket.id || ticket._id);
+    formDataToSend.append('record_type', type);
+    if (data.number) formDataToSend.append('number', data.number);
+    if (data.amount) formDataToSend.append('amount', data.amount);
+    if (data.file) formDataToSend.append('file', data.file);
 
     try {
       setSubmitting(true);
-      await api.patch(`/tickets/${ticket.id || ticket._id}/`, formDataToSend, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      showNotification('Billing documents uploaded successfully', 'success');
-      setShowBillingModal(false);
-      fetchTicketData(); // Refresh ticket data
-    } catch (err) {
-      console.error(err);
-      showNotification('Failed to upload billing documents', 'error');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleBillingFileChange = (e, field) => {
-    setBillingData(prev => ({ ...prev, [field]: e.target.files[0] }));
-  };
-
-  const handleDeleteBillingDocument = async (field) => {
-    if (!ticket || !window.confirm(`Are you sure you want to remove this ${field === 'bill_document' ? 'Bill' : 'PO'}? This will delete the file and clear the number.`)) return;
-
-    const data = new FormData();
-    data.append(field, ''); 
-    
-    if (field === 'bill_document') {
-      data.append('bill_number', '');
-      setBillingData(prev => ({ ...prev, bill_number: '', bill_document: null }));
-    } else if (field === 'po_document') {
-      data.append('po_number', '');
-      setBillingData(prev => ({ ...prev, po_number: '', po_document: null }));
-    }
-
-    try {
-      setSubmitting(true);
-      await api.patch(`/tickets/${ticket.id || ticket._id}/`, data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      showNotification('Document removed successfully', 'success');
+      await api.post('/tickets/ticket-billing-records/', formDataToSend);
+      showNotification(`${type} added successfully`, 'success');
+      setFormData(prev => ({
+        ...prev,
+        [isBill ? 'new_bill' : 'new_po']: { number: '', amount: '', file: null }
+      }));
       fetchTicketData();
     } catch (err) {
       console.error(err);
-      showNotification('Failed to remove document', 'error');
+      showNotification(`Failed to add ${type}`, 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const submitTicketDocument = async (e) => {
-    e.preventDefault();
-    if (!docData.name || !docData.file || !ticket) return;
+  const handleDeleteBillingRecord = async (recordId) => {
+    if (!window.confirm('Are you sure you want to delete this record?')) return;
+    try {
+      setSubmitting(true);
+      await api.delete(`/tickets/ticket-billing-records/${recordId}/`);
+      showNotification('Record deleted successfully', 'success');
+      fetchTicketData();
+    } catch (err) {
+      console.error(err);
+      showNotification('Failed to delete record', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    const data = new FormData();
-    data.append('ticket', ticket.id || ticket._id);
-    data.append('name', docData.name);
-    data.append('file', docData.file);
+  const handleAddDocument = async (e) => {
+    if (e) e.preventDefault();
+    if (!docFormData.name || !docFormData.file || !ticket) return;
+
+    const formDataToSend = new FormData();
+    formDataToSend.append('ticket', ticket.id || ticket._id);
+    formDataToSend.append('name', docFormData.name);
+    formDataToSend.append('file', docFormData.file);
 
     try {
-      setUploadingDoc(true);
-      await api.post('/tickets/ticket-documents/', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      setSubmitting(true);
+      await api.post('/tickets/ticket-documents/', formDataToSend);
       showNotification('Document uploaded successfully', 'success');
-      setShowDocModal(false);
-      setDocData({ name: '', file: null });
+      setDocFormData({ name: '', file: null });
       fetchTicketData();
     } catch (err) {
       console.error(err);
       showNotification('Failed to upload document', 'error');
     } finally {
-      setUploadingDoc(false);
+      setSubmitting(false);
     }
   };
 
-  const deleteTicketDocument = async (docId) => {
+  const handleDeleteGeneralDocument = async (docId) => {
     if (!window.confirm('Are you sure you want to delete this document?')) return;
     try {
-      setUploadingDoc(true);
+      setSubmitting(true);
       await api.delete(`/tickets/ticket-documents/${docId}/`);
       showNotification('Document deleted successfully', 'success');
       fetchTicketData();
@@ -302,7 +327,7 @@ export default function TicketDetail() {
       console.error(err);
       showNotification('Failed to delete document', 'error');
     } finally {
-      setUploadingDoc(false);
+      setSubmitting(false);
     }
   };
 
@@ -312,12 +337,320 @@ export default function TicketDetail() {
 
   const meta = parseMetadata(ticket.remarks);
 
+  const handlePrint = () => {
+    const getAbsoluteUrl = (path) => {
+      if (!path) return '';
+      const rel = getImageUrl(path);
+      if (rel.startsWith('http')) return rel;
+      return window.location.origin + rel;
+    };
+
+    const openImage = getAbsoluteUrl(ticket.createdImage);
+    const inProgressImage = getAbsoluteUrl(ticket.inProgressImage);
+    const completedImage = getAbsoluteUrl(
+      ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image)
+    );
+
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Ticket Details - #${ticket.id || ticket._id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
+            .section { margin-bottom: 30px; }
+            .section-title { font-size: 14px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+            .grid { display: flex; flex-wrap: wrap; margin: -10px; }
+            .grid-item { flex: 1 1 45%; padding: 10px; }
+            .label { font-size: 11px; color: #9ca3af; text-transform: uppercase; font-weight: bold; }
+            .value { font-size: 15px; font-weight: bold; color: #111827; }
+            .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            .status-completed { background-color: #d1fae5; color: #047857; }
+            .status-progress { background-color: #fef3c7; color: #d97706; }
+            .status-open { background-color: #fee2e2; color: #b91c1c; }
+            .image-grid { display: flex; gap: 15px; margin-top: 10px; }
+            .image-card { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; text-align: center; background-color: #f9fafb; display: flex; flex-direction: column; }
+            .evidence-img { width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-top: 8px; border: 1px solid #d1d5db; }
+            .no-img { height: 180px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 12px; font-style: italic; background-color: #f3f4f6; border-radius: 6px; margin-top: 8px; border: 1px dashed #d1d5db; }
+          </style>
+        </head>
+        <body>
+          <div class="section">
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Status</div>
+                <div class="value">
+                  <span class="badge ${ticket.status === 'Completed' ? 'status-completed' : ticket.status === 'In Progress' ? 'status-progress' : 'status-open'}">
+                    ${ticket.status}
+                  </span>
+                </div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Received Date</div>
+                <div class="value">${ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Issue Description</div>
+            <p><strong>"${ticket.issueDescription}"</strong></p>
+          </div>
+
+          <div class="section">
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Ticket Category</div>
+                <div class="value">${ticket.category || meta.category || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Point (Location)</div>
+                <div class="value">${ticket.location || meta.location || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Ticket Evidence Images</div>
+            <div class="image-grid">
+              <div class="image-card">
+                <div class="label">Open Image</div>
+                ${openImage ? `<img src="${openImage}" class="evidence-img" />` : '<div class="no-img">No Image Available</div>'}
+              </div>
+              <div class="image-card">
+                <div class="label">In Process Image</div>
+                ${inProgressImage ? `<img src="${inProgressImage}" class="evidence-img" />` : '<div class="no-img">No Image Available</div>'}
+              </div>
+              <div class="image-card">
+                <div class="label">Completed Image</div>
+                ${completedImage ? `<img src="${completedImage}" class="evidence-img" />` : '<div class="no-img">No Image Available</div>'}
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
+
+  const loadImage = (url) => {
+    return new Promise((resolve) => {
+      if (!url) {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  };
+
+  const generateTicketCanvas = async () => {
+    const getAbsoluteUrl = (path) => {
+      if (!path) return '';
+      const rel = getImageUrl(path);
+      if (rel.startsWith('http')) return rel;
+      return window.location.origin + rel;
+    };
+
+    const openUrl = getAbsoluteUrl(ticket.createdImage);
+    const inProgressUrl = getAbsoluteUrl(ticket.inProgressImage);
+    const completedUrl = getAbsoluteUrl(
+      ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image)
+    );
+
+    const [openImg, inProgressImg, completedImg] = await Promise.all([
+      loadImage(openUrl),
+      loadImage(inProgressUrl),
+      loadImage(completedUrl)
+    ]);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 760;
+    const ctx = canvas.getContext('2d');
+
+    const grad = ctx.createLinearGradient(0, 0, 0, 760);
+    grad.addColorStop(0, '#0f172a');
+    grad.addColorStop(1, '#1e293b');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 900, 760);
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(10, 10, 880, 740);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 24px Arial';
+    ctx.fillText(`TICKET #${ticket.id || ticket._id}`, 40, 60);
+
+    const isCompleted = ticket.status === 'Completed';
+    const badgeColor = isCompleted ? '#10b981' : (ticket.status === 'In Progress' ? '#f97316' : '#ef4444');
+    ctx.fillStyle = badgeColor;
+    ctx.fillRect(40, 85, 120, 30);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(ticket.status.toUpperCase(), 100, 105);
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText('CATEGORY', 40, 160);
+    ctx.fillText('RAISED BY', 240, 160);
+    ctx.fillText('LOGGED DATE', 40, 230);
+    ctx.fillText('LOCATION', 40, 300);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 15px Arial';
+    ctx.fillText(ticket.category || meta.category || 'N/A', 40, 185);
+    ctx.fillText(ticket.raisedByName || 'Authorized Staff', 240, 185);
+    ctx.fillText(ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A', 40, 255);
+    
+    const locText = ticket.location || meta.location || 'N/A';
+    ctx.fillText(locText, 40, 325);
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(460, 140, 400, 200);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 11px Arial';
+    ctx.fillText('ISSUE DESCRIPTION', 480, 170);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'italic 13px Arial';
+    
+    const words = (ticket.issueDescription || '').split(' ');
+    let line = '';
+    let y = 195;
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > 360 && n > 0) {
+        ctx.fillText(line, 480, y);
+        line = words[n] + ' ';
+        y += 20;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, 480, y);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('EVIDENCE GALLERY', 40, 390);
+
+    const imgWidth = 260;
+    const imgHeight = 180;
+    const imgY = 410;
+
+    // Open Image
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(40, imgY, imgWidth, imgHeight);
+    ctx.strokeStyle = '#334155';
+    ctx.strokeRect(40, imgY, imgWidth, imgHeight);
+    if (openImg) {
+      ctx.drawImage(openImg, 40, imgY, imgWidth, imgHeight);
+    } else {
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'italic 12px Arial';
+      ctx.fillText('Open Image Not Available', 80, imgY + 95);
+    }
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('OPEN IMAGE', 40, imgY + imgHeight + 20);
+
+    // In Progress Image
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(320, imgY, imgWidth, imgHeight);
+    ctx.strokeStyle = '#334155';
+    ctx.strokeRect(320, imgY, imgWidth, imgHeight);
+    if (inProgressImg) {
+      ctx.drawImage(inProgressImg, 320, imgY, imgWidth, imgHeight);
+    } else {
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'italic 12px Arial';
+      ctx.fillText('In Progress Image Not Available', 345, imgY + 95);
+    }
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('IN PROGRESS IMAGE', 320, imgY + imgHeight + 20);
+
+    // Completed Image
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(600, imgY, imgWidth, imgHeight);
+    ctx.strokeStyle = '#334155';
+    ctx.strokeRect(600, imgY, imgWidth, imgHeight);
+    if (completedImg) {
+      ctx.drawImage(completedImg, 600, imgY, imgWidth, imgHeight);
+    } else {
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'italic 12px Arial';
+      ctx.fillText('Completed Image Not Available', 635, imgY + 95);
+    }
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('COMPLETED IMAGE', 600, imgY + imgHeight + 20);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('GENERATED FROM CCTV SECURITY MANAGEMENT SYSTEM', 40, 710);
+
+    return canvas;
+  };
+
+  const handleExportPPT = async () => {
+    try {
+      const canvas = await generateTicketCanvas();
+      const imgDataUrl = canvas.toDataURL('image/png');
+
+      const pptx = new pptxgen();
+      pptx.layout = 'LAYOUT_16x9';
+
+      const slide = pptx.addSlide();
+      slide.background = { color: '0F172A' };
+      
+      slide.addImage({ 
+        data: imgDataUrl, 
+        x: 0, 
+        y: 0, 
+        w: 13.33,
+        h: 7.5
+      });
+
+      pptx.writeFile({ fileName: `ticket_${ticket.id || ticket._id}_presentation.pptx` });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleExportImage = async () => {
+    try {
+      const canvas = await generateTicketCanvas();
+      const link = document.createElement('a');
+      link.download = `ticket_${ticket.id || ticket._id}_card.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in pb-10 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-white/10 pb-6">
-        <div className="flex items-center space-x-4">
-          <button onClick={() => {
+    <div className="space-y-6 animate-fade-in pb-16 max-w-7xl mx-auto px-4 sm:px-6">
+      {/* Header Back Button */}
+      <div className="flex items-center space-x-4 border-b border-main pb-4">
+        <button 
+          onClick={() => {
             if (ticket.category === 'Upgrade' || meta.category === 'Upgrade') {
               navigate('/upgrades');
             } else if (ticket.projectId || ticket.project) {
@@ -326,782 +659,810 @@ export default function TicketDetail() {
             } else {
               navigate('/tickets');
             }
-          }} className="p-2 hover:bg-panel rounded-xl text-dim hover:text-main transition-all border border-transparent hover:border-white/10">
-            <ArrowLeft size={24} />
+          }} 
+          className="p-3 bg-panel hover:bg-white/10 rounded-2xl text-secondary hover:text-main transition-all border border-main"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-xl font-black text-main tracking-tight uppercase">
+          Back to Tickets
+        </h1>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Export PDF Button */}
+          <button 
+            onClick={handlePrint}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-xl font-bold uppercase tracking-widest text-[9px] transition-all border border-blue-500/20 shadow-md shadow-blue-500/5"
+            title="Export to PDF Format"
+          >
+            <Printer size={12} />
+            <span>PDF</span>
           </button>
+
+          {/* Export Image Button */}
+          <button 
+            onClick={handleExportImage}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white rounded-xl font-bold uppercase tracking-widest text-[9px] transition-all border border-purple-500/20 shadow-md shadow-purple-500/5"
+            title="Export to Image (PNG) Format"
+          >
+            <ImageIcon size={12} />
+            <span>Image</span>
+          </button>
+
+          {/* Export PPT Button */}
+          <button 
+            onClick={handleExportPPT}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-orange-500/10 text-orange-400 hover:bg-orange-500 hover:text-white rounded-xl font-bold uppercase tracking-widest text-[9px] transition-all border border-orange-500/20 shadow-md shadow-orange-500/5"
+            title="Export to PowerPoint (PPTX) Format"
+          >
+            <FileText size={12} />
+            <span>PPTX</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Bento Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-auto">
+        
+        {/* Cell 1: Ticket Header & Status (Spans 3 cols) */}
+        <div className="col-span-1 md:col-span-3 bg-card border border-main rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
-              {ticket.category === 'Upgrade' || meta.category === 'Upgrade' ? 'Upgrade Details' : (ticket.projectId || ticket.project ? 'Log Details' : 'Ticket Details')}
-            </h1>
-            <div className="flex items-center space-x-2 mt-1">
-              <span className="text-[10px] font-black text-dim uppercase tracking-[0.3em] bg-panel px-2 py-0.5 rounded">Trace: #{ticket.id || ticket._id}</span>
-              <div className="w-1 h-1 rounded-full bg-dim/30"></div>
-              <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{ticket.status}</span>
-            </div>
+            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.25em] mb-1">Ticket #{ticket.id || ticket._id}</p>
+            <h2 className="text-lg md:text-xl font-black text-main tracking-tight uppercase">
+              {ticket.category === 'Upgrade' || meta.category === 'Upgrade' ? 'Upgrade details' : (ticket.projectId || ticket.project ? 'Log details' : 'Ticket details')}
+            </h2>
           </div>
+          <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider ${
+            ticket.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+            ticket.status === 'In Progress' ? 'bg-orange-500/10 text-orange-500 animate-pulse border border-orange-500/20' :
+            'bg-red-500/10 text-red-500 border border-red-500/20'
+          }`}>
+            {ticket.status}
+          </span>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        <div className="lg:col-span-4 space-y-8">
-          <div className="glass-panel p-6 space-y-6 bg-gradient-to-br from-blue-500/[0.03] to-indigo-500/[0.03] border-blue-500/10">
-            <div className="flex justify-between items-center">
-              <div className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.2em] shadow-sm border ${
-                ticket.status === 'Completed' ? 'bg-emerald-500 text-white border-emerald-400' :
-                ticket.status === 'In Progress' ? 'bg-orange-500 text-white border-orange-400' :
-                'bg-red-500 text-white border-red-400'
-              }`}>
-                {ticket.status}
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[9px] font-black text-dim uppercase tracking-widest">Received Date</span>
-                <span className="text-xs font-bold text-main">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A'}</span>
-              </div>
-            </div>
-
-            <div className="h-px bg-gradient-to-r from-transparent via-main to-transparent opacity-10"></div>
-
-            <div className="space-y-3">
-              <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Issue Description</h4>
-              <div className="bg-panel/50 p-5 rounded-2xl border border-main shadow-inner">
-                <p className="text-sm text-main leading-relaxed font-bold italic opacity-90">
-                  "{ticket.issueDescription}"
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-card rounded-2xl border border-main">
-                <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Module</span>
-                <p className="text-sm text-main font-black uppercase tracking-wider">{ticket.category || meta.category || 'N/A'}</p>
-              </div>
-              <div className="p-4 bg-card rounded-2xl border border-main">
-                <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Point</span>
-                <p className="text-sm text-main font-black uppercase tracking-wider">{ticket.location || meta.location || 'N/A'}</p>
-              </div>
-            </div>
-
-            {(ticket.workImage || ticket.serviceImage) && (
-              <div className="space-y-4 animate-slide-up">
-                 <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] pl-2">Service Artifacts (Evidence)</h4>
-                 <div className="grid grid-cols-2 gap-4">
-                    {ticket.workImage && (
-                      <div className="group relative">
-                        <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">Before Work</span>
-                        <a href={getImageUrl(ticket.workImage)} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner relative">
-                          <img src={getImageUrl(ticket.workImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Before" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl text-[10px] font-black text-white flex items-center uppercase tracking-widest border border-white/20">
-                              <Eye size={12} className="mr-2" /> View Image
-                            </div>
-                          </div>
-                        </a>
-                      </div>
-                    )}
-                    {ticket.serviceImage && (
-                      <div className="group relative">
-                        <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-emerald-500/80 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">After Work</span>
-                        <a href={getImageUrl(ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-2xl overflow-hidden border border-white/5 bg-panel shadow-inner relative">
-                          <img src={getImageUrl(ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="After" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="px-3 py-1.5 bg-emerald-600/80 backdrop-blur-md rounded-xl text-[10px] font-black text-white flex items-center uppercase tracking-widest border border-white/20">
-                              <Eye size={12} className="mr-2" /> View Image
-                            </div>
-                          </div>
-                        </a>
-                      </div>
-                    )}
-                 </div>
-              </div>
+        {/* Cell 2: Reaction Metric (Spans 1 col) */}
+        <div className="col-span-1 bg-orange-500/10 border border-orange-500/20 rounded-2xl p-5 flex flex-col justify-center items-center text-center">
+          <Clock size={20} className="text-orange-400 mb-1.5" />
+          <p className="text-lg font-black text-orange-400">
+            {calculateAdvancedTimeDiff(
+              ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
+              ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
+              ticket.inProgressDate || meta.workStartDate, 
+              ticket.inProgressTime || meta.workStartTime
             )}
+          </p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-orange-500/80">Reaction</p>
+        </div>
 
-            {meta.workStartTime && (
-              <div className="space-y-4 animate-slide-up">
-                 <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] pl-2">Service Timeline</h4>
-                 <div className="bg-card p-4 rounded-2xl border border-main space-y-4">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-dim font-bold uppercase tracking-widest">Execution Start</span>
-                      <span className="text-main font-black">
-                        {meta.workStartDate} <span className="text-blue-500 font-mono ml-2">{meta.workStartTime}</span>
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-dim font-bold uppercase tracking-widest">Completion</span>
-                      <span className="text-main font-black">
-                        {meta.manualDate} <span className="text-emerald-500 font-mono ml-2">{meta.endTime}</span>
-                      </span>
-                    </div>
-                 </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-               <h4 className="text-[10px] font-black text-dim uppercase tracking-[0.3em] pl-2">System Metadata</h4>
-               <div className="bg-card p-4 rounded-2xl border border-main space-y-4">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-dim font-bold uppercase tracking-widest">Raised By</span>
-                    <span className="text-main font-black">{ticket.raisedByName || 'Authorized Staff'}</span>
-                  </div>
-                  <div className="h-px bg-main opacity-5"></div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-dim font-bold uppercase tracking-widest">Last Update</span>
-                    <span className="text-main font-black">{ticket.message_history?.[0]?.date || 'Today'}</span>
-                  </div>
-               </div>
+        {/* Cell 3: Issue Description (Spans 2 cols, spans 2 rows) */}
+        <div className="col-span-1 md:col-span-2 md:row-span-2 bg-card border border-main rounded-2xl p-5 flex flex-col justify-between">
+          <div>
+            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em] mb-3">Issue description</p>
+            <p className="margin-0 text-sm leading-relaxed text-main font-bold italic opacity-95">"{ticket.issueDescription}"</p>
+          </div>
+          {ticket.status === 'Completed' && ticket.actionTaken && (
+            <div className="mt-4 pt-4 border-t border-main/10">
+              <p className="margin-0 text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-1">Resolution / Action Taken</p>
+              <p className="margin-0 text-xs leading-relaxed text-emerald-400 font-bold italic">"{ticket.actionTaken}"</p>
             </div>
+          )}
+        </div>
 
-            <div className="space-y-4 animate-slide-up relative">
-               <div className="flex justify-between items-center pl-2">
-                 <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">Billing & PO Records</h4>
-                 <button 
-                   onClick={() => {
-                     setBillingData({
-                       bill_number: ticket.bill_number || '',
-                       po_number: ticket.po_number || '',
-                       bill_document: null,
-                       po_document: null
-                     });
-                     setShowBillingModal(true);
-                   }}
-                   className="text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/30 px-3 py-1 rounded-lg transition-colors border border-emerald-500/20 flex items-center"
-                 >
-                   <Upload size={10} className="mr-1" />
-                   {(ticket.bill_number || ticket.po_number || ticket.bill_document || ticket.po_document) ? 'Update Docs' : 'Attach Docs'}
-                 </button>
-               </div>
-               {(ticket.bill_number || ticket.po_number || ticket.bill_document || ticket.po_document) ? (
-                 <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20 space-y-4">
-                    {(ticket.bill_number || ticket.bill_document) && (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-emerald-400 font-bold uppercase tracking-widest flex items-center"><Hash size={12} className="mr-1"/> Bill Record</span>
-                        <div className="flex items-center space-x-2">
-                          {ticket.bill_number && <span className="text-emerald-300 font-mono font-black bg-emerald-500/10 px-2 py-0.5 rounded">{ticket.bill_number}</span>}
-                          {ticket.bill_document && (
-                            <a href={getImageUrl(ticket.bill_document)} target="_blank" rel="noopener noreferrer" className="flex items-center px-2 py-0.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded-lg transition-colors" title="View Document">
-                              <File size={12} className="mr-1.5" />
-                              <span className="text-[10px] font-bold truncate max-w-[120px]">{getFileName(ticket.bill_document)}</span>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {(ticket.bill_number || ticket.bill_document) && (ticket.po_number || ticket.po_document) && <div className="h-px bg-emerald-500/20"></div>}
-                    {(ticket.po_number || ticket.po_document) && (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-purple-400 font-bold uppercase tracking-widest flex items-center"><Hash size={12} className="mr-1"/> PO Record</span>
-                        <div className="flex items-center space-x-2">
-                          {ticket.po_number && <span className="text-purple-300 font-mono font-black bg-purple-500/10 px-2 py-0.5 rounded">{ticket.po_number}</span>}
-                          {ticket.po_document && (
-                            <a href={getImageUrl(ticket.po_document)} target="_blank" rel="noopener noreferrer" className="flex items-center px-2 py-0.5 bg-purple-500/20 text-purple-400 hover:bg-purple-500/40 rounded-lg transition-colors" title="View Document">
-                              <File size={12} className="mr-1.5" />
-                              <span className="text-[10px] font-bold truncate max-w-[120px]">{getFileName(ticket.po_document)}</span>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                 </div>
-               ) : (
-                 <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20 flex items-center justify-center text-center">
-                   <p className="text-[10px] font-black text-emerald-500/50 uppercase tracking-[0.2em]">No Billing Records Attached</p>
-                 </div>
-               )}
-            </div>
-
-            <div className="space-y-4 animate-slide-up relative mt-6">
-               <div className="flex justify-between items-center pl-2">
-                 <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em]">Ticket Documents</h4>
-                 <button 
-                   onClick={() => {
-                     setDocData({ name: '', file: null });
-                     setShowDocModal(true);
-                   }}
-                   className="text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-3 py-1 rounded-lg transition-colors border border-blue-500/20 flex items-center"
-                 >
-                   <Upload size={10} className="mr-1" />
-                   Upload Doc
-                 </button>
-               </div>
-               {ticket.documents && ticket.documents.length > 0 ? (
-                 <div className="bg-blue-500/5 p-4 rounded-2xl border border-blue-500/20 space-y-3">
-                   {ticket.documents.map((doc, idx) => (
-                      <div key={doc.id || idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-3 bg-panel border border-blue-500/10 rounded-xl hover:border-blue-500/30 transition-all">
-                        <div className="flex items-center space-x-3 mb-2 sm:mb-0">
-                          <FileText size={16} className="text-blue-400" />
-                          <div>
-                            <p className="text-xs font-bold text-main truncate max-w-[150px]">{doc.name}</p>
-                            <p className="text-[9px] font-black text-dim uppercase tracking-widest mt-0.5">{new Date(doc.uploaded_at).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <a href={getImageUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="p-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors" title="View Document">
-                            <Eye size={12} />
-                          </a>
-                          <button type="button" onClick={() => deleteTicketDocument(doc.id)} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-                   ))}
-                 </div>
-               ) : (
-                 <div className="bg-blue-500/5 p-4 rounded-2xl border border-blue-500/20 flex items-center justify-center text-center">
-                   <p className="text-[10px] font-black text-blue-500/50 uppercase tracking-[0.2em]">No Documents Attached</p>
-                 </div>
-               )}
-            </div>
-            
-            {ticket.status !== 'Completed' && (
-              <div className="pt-6 mt-6 border-t border-main">
-                <button
-                  onClick={() => {
-                    setCompletionStep(ticket.projectId || ticket.project ? 2 : 1);
-                    setShowCompletionModal(true);
-                  }}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
-                >
-                  Mark as Complete
-                </button>
-              </div>
-            )}
+        {/* Cell 4: Horizontal Status Dots Timeline (Spans 2 cols) */}
+        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 w-full text-dim font-bold text-[10px] uppercase tracking-wider">
+            <div className={`w-2 h-2 rounded-full ${ticket.status === 'Open' || ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-blue-500 shadow shadow-blue-500' : 'bg-dim/20'}`}></div>
+            <div className="flex-1 h-[1px] bg-main opacity-20"></div>
+            <div className={`w-2 h-2 rounded-full ${ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-orange-500 shadow shadow-orange-500 animate-pulse' : 'bg-dim/20'}`}></div>
+            <div className="flex-1 h-[1px] bg-main opacity-20"></div>
+            <div className={`w-2 h-2 rounded-full ${ticket.status === 'Completed' ? 'bg-emerald-500 shadow shadow-emerald-500' : 'bg-dim/20'}`}></div>
+            <p className="ml-2 font-mono whitespace-nowrap text-secondary">Open &rarr; Active &rarr; Done</p>
           </div>
         </div>
 
-        <div className="lg:col-span-8 space-y-6">
-          <div className="flex items-center justify-between border-b border-main pb-4">
-            <h4 className="text-sm font-black text-main uppercase tracking-[0.3em] flex items-center">
-              <MessageSquare size={18} className="mr-3 text-teal-500" />
-              Operational Activity Log
-            </h4>
-            <div className="bg-teal-500/10 text-teal-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-              {(ticket.message_history || []).length} Points Recorded
-            </div>
-          </div>
-
-          <div className="p-8 mb-8 border border-main bg-card/80 backdrop-blur-md rounded-3xl">
-            {ticket.status === 'Completed' && user?.role !== 'Super Admin' ? (
-              <div className="flex flex-col space-y-4">
-                <div className="flex items-center justify-center py-10 bg-emerald-500/[0.03] border-2 border-dashed border-emerald-500/20 rounded-[2.5rem]">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-emerald-500/20 shadow-lg">
-                      <CheckCircle size={32} className="text-emerald-500" />
-                    </div>
-                    <p className="text-lg font-black text-emerald-600 uppercase tracking-tight">Maintenance Cycle Complete</p>
-                    <p className="text-[10px] text-dim font-black uppercase tracking-[0.3em] mt-1 opacity-60">Verified Operational Integrity</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <form onSubmit={addRemark} className="relative group space-y-4">
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <label className="block text-[9px] font-black text-dim uppercase tracking-widest mb-1 pl-2">Log Date</label>
-                      <input 
-                        type="date" 
-                        value={newRemarkDate}
-                        onChange={(e) => setNewRemarkDate(e.target.value)}
-                        className="glass-input w-full p-3 text-xs bg-panel border-main rounded-xl"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-[9px] font-black text-dim uppercase tracking-widest mb-1 pl-2">Log Time</label>
-                      <input 
-                        type="time" 
-                        value={newRemarkTime}
-                        onChange={(e) => setNewRemarkTime(e.target.value)}
-                        className="glass-input w-full p-3 text-xs bg-panel border-main rounded-xl font-mono"
-                      />
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 rounded-[2rem] blur opacity-0 group-hover:opacity-100 transition duration-500"></div>
-                    <textarea
-                      value={newRemark}
-                      onChange={(e) => setNewRemark(e.target.value)}
-                      placeholder="Add technical update or observation..."
-                      className="glass-input relative w-full p-6 pr-16 text-sm min-h-[120px] resize-none focus:ring-4 focus:ring-blue-500/10 border-main transition-all placeholder:text-dim/40 font-bold rounded-[2rem] bg-panel/50 shadow-inner"
-                    />
-                    <div className="absolute right-4 bottom-4 flex items-center space-x-2">
-                      {newRemarkImage && (
-                        <div className="text-[10px] bg-panel/80 px-2 py-1 rounded-lg text-blue-400 truncate max-w-[120px] border border-blue-500/20 flex items-center backdrop-blur-md">
-                          <span className="truncate mr-1 font-bold">{newRemarkImage.name}</span>
-                          <button type="button" onClick={() => setNewRemarkImage(null)} className="text-blue-400 hover:text-red-400"><X size={12} /></button>
-                        </div>
-                      )}
-                      <label className="p-3 bg-panel/50 hover:bg-panel text-dim hover:text-blue-400 rounded-2xl transition-all cursor-pointer border border-transparent hover:border-blue-500/30">
-                        <Upload size={20} />
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file && file.size <= 2 * 1024 * 1024) {
-                              setNewRemarkImage(file);
-                            } else if (file) {
-                              showNotification('Image exceeds 2MB', 'error');
-                            }
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="submit"
-                        disabled={!newRemark.trim()}
-                        className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 disabled:grayscale text-white rounded-2xl transition-all shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 group/btn"
-                      >
-                        <Send size={20} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-                      </button>
-                    </div>
-                  </div>
-                </form>
-                <div className="flex items-center justify-center space-x-3">
-                  <div className="h-px w-8 bg-main opacity-10"></div>
-                  <p className="text-[10px] text-dim font-black uppercase tracking-[0.4em] opacity-40">
-                    Enterprise Audit Logging Active
-                  </p>
-                  <div className="h-px w-8 bg-main opacity-10"></div>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[2px] before:bg-main before:opacity-10">
-            {(ticket.message_history || []).length === 0 ? (
-              <div className="text-center py-20 bg-panel/30 rounded-[2.5rem] border-2 border-dashed border-main">
-                <div className="w-16 h-16 bg-panel rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                  <MessageSquare size={28} className="text-dim opacity-20" />
-                </div>
-                <p className="text-sm text-dim font-black uppercase tracking-[0.2em]">Zero Activity Logs Detected</p>
-                <p className="text-[10px] text-dim/50 uppercase tracking-widest mt-2">Initialize communication below</p>
-              </div>
-            ) : (
-              ticket.message_history.map((msg, idx) => {
-                const isSystem = msg.remark?.toLowerCase().includes('ticket updated') || msg.remark?.toLowerCase().includes('initial ticket');
-                return (
-                  <div key={idx} className="relative pl-12 animate-fade-in group" style={{ animationDelay: `${idx * 50}ms` }}>
-                    <div className={`absolute left-0 top-1 w-8 h-8 rounded-2xl border-4 border-main z-10 flex items-center justify-center transition-transform group-hover:scale-110 ${
-                      isSystem ? 'bg-slate-700 shadow-lg' : 'bg-blue-600 shadow-lg'
-                    }`}>
-                      {isSystem ? <Activity size={12} className="text-white" /> : <Shield size={12} className="text-white" />}
-                    </div>
-                    
-                    <div className={`rounded-3xl p-6 border transition-all duration-300 ${
-                      isSystem 
-                        ? 'bg-slate-500/[0.03] border-slate-500/10 hover:bg-slate-500/[0.06]' 
-                        : 'bg-blue-600/[0.04] border-blue-600/10 shadow-sm hover:bg-blue-600/[0.08] hover:border-blue-600/20'
-                    }`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex flex-col">
-                          <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isSystem ? 'text-slate-500' : 'text-blue-600'}`}>
-                            {isSystem ? 'Protocol System' : (msg.user_name || 'Admin Technician')}
-                          </span>
-                          <div className="flex items-center text-[10px] text-dim font-bold mt-1 uppercase tracking-wider">
-                            <Clock size={12} className="mr-1.5 opacity-50" />
-                            {msg.date} <span className="mx-2 opacity-30">|</span> {msg.time}
-                          </div>
-                        </div>
-                        {msg.device_status && (
-                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border-2 ${
-                            msg.device_status === 'Completed' ? 'bg-emerald-500/5 text-emerald-600 border-emerald-500/10' :
-                            msg.device_status === 'In Progress' ? 'bg-orange-500/5 text-orange-600 border-orange-400/10' :
-                            'bg-red-500/5 text-red-600 border-red-500/10'
-                          }`}>
-                            {msg.device_status}
-                          </span>
-                        )}
-                      </div>
-                      <div className="h-px bg-main opacity-5 mb-4"></div>
-                      <p className={`text-sm leading-relaxed ${isSystem ? 'text-dim italic font-bold opacity-80' : 'text-main font-black'}`}>
-                        {msg.remark}
-                      </p>
-                      {msg.image && (
-                        <div className="mt-4 animate-slide-up">
-                          <a href={getImageUrl(msg.image)} target="_blank" rel="noopener noreferrer" className="block w-full max-w-sm rounded-2xl overflow-hidden border border-main/10 bg-panel shadow-inner relative group/img">
-                            <img src={getImageUrl(msg.image)} className="w-full object-cover group-hover/img:scale-105 transition-transform duration-500 max-h-64" alt="Activity Attachment" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                              <div className="px-3 py-1.5 bg-blue-600/80 backdrop-blur-md rounded-xl text-[10px] font-black text-white flex items-center uppercase tracking-widest border border-white/20">
-                                <Eye size={12} className="mr-2" /> View Image
-                              </div>
-                            </div>
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+        {/* Cell 5: Location Card (Spans 2 cols) */}
+        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 space-y-1">
+          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Location</p>
+          <p className="margin-0 text-sm font-bold text-main flex items-center gap-1.5 uppercase tracking-wide">
+            <MapPin size={14} className="text-dim" />
+            {ticket.location || meta.location || 'N/A'}
+          </p>
         </div>
-      </div>
 
-      {showCompletionModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
-          <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
-            <div className="p-8 border-b border-main bg-panel flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <CheckCircle className="text-emerald-500" size={32} />
-                <div>
-                  <h3 className="text-2xl font-black text-main uppercase tracking-tight">Finalize Maintenance</h3>
-                  <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Service Completion Protocol</p>
-                </div>
-              </div>
-              <button onClick={() => setShowCompletionModal(false)} className="text-secondary hover:text-main p-2 hover:bg-panel rounded-xl transition-all"><X size={24} /></button>
-            </div>
-            
-            <div className="p-8 space-y-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className={`flex-1 h-1.5 rounded-full transition-all ${completionStep >= 1 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
-                <div className={`flex-1 h-1.5 rounded-full transition-all ${completionStep >= 2 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
-              </div>
+        {/* Cell 6: Raised By Card (Spans 2 cols) */}
+        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 space-y-1">
+          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Raised by</p>
+          <p className="margin-0 text-sm font-bold text-main flex items-center gap-1.5">
+            <User size={14} className="text-dim" />
+            <span>{ticket.raisedByName || 'Authorized Staff'} &middot; {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A'}</span>
+          </p>
+        </div>
 
-              {completionStep === 1 ? (
-                <div className="space-y-6 animate-slide-up">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work Start Date</label>
-                      <input 
-                        type="date" 
-                        value={completionData.beforeDate}
-                        onChange={(e) => setCompletionData({...completionData, beforeDate: e.target.value})}
-                        className="glass-input w-full p-3 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work Start Time</label>
-                      <input 
-                        type="time" 
-                        value={completionData.beforeTime}
-                        onChange={(e) => setCompletionData({...completionData, beforeTime: e.target.value})}
-                        className="glass-input w-full p-3 text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work In-Progress Details</label>
-                    <textarea 
-                      required
-                      value={completionData.beforeRemark}
-                      onChange={(e) => setCompletionData({...completionData, beforeRemark: e.target.value})}
-                      placeholder="Describe the initial work details or observations..."
-                      className="glass-input w-full p-4 text-sm min-h-[120px] resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work In-Progress Image (Before Work)</label>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload size={24} className="text-dim mb-2" />
-                            <p className="mb-2 text-xs text-dim font-bold">Upload Before Image</p>
-                          </div>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file && file.size <= 2 * 1024 * 1024) {
-                                setCompletionData({...completionData, beforeImage: file});
-                              } else if (file) {
-                                showNotification('Image exceeds 2MB', 'error');
-                              }
-                            }}
-                          />
-                        </label>
-                      </div>
-                      {completionData.beforeImage && (
-                        <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                          <span className="text-[10px] text-blue-400 font-bold truncate">{completionData.beforeImage.name}</span>
-                          <button onClick={() => setCompletionData({...completionData, beforeImage: null})} className="text-blue-400"><X size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex space-x-4">
-                    <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
-                    <button 
-                      onClick={() => {
-                        if (!completionData.beforeRemark.trim()) {
-                          showNotification('Please provide work details', 'error');
-                          return;
-                        }
-                        setCompletionStep(2);
-                      }} 
-                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg"
-                    >
-                      NEXT: FINALIZATION
-                    </button>
-                  </div>
-                </div>
+        {/* Cell 7: Evidence Gallery Card (Spans 2 cols, spans 2 rows) */}
+        <div className="col-span-1 md:col-span-2 md:row-span-2 bg-card border border-main rounded-2xl p-5 space-y-3">
+          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Evidence</p>
+          <div className="grid grid-cols-3 gap-3">
+            {/* Open Image */}
+            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
+              {ticket.createdImage ? (
+                <>
+                  <img src={getImageUrl(ticket.createdImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Open" />
+                  <a href={getImageUrl(ticket.createdImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={12} className="text-white" />
+                  </a>
+                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Open</span>
+                </>
               ) : (
-                <div className="space-y-6 animate-slide-up">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Date</label>
-                      <input 
-                        type="date" 
-                        value={completionData.date}
-                        onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
-                        className="glass-input w-full p-3 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Time</label>
-                      <input 
-                        type="time" 
-                        value={completionData.endTime}
-                        onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
-                        className="glass-input w-full p-3 text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Resolution Remark</label>
-                    <textarea 
-                      required
-                      value={completionData.remark}
-                      onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
-                      placeholder="Describe the final action taken..."
-                      className="glass-input w-full p-4 text-sm min-h-[120px] resize-none"
-                    />
-                  </div>
+                <ImageIcon size={16} className="text-dim opacity-30" />
+              )}
+            </div>
+            
+            {/* In Progress Image */}
+            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
+              {ticket.inProgressImage || ticket.workImage ? (
+                <>
+                  <img src={getImageUrl(ticket.inProgressImage || ticket.workImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="In Progress" />
+                  <a href={getImageUrl(ticket.inProgressImage || ticket.workImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={12} className="text-white" />
+                  </a>
+                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Active</span>
+                </>
+              ) : (
+                <ImageIcon size={16} className="text-dim opacity-30" />
+              )}
+            </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (After Work)</label>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload size={24} className="text-dim mb-2" />
-                            <p className="mb-2 text-xs text-dim font-bold">Upload After Image</p>
-                          </div>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file && file.size <= 2 * 1024 * 1024) {
-                                setCompletionData({...completionData, afterImage: file});
-                              } else if (file) {
-                                showNotification('Image exceeds 2MB', 'error');
-                              }
-                            }}
-                          />
-                        </label>
-                      </div>
-                      {completionData.afterImage && (
-                        <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                          <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.afterImage.name}</span>
-                          <button onClick={() => setCompletionData({...completionData, afterImage: null})} className="text-emerald-400"><X size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex space-x-4">
-                    {(!ticket.projectId && !ticket.project) && (
-                      <button onClick={() => setCompletionStep(1)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Back</button>
-                    )}
-                    {!ticket.projectId && !ticket.project && (
-                      <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
-                    )}
-                    {(ticket.projectId || ticket.project) && (
-                      <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
-                    )}
-                    <button 
-                      onClick={finalizeTicket}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
-                    >
-                      {submitting ? 'PROCESSING...' : 'COMPLETE TICKET'}
-                    </button>
-                  </div>
-                </div>
+            {/* Completed Image */}
+            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
+              {ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image) || ticket.serviceImage ? (
+                <>
+                  <img src={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Completed" />
+                  <a href={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={12} className="text-white" />
+                  </a>
+                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Done</span>
+                </>
+              ) : (
+                <ImageIcon size={16} className="text-dim opacity-30" />
               )}
             </div>
           </div>
         </div>
-      )}
 
-      {showBillingModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[250] animate-fade-in overflow-y-auto">
-          <div className="bg-panel rounded-[2.5rem] w-full max-w-2xl overflow-hidden border border-emerald-500/30 shadow-2xl flex flex-col my-8">
-            <div className="p-8 border-b border-emerald-500/20 flex justify-between items-center bg-emerald-500/5">
-              <div>
-                <h2 className="text-xl font-black text-white tracking-tight uppercase flex items-center">
-                  <Upload className="mr-3 text-emerald-400" size={24} />
-                  Attach Billing Documents
-                </h2>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500/70 mt-2">
-                  Documents will sync to the main Billing Page
-                </p>
+        {/* Cell 8: Activity List Card (Spans 4 cols) */}
+        <div className="col-span-1 md:col-span-4 bg-card border border-main rounded-2xl p-5 space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Activity</p>
+            <span className="bg-panel border border-main font-bold text-[9px] px-2 py-0.5 rounded-lg text-secondary">{(ticket.message_history || []).length} entries</span>
+          </div>
+
+          <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-main/5 pb-3">
+            {(ticket.message_history || []).slice(0, 3).map((msg, idx) => (
+              <p key={idx} className="margin-0 text-xs text-secondary leading-relaxed font-medium">
+                <span className="font-bold text-main">{msg.user_name || 'Protocol'}</span>{' '}
+                {cleanRemarkText(msg.remark)}{' '}
+                <span className="text-dim font-mono text-[9px] ml-1">&middot; {msg.time}</span>
+              </p>
+            ))}
+          </div>
+
+          {!(ticket.status === 'Completed' && user?.role !== 'Super Admin') && (
+            <form onSubmit={addRemark} className="flex gap-2">
+              <input 
+                type="text"
+                value={newRemark}
+                onChange={(e) => setNewRemark(e.target.value)}
+                placeholder="Add an update..." 
+                className="glass-input flex-1 px-3 py-2 text-xs bg-panel border-main rounded-xl font-bold"
+              />
+              <button 
+                type="submit"
+                disabled={!newRemark.trim()}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-20 flex items-center gap-1.5"
+              >
+                Post
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Cell 9: Complete Work Action Button (Spans 4 cols) */}
+        {ticket.status !== 'Completed' && (
+          <div className="col-span-1 md:col-span-4">
+            {ticket.status === 'Open' ? (
+              <button
+                onClick={() => {
+                  setInProgressData({
+                    date: new Date().toISOString().split('T')[0],
+                    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                    image: null
+                  });
+                  setShowInProgressModal(true);
+                }}
+                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-md flex items-center justify-center gap-1.5 uppercase"
+              >
+                <Clock size={14} /> Start work
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setCompletionData({
+                    remark: '',
+                    endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                    date: new Date().toISOString().split('T')[0],
+                    image: null
+                  });
+                  setShowCompletionModal(true);
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-md flex items-center justify-center gap-1.5 uppercase"
+              >
+                <CheckCircle size={14} /> Complete work
+              </button>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* Modals & Dialogs */}
+      {/* 1. Staff On Site (In Progress) Modal */}
+      {showInProgressModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in overflow-y-auto">
+          <div className="bg-panel rounded-[2rem] w-full max-w-lg border border-main shadow-2xl overflow-hidden my-8">
+            <div className="p-6 border-b border-main bg-card flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <Clock className="text-orange-500 animate-pulse" size={24} />
+                <div>
+                  <h3 className="text-lg font-black text-main uppercase tracking-tight">Staff On Site</h3>
+                  <p className="text-[8px] text-secondary mt-0.5 uppercase tracking-[0.25em] font-black">Transition to In Progress</p>
+                </div>
               </div>
-              <button onClick={() => setShowBillingModal(false)} className="p-2 hover:bg-white/10 rounded-xl text-dim hover:text-white transition-all"><X size={24} /></button>
+              <button onClick={() => setShowInProgressModal(false)} className="text-secondary hover:text-main p-1.5 hover:bg-panel rounded-xl transition-all"><X size={20} /></button>
             </div>
             
-            <form onSubmit={submitBillingDocs} className="p-8 space-y-6">
-              
-              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-6 space-y-4">
-                <h3 className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center">
-                  <FileText size={16} className="mr-2" />
-                  Bill Details
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Bill Number / Amount</label>
-                    <input 
-                      type="text" 
-                      value={billingData.bill_number} 
-                      onChange={(e) => setBillingData(prev => ({ ...prev, bill_number: e.target.value }))}
-                      className="glass-input w-full p-3 text-xs bg-black/40 border-emerald-500/20 text-white focus:border-emerald-500" 
-                      placeholder="e.g. INV-2026-001"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Upload Bill PDF/Image</label>
-                    <input 
-                      type="file" 
-                      onChange={(e) => handleBillingFileChange(e, 'bill_document')}
-                      className="w-full text-xs text-dim file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-emerald-500/20 file:text-emerald-400 hover:file:bg-emerald-500/30 cursor-pointer" 
-                    />
-                    {ticket.bill_document && !billingData.bill_document && (
-                      <div className="mt-3 p-3 bg-black/20 rounded-xl border border-emerald-500/20 flex items-center justify-between">
-                        <div className="flex items-center w-full max-w-[200px]">
-                          <CheckCircle size={14} className="text-emerald-400 mr-2 flex-shrink-0" />
-                          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest truncate" title={getFileName(ticket.bill_document)}>
-                            {getFileName(ticket.bill_document)}
-                          </span>
-                        </div>
-                        <div className="flex space-x-2">
-                          <a href={getImageUrl(ticket.bill_document)} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded-lg transition-colors">
-                            <Eye size={14} />
-                          </a>
-                          <button type="button" onClick={() => handleDeleteBillingDocument('bill_document')} className="p-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/40 rounded-lg transition-colors">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1.5">On Site Date</label>
+                  <input 
+                    type="date" 
+                    value={inProgressData.date}
+                    onChange={(e) => setInProgressData({...inProgressData, date: e.target.value})}
+                    className="glass-input w-full p-2.5 text-xs bg-card"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1.5">On Site Time</label>
+                  <input 
+                    type="time" 
+                    value={inProgressData.time}
+                    onChange={(e) => setInProgressData({...inProgressData, time: e.target.value})}
+                    className="glass-input w-full p-2.5 text-xs font-mono bg-card"
+                  />
                 </div>
               </div>
 
-              <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-6 space-y-4">
-                <h3 className="text-xs font-black text-purple-400 uppercase tracking-widest mb-4 flex items-center">
-                  <FileText size={16} className="mr-2" />
-                  Purchase Order (PO) Details
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">PO Number</label>
-                    <input 
-                      type="text" 
-                      value={billingData.po_number} 
-                      onChange={(e) => setBillingData(prev => ({ ...prev, po_number: e.target.value }))}
-                      className="glass-input w-full p-3 text-xs bg-black/40 border-purple-500/20 text-white focus:border-purple-500" 
-                      placeholder="e.g. PO-998877"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Upload PO Document</label>
+              <div>
+                <label className="block text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1.5">Evidence Photo (Optional)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col items-center justify-center h-24 border border-dashed rounded-xl cursor-pointer hover:bg-white/5 border-main transition-all bg-card">
+                    <ImageIcon size={18} className="text-dim mb-1" />
+                    <span className="text-[9px] text-dim font-bold uppercase tracking-wider">Gallery</span>
                     <input 
                       type="file" 
-                      onChange={(e) => handleBillingFileChange(e, 'po_document')}
-                      className="w-full text-xs text-dim file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-purple-500/20 file:text-purple-400 hover:file:bg-purple-500/30 cursor-pointer" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          try {
+                            const compressedFile = await compressImage(file, 50);
+                            setInProgressData({...inProgressData, image: compressedFile});
+                          } catch (err) {
+                            showNotification('Failed to process image', 'error');
+                          }
+                        }
+                      }}
                     />
-                    {ticket.po_document && !billingData.po_document && (
-                      <div className="mt-3 p-3 bg-black/20 rounded-xl border border-purple-500/20 flex items-center justify-between">
-                        <div className="flex items-center w-full max-w-[200px]">
-                          <CheckCircle size={14} className="text-purple-400 mr-2 flex-shrink-0" />
-                          <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest truncate" title={getFileName(ticket.po_document)}>
-                            {getFileName(ticket.po_document)}
-                          </span>
-                        </div>
-                        <div className="flex space-x-2">
-                          <a href={getImageUrl(ticket.po_document)} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-purple-500/20 text-purple-400 hover:bg-purple-500/40 rounded-lg transition-colors">
-                            <Eye size={14} />
-                          </a>
-                          <button type="button" onClick={() => handleDeleteBillingDocument('po_document')} className="p-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/40 rounded-lg transition-colors">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  </label>
+                  <label className="flex flex-col items-center justify-center h-24 border border-dashed rounded-xl cursor-pointer hover:bg-white/5 border-main transition-all bg-card">
+                    <Camera size={18} className="text-dim mb-1" />
+                    <span className="text-[9px] text-dim font-bold uppercase tracking-wider">Camera</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      capture="environment"
+                      onChange={async (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          try {
+                            const compressedFile = await compressImage(file, 50);
+                            setInProgressData({...inProgressData, image: compressedFile});
+                          } catch (err) {
+                            showNotification('Failed to process image', 'error');
+                          }
+                        }
+                      }}
+                    />
+                  </label>
                 </div>
+                {inProgressData.image && (
+                  <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                    <span className="text-[9px] text-blue-400 font-bold truncate">{inProgressData.image.name}</span>
+                    <button onClick={() => setInProgressData({...inProgressData, image: null})} className="text-blue-400"><X size={12} /></button>
+                  </div>
+                )}
               </div>
 
-              <div className="flex space-x-4 pt-4 border-t border-white/10">
-                <button type="button" onClick={() => setShowBillingModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest hover:bg-white/5 rounded-xl transition-all">Cancel</button>
-                <button 
-                  type="submit" 
-                  disabled={submitting}
-                  className="flex-1 bg-emerald-600 text-white hover:bg-emerald-500 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/30 disabled:opacity-50 flex items-center justify-center"
-                >
-                  {submitting ? 'UPLOADING...' : 'SAVE & SYNC TO BILLING'}
-                </button>
+              <div>
+                <label className="block text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1.5">Evidence Video (Optional)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col items-center justify-center h-24 border border-dashed rounded-xl cursor-pointer hover:bg-white/5 border-main transition-all bg-card">
+                    <ImageIcon size={18} className="text-dim mb-1" />
+                    <span className="text-[9px] text-dim font-bold uppercase tracking-wider">Video Gallery</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="video/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file && file.size <= 5 * 1024 * 1024) {
+                          setInProgressData({...inProgressData, video: file});
+                        } else if (file) {
+                          showNotification('Video exceeds 5MB limit', 'error');
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="flex flex-col items-center justify-center h-24 border border-dashed rounded-xl cursor-pointer hover:bg-white/5 border-main transition-all bg-card">
+                    <Camera size={18} className="text-dim mb-1" />
+                    <span className="text-[9px] text-dim font-bold uppercase tracking-wider">Record Video</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="video/*"
+                      capture="environment"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file && file.size <= 5 * 1024 * 1024) {
+                          setInProgressData({...inProgressData, video: file});
+                        } else if (file) {
+                          showNotification('Video exceeds 5MB limit', 'error');
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                {inProgressData.video && (
+                  <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                    <span className="text-[9px] text-blue-400 font-bold truncate">{inProgressData.video.name}</span>
+                    <button onClick={() => setInProgressData({...inProgressData, video: null})} className="text-blue-400"><X size={12} /></button>
+                  </div>
+                )}
               </div>
-            </form>
+            </div>
+
+            <div className="p-6 bg-card border-t border-main flex space-x-3">
+              <button onClick={() => setShowInProgressModal(false)} className="flex-1 py-2.5 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+              <button 
+                disabled={submitting}
+                onClick={transitionToInProgress}
+                className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2.5 rounded-xl text-xs font-black tracking-widest transition-all shadow-md uppercase"
+              >
+                {submitting ? 'Updating...' : 'Start Work'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Document Upload Modal */}
-      {showDocModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in">
-          <div className="bg-card rounded-[2.5rem] w-full max-w-lg border border-main shadow-2xl overflow-hidden">
-            <div className="p-8 border-b border-main bg-panel flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <Upload className="text-blue-500" size={32} />
+      {/* 2. Service Completion Modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in overflow-y-auto">
+          <div className="bg-panel rounded-[2rem] w-full max-w-lg border border-main shadow-2xl overflow-hidden my-8">
+            <div className="p-6 border-b border-main bg-card flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <CheckCircle className="text-emerald-500" size={24} />
                 <div>
-                  <h2 className="text-2xl font-black text-main tracking-tight uppercase">Upload Document</h2>
-                  <p className="text-[10px] text-dim font-black uppercase tracking-[0.2em]">Attach file to this ticket</p>
+                  <h3 className="text-lg font-black text-main uppercase tracking-tight">Finalize Work</h3>
+                  <p className="text-[8px] text-secondary mt-0.5 uppercase tracking-[0.25em] font-black">Service Completion Protocol</p>
                 </div>
               </div>
-              <button onClick={() => !uploadingDoc && setShowDocModal(false)} className="p-2 hover:bg-card rounded-xl text-dim hover:text-main">
-                <X size={24} />
-              </button>
+              <button onClick={() => setShowCompletionModal(false)} className="text-secondary hover:text-main p-1.5 hover:bg-panel rounded-xl transition-all"><X size={20} /></button>
             </div>
             
-            <form onSubmit={submitTicketDocument} className="p-8 space-y-6">
-              <div>
-                <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Document Title</label>
-                <input 
-                  type="text" 
-                  required
-                  value={docData.name} 
-                  onChange={(e) => setDocData(prev => ({ ...prev, name: e.target.value }))}
-                  className="glass-input w-full p-3 text-xs bg-panel border-main focus:border-blue-500" 
-                  placeholder="e.g. Service Report"
-                />
+            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1.5">Completion Date</label>
+                  <input 
+                    type="date" 
+                    value={completionData.date}
+                    onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
+                    className="glass-input w-full p-2.5 text-xs bg-card"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1.5">Completion Time</label>
+                  <input 
+                    type="time" 
+                    value={completionData.endTime}
+                    onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
+                    className="glass-input w-full p-2.5 text-xs font-mono bg-card"
+                  />
+                </div>
               </div>
+              
               <div>
-                <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Upload File</label>
-                <input 
-                  type="file" 
+                <label className="block text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1.5">Final Resolution Remark</label>
+                <textarea 
                   required
-                  onChange={(e) => setDocData(prev => ({ ...prev, file: e.target.files[0] }))}
-                  className="w-full text-xs text-dim file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-blue-500/20 file:text-blue-400 hover:file:bg-blue-500/30 cursor-pointer" 
+                  value={completionData.remark}
+                  onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
+                  placeholder="Describe the final action taken to resolve this ticket..."
+                  className="glass-input w-full p-3 text-xs min-h-[90px] resize-none bg-card"
                 />
               </div>
 
-              <div className="flex justify-end pt-6 border-t border-main">
-                <button 
-                  type="submit" 
-                  disabled={uploadingDoc || !docData.name || !docData.file}
-                  className="glass-button px-12 py-3 disabled:opacity-50"
-                >
-                  {uploadingDoc ? 'UPLOADING...' : 'UPLOAD DOCUMENT'}
-                </button>
+              <div>
+                <label className="block text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-1.5 flex items-center">
+                  <Camera size={12} className="mr-1.5" /> Upload Evidence Files
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col items-center justify-center h-24 border border-dashed rounded-xl cursor-pointer hover:bg-white/5 border-main transition-all bg-card">
+                    <ImageIcon size={18} className="text-dim mb-1" />
+                    <span className="text-[9px] text-dim font-bold uppercase tracking-wider">Gallery</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      multiple
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files);
+                        try {
+                          const compressedPromises = files.map(f => compressImage(f, 50));
+                          const compressedFiles = await Promise.all(compressedPromises);
+                          setCompletionData(prev => ({
+                            ...prev, 
+                            images: [...(prev.images || []), ...compressedFiles]
+                          }));
+                        } catch (err) {
+                          showNotification('Failed to process images', 'error');
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="flex flex-col items-center justify-center h-24 border border-dashed rounded-xl cursor-pointer hover:bg-white/5 border-main transition-all bg-card">
+                    <Camera size={18} className="text-dim mb-1" />
+                    <span className="text-[9px] text-dim font-bold uppercase tracking-wider">Camera</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      capture="environment"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files);
+                        try {
+                          const compressedPromises = files.map(f => compressImage(f, 50));
+                          const compressedFiles = await Promise.all(compressedPromises);
+                          setCompletionData(prev => ({
+                            ...prev, 
+                            images: [...(prev.images || []), ...compressedFiles]
+                          }));
+                        } catch (err) {
+                          showNotification('Failed to process image', 'error');
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                {completionData.images && completionData.images.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {completionData.images.map((img, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-xl">
+                        <span className="text-[9px] text-emerald-400 font-bold truncate max-w-[120px]">{img.name}</span>
+                        <button type="button" onClick={() => {
+                          const newImages = [...completionData.images];
+                          newImages.splice(idx, 1);
+                          setCompletionData({...completionData, images: newImages});
+                        }} className="text-emerald-400 hover:text-red-400 p-0.5"><X size={12} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </form>
+            </div>
+
+            <div className="p-6 bg-card border-t border-main flex space-x-3">
+              <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-2.5 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+              <button 
+                disabled={submitting || !completionData.remark.trim()}
+                onClick={finalizeTicket}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-black tracking-widest transition-all shadow-md uppercase disabled:opacity-50"
+              >
+                {submitting ? 'Completing...' : 'Close Ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Billing & PO Management Modal */}
+      {showBillingModal && ticket && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-panel rounded-[2rem] w-full max-w-4xl border border-main shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-main flex justify-between items-center bg-card">
+              <div>
+                <h2 className="text-lg font-black text-main tracking-tight uppercase flex items-center">
+                  <Upload className="mr-2.5 text-emerald-400" size={20} />
+                  Billing & PO Management
+                </h2>
+                <p className="text-[10px] text-secondary mt-1 font-bold">
+                  Ticket #{ticket.id} - {ticket.issueDescription}
+                </p>
+              </div>
+              <button onClick={() => setShowBillingModal(false)} className="p-1.5 hover:bg-panel rounded-xl text-secondary hover:text-main transition-all"><X size={20} /></button>
+            </div>
+            
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 space-y-4">
+                <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center">
+                  <FileText size={14} className="mr-1.5" />
+                  Bill Records
+                </h3>
+
+                {ticket.billing_records && ticket.billing_records.filter(r => r.record_type === 'Bill').length > 0 && (
+                  <div className="space-y-2">
+                    {ticket.billing_records.filter(r => r.record_type === 'Bill').map(record => (
+                      <div key={record.id} className="p-3 bg-panel rounded-xl border border-blue-500/10 flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <CheckCircle size={14} className="text-blue-400 flex-shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
+                              {record.number || 'No Number'}
+                            </span>
+                            {record.amount && <span className="text-[9px] text-blue-400/70 font-mono mt-0.5">{record.amount}</span>}
+                          </div>
+                        </div>
+                        <div className="flex space-x-1.5">
+                          {record.file && (
+                            <a href={getImageUrl(record.file)} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors" title="View">
+                              <Eye size={12} />
+                            </a>
+                          )}
+                          <button type="button" onClick={() => handleDeleteBillingRecord(record.id)} className="p-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors" disabled={submitting}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-blue-500/15">
+                  <h4 className="text-[9px] font-black text-secondary uppercase tracking-widest mb-3">Add Bill Document</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-[8px] font-black text-secondary uppercase tracking-widest mb-1.5 pl-1">Bill Reference Number</label>
+                      <input 
+                        type="text" 
+                        value={formData.new_bill.number} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, new_bill: { ...prev.new_bill, number: e.target.value } }))}
+                        className="glass-input w-full p-2 text-xs bg-card" 
+                        placeholder="e.g. INV-2026-001"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black text-secondary uppercase tracking-widest mb-1.5 pl-1">Amount / Details</label>
+                      <input 
+                        type="text" 
+                        value={formData.new_bill.amount} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, new_bill: { ...prev.new_bill, amount: e.target.value } }))}
+                        className="glass-input w-full p-2 text-xs bg-card" 
+                        placeholder="e.g. $1,250"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <input 
+                      type="file" 
+                      onChange={(e) => setFormData(prev => ({ ...prev, new_bill: { ...prev.new_bill, file: e.target.files[0] } }))}
+                      className="text-xs text-dim file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-wider file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/25 cursor-pointer" 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddBillingRecord('Bill')}
+                      disabled={submitting || (!formData.new_bill.number && !formData.new_bill.file)}
+                      className="bg-blue-600 text-white hover:bg-blue-500 px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                    >
+                      Save Bill
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-purple-500/5 p-5 border border-purple-500/20 rounded-2xl space-y-4">
+                <h3 className="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center">
+                  <FileText size={14} className="mr-1.5" />
+                  Purchase Orders (PO)
+                </h3>
+
+                {ticket.billing_records && ticket.billing_records.filter(r => r.record_type === 'PO').length > 0 && (
+                  <div className="space-y-2">
+                    {ticket.billing_records.filter(r => r.record_type === 'PO').map(record => (
+                      <div key={record.id} className="p-3 bg-panel rounded-xl border border-purple-500/10 flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <CheckCircle size={14} className="text-purple-400 flex-shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">
+                              {record.number || 'No Number'}
+                            </span>
+                            {record.amount && <span className="text-[9px] text-purple-400/70 font-mono mt-0.5">{record.amount}</span>}
+                          </div>
+                        </div>
+                        <div className="flex space-x-1.5">
+                          {record.file && (
+                            <a href={getImageUrl(record.file)} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500/30 rounded-lg transition-colors" title="View">
+                              <Eye size={12} />
+                            </a>
+                          )}
+                          <button type="button" onClick={() => handleDeleteBillingRecord(record.id)} className="p-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors" disabled={submitting}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-purple-500/15">
+                  <h4 className="text-[9px] font-black text-secondary uppercase tracking-widest mb-3">Add PO Document</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-[8px] font-black text-secondary uppercase tracking-widest mb-1.5 pl-1">PO Reference Number</label>
+                      <input 
+                        type="text" 
+                        value={formData.new_po.number} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, new_po: { ...prev.new_po, number: e.target.value } }))}
+                        className="glass-input w-full p-2 text-xs bg-card" 
+                        placeholder="e.g. PO-998877"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black text-secondary uppercase tracking-widest mb-1.5 pl-1">Amount / Details</label>
+                      <input 
+                        type="text" 
+                        value={formData.new_po.amount} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, new_po: { ...prev.new_po, amount: e.target.value } }))}
+                        className="glass-input w-full p-2 text-xs bg-card" 
+                        placeholder="e.g. $5,000"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <input 
+                      type="file" 
+                      onChange={(e) => setFormData(prev => ({ ...prev, new_po: { ...prev.new_po, file: e.target.files[0] } }))}
+                      className="text-xs text-dim file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-wider file:bg-purple-500/10 file:text-purple-400 hover:file:bg-purple-500/25 cursor-pointer" 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddBillingRecord('PO')}
+                      disabled={submitting || (!formData.new_po.number && !formData.new_po.file)}
+                      className="bg-purple-600 text-white hover:bg-purple-500 px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                    >
+                      Save PO
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-card border-t border-main flex justify-end">
+              <button 
+                type="button" 
+                onClick={() => setShowBillingModal(false)}
+                className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+              >
+                Close Vault
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. General Document Management Modal */}
+      {showDocModal && ticket && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-panel rounded-[2rem] w-full max-w-2xl border border-main shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-main flex justify-between items-center bg-card">
+              <div>
+                <h2 className="text-lg font-black text-main tracking-tight uppercase flex items-center">
+                  <File className="mr-2.5 text-blue-400" size={20} />
+                  General Documents
+                </h2>
+                <p className="text-[10px] text-secondary mt-1 font-bold">
+                  Ticket #{ticket.id} - {ticket.issueDescription}
+                </p>
+              </div>
+              <button onClick={() => setShowDocModal(false)} className="p-1.5 hover:bg-panel rounded-xl text-secondary hover:text-main transition-all"><X size={20} /></button>
+            </div>
+            
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 space-y-4">
+                <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center">
+                  <FileText size={14} className="mr-1.5" />
+                  Vault Documents
+                </h3>
+
+                {ticket.documents && ticket.documents.length > 0 && (
+                  <div className="space-y-2">
+                    {ticket.documents.map(doc => (
+                      <div key={doc.id} className="p-3 bg-panel rounded-xl border border-blue-500/10 flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <CheckCircle size={14} className="text-blue-400 flex-shrink-0" />
+                          <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
+                            {doc.name}
+                          </span>
+                        </div>
+                        <div className="flex space-x-1.5">
+                          {doc.file && (
+                            <a href={getImageUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors" title="View">
+                              <Eye size={12} />
+                            </a>
+                          )}
+                          <button type="button" onClick={() => handleDeleteGeneralDocument(doc.id)} className="p-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors" disabled={submitting}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-blue-500/15">
+                  <h4 className="text-[9px] font-black text-secondary uppercase tracking-widest mb-3">Upload New Document</h4>
+                  <div className="grid grid-cols-1 gap-4 mb-4">
+                    <div>
+                      <label className="block text-[8px] font-black text-secondary uppercase tracking-widest mb-1.5 pl-1">Document Title / Tag</label>
+                      <input 
+                        type="text" 
+                        value={docFormData.name} 
+                        onChange={(e) => setDocFormData(prev => ({ ...prev, name: e.target.value }))}
+                        className="glass-input w-full p-2 text-xs bg-card" 
+                        placeholder="e.g. Site Plan, Vendor Invoice..."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <input 
+                      type="file" 
+                      onChange={(e) => setDocFormData(prev => ({ ...prev, file: e.target.files[0] }))}
+                      className="text-xs text-dim file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-wider file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/25 cursor-pointer" 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={handleAddDocument}
+                      disabled={submitting || !docFormData.name || !docFormData.file}
+                      className="bg-blue-600 text-white hover:bg-blue-500 px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                    >
+                      Upload File
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-card border-t border-main flex justify-end">
+              <button 
+                type="button" 
+                onClick={() => setShowDocModal(false)}
+                className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+              >
+                Close Vault
+              </button>
+            </div>
           </div>
         </div>
       )}

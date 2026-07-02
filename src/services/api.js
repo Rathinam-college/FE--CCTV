@@ -7,7 +7,7 @@ const api = axios.create({
 // Request Interceptor: Automatically add the Bearer token
 api.interceptors.request.use(
   (config) => {
-    const user = JSON.parse(localStorage.getItem('user'));
+    const user = JSON.parse(localStorage.getItem('cctv_user'));
     if (user && user.token) {
       config.headers.Authorization = `Bearer ${user.token}`;
     }
@@ -22,7 +22,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       console.warn('Unauthorized request. Clearing session.');
-      localStorage.removeItem('user');
+      localStorage.removeItem('cctv_user');
       window.location.href = `${import.meta.env.BASE_URL}login`;
     }
     return Promise.reject(error);

@@ -19,13 +19,23 @@ export default function Maintenance() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [currentTicket, setCurrentTicket] = useState(null);
+  const [showInProgressModal, setShowInProgressModal] = useState(false);
+  const [inProgressTicket, setInProgressTicket] = useState(null);
+  const [inProgressData, setInProgressData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    image: null,
+    video: null
+  });
+
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionTicket, setCompletionTicket] = useState(null);
   const [completionData, setCompletionData] = useState({
     remark: '',
     endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
     date: new Date().toISOString().split('T')[0],
-    image: null
+    image: null,
+    video: null
   });
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Maintenance:EDIT');
 
@@ -55,7 +65,9 @@ export default function Maintenance() {
         api.get('/tickets/'),
         api.get('/users/')
       ]);
-      setTickets((ticketRes.data || []).filter(t => !t.projectId && !t.project));
+      const allTickets = ticketRes.data || [];
+      const sortedTickets = [...allTickets].sort((a, b) => (b.id || 0) - (a.id || 0));
+      setTickets(sortedTickets.filter(t => !t.projectId && !t.project));
       setUsers(userRes.data || []);
     } catch (err) {
       console.error(err);
@@ -94,7 +106,11 @@ export default function Maintenance() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    let newValue = value;
+    if (typeof newValue === 'string' && !['date', 'status', 'receivedTime', 'endTime'].includes(name)) {
+      newValue = newValue.toUpperCase();
+    }
+    setFormData(prev => ({ ...prev, [name]: newValue }));
   };
 
   const handleEdit = (ticket) => {
@@ -212,12 +228,23 @@ export default function Maintenance() {
     const ticket = tickets.find(t => (t.id || t._id || '').toString() === ticketId.toString());
     
     if (ticket && ticket.status !== newStatus) {
+      if (newStatus === 'In Progress') {
+        setInProgressTicket(ticket);
+        setInProgressData({
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+          image: null
+        });
+        setShowInProgressModal(true);
+        return;
+      }
       if (newStatus === 'Completed') {
         setCompletionTicket(ticket);
         setCompletionData({
           remark: '',
           endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-          date: new Date().toISOString().split('T')[0]
+          date: new Date().toISOString().split('T')[0],
+          image: null
         });
         setShowCompletionModal(true);
         return;
@@ -424,7 +451,7 @@ export default function Maintenance() {
                         <option value="Assets">Assets</option>
                         <option value="Storage">Storage Units</option>
                         <option value="Identity">Identity Access</option>
-                        <option value="Network">Network Nodes</option>
+                        <option value="Network">Network Assets</option>
                         <option value="Other">Other Hardware</option>
                       </select>
                     </div>
@@ -480,12 +507,23 @@ export default function Maintenance() {
                             key={status}
                             type="button"
                             onClick={() => {
+                              if (status === 'In Progress') {
+                                setInProgressTicket(currentTicket || formData);
+                                setInProgressData({
+                                  date: new Date().toISOString().split('T')[0],
+                                  time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                                  image: null
+                                });
+                                setShowInProgressModal(true);
+                                return;
+                              }
                               if (status === 'Completed') {
                                 setCompletionTicket(currentTicket || formData);
                                 setCompletionData({
                                   remark: '',
                                   endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                                  date: new Date().toISOString().split('T')[0]
+                                  date: new Date().toISOString().split('T')[0],
+                                  image: null
                                 });
                                 setShowCompletionModal(true);
                                 return;
@@ -525,6 +563,173 @@ export default function Maintenance() {
           </div>
         </div>
       )}
+      {showInProgressModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
+            <div className="p-8 border-b border-main bg-panel flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <Clock className="text-orange-500" size={32} />
+                <div>
+                  <h3 className="text-2xl font-black text-main uppercase tracking-tight">Staff On Site</h3>
+                  <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Transition to In Progress</p>
+                </div>
+              </div>
+              <button onClick={() => setShowInProgressModal(false)} className="text-secondary hover:text-main p-2 hover:bg-panel rounded-xl transition-all"><X size={24} /></button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">On Site Date</label>
+                  <input 
+                    type="date" 
+                    value={inProgressData.date}
+                    onChange={(e) => setInProgressData({...inProgressData, date: e.target.value})}
+                    className="glass-input w-full p-3 text-sm bg-panel border-main"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">On Site Time</label>
+                  <input 
+                    type="time" 
+                    value={inProgressData.time}
+                    onChange={(e) => setInProgressData({...inProgressData, time: e.target.value})}
+                    className="glass-input w-full p-3 text-sm font-mono bg-panel border-main"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Staff On Site Image (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Upload size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Upload Site Image</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 2 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, image: file});
+                          } else if (file) {
+                            showNotification('Image exceeds 2MB', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {inProgressData.image && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <span className="text-[10px] text-blue-400 font-bold truncate">{inProgressData.image.name}</span>
+                      <button onClick={() => setInProgressData({...inProgressData, image: null})} className="text-blue-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Staff On Site Video (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Upload size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Upload Site Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Camera size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Record Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {inProgressData.video && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <span className="text-[10px] text-blue-400 font-bold truncate">{inProgressData.video.name}</span>
+                      <button onClick={() => setInProgressData({...inProgressData, video: null})} className="text-blue-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-4">
+                <button onClick={() => setShowInProgressModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+                <button 
+                  disabled={submitting}
+                  onClick={async () => {
+                    try {
+                      setSubmitting(true);
+                      const id = inProgressTicket.id || inProgressTicket._id;
+                      
+                      const formDataToSend = new FormData();
+                      formDataToSend.append('status', 'In Progress');
+                      formDataToSend.append('inProgressDate', inProgressData.date);
+                      formDataToSend.append('inProgressTime', inProgressData.time);
+                      
+                      if (inProgressData.image) {
+                        formDataToSend.append('inProgressImage', inProgressData.image);
+                      }
+                      if (inProgressData.video) {
+                        formDataToSend.append('inProgressVideo', inProgressData.video);
+                      }
+                      formDataToSend.append('remark', 'Status updated to In Progress (Staff on Site)');
+
+                      await api.patch(`/tickets/${id}/`, formDataToSend);
+
+                      showNotification('Ticket status changed to In Progress', 'success');
+                      setShowInProgressModal(false);
+                      if (showModal) setShowModal(false);
+                      fetchData();
+                    } catch (err) {
+                      console.error(err);
+                      showNotification('Failed to update ticket status', 'error');
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                >
+                  {submitting ? 'PROCESSING...' : 'START WORK'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
           <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
@@ -547,7 +752,7 @@ export default function Maintenance() {
                     type="date" 
                     value={completionData.date}
                     onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
-                    className="glass-input w-full p-3 text-sm"
+                    className="glass-input w-full p-3 text-sm bg-panel border-main font-bold"
                   />
                 </div>
                 <div>
@@ -556,7 +761,7 @@ export default function Maintenance() {
                     type="time" 
                     value={completionData.endTime}
                     onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
-                    className="glass-input w-full p-3 text-sm font-mono"
+                    className="glass-input w-full p-3 text-sm font-mono bg-panel border-main font-bold"
                   />
                 </div>
               </div>
@@ -568,19 +773,18 @@ export default function Maintenance() {
                   value={completionData.remark}
                   onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
                   placeholder="Describe the final action taken to resolve this ticket..."
-                  className="glass-input w-full p-4 text-sm min-h-[120px] resize-none"
+                  className="glass-input w-full p-4 text-sm min-h-[120px] resize-none bg-panel border-main font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Service Image (Max 2MB)</label>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (Completed Image)</label>
                 <div className="mt-2">
                   <div className="flex items-center justify-center w-full">
-                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-[2rem] cursor-pointer hover:bg-panel border-main transition-all group">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <Upload size={32} className="text-secondary group-hover:text-teal-500 mb-3 transition-colors" />
-                        <p className="mb-2 text-xs text-secondary font-bold uppercase tracking-widest"><span className="text-main">Click to upload</span> or drag and drop</p>
-                        <p className="text-[10px] text-dim font-medium">PNG, JPG or JPEG (MAX. 2MB)</p>
+                        <Upload size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Upload Completed Image</p>
                       </div>
                       <input 
                         type="file" 
@@ -588,13 +792,10 @@ export default function Maintenance() {
                         accept="image/*"
                         onChange={(e) => {
                           const file = e.target.files[0];
-                          if (file) {
-                            if (file.size > 2 * 1024 * 1024) {
-                              showNotification('Image size exceeds 2MB limit', 'error');
-                              e.target.value = '';
-                              return;
-                            }
+                          if (file && file.size <= 2 * 1024 * 1024) {
                             setCompletionData({...completionData, image: file});
+                          } else if (file) {
+                            showNotification('Image exceeds 2MB', 'error');
                           }
                         }}
                       />
@@ -603,18 +804,62 @@ export default function Maintenance() {
                   {completionData.image && (
                     <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
                       <span className="text-[10px] text-emerald-400 font-bold truncate max-w-[200px]">{completionData.image.name}</span>
-                      <button onClick={() => setCompletionData({...completionData, image: null})} className="text-emerald-400 hover:text-emerald-300">
-                        <X size={14} />
-                      </button>
+                      <button onClick={() => setCompletionData({...completionData, image: null})} className="text-emerald-400"><X size={14} /></button>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-panel p-5 rounded-3xl border border-main">
-                <div className="flex items-center space-x-3 text-[10px] text-secondary uppercase font-black tracking-widest">
-                  <User size={14} className="text-teal-500" />
-                  <span>Closing Technician: <span className="text-main">{user?.name}</span></span>
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Video (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Upload size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Upload Completed Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setCompletionData({...completionData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Camera size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Record Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setCompletionData({...completionData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {completionData.video && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.video.name}</span>
+                      <button onClick={() => setCompletionData({...completionData, video: null})} className="text-emerald-400"><X size={14} /></button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -636,23 +881,22 @@ export default function Maintenance() {
                       const id = completionTicket.id || completionTicket._id;
                       const meta = parseMetadata(completionTicket.remarks);
 
-                      // 2. Prepare FormData for multipart submission
                       const formData = new FormData();
                       formData.append('status', 'Completed');
+                      formData.append('completedDate', completionData.date);
+                      formData.append('completedTime', completionData.endTime);
+                      formData.append('actionTaken', completionData.remark);
                       formData.append('endTime', completionData.endTime);
-                      formData.append('operationDate', completionData.date);
-                      formData.append('totalTime', calculateTotalTime(completionTicket.receivedTime || meta.receivedTime, completionData.endTime));
-                      formData.append('remark', completionData.remark);
+                      formData.append('totalTime', calculateTotalTime(completionTicket.receivedTime || meta.receivedTime || '09:00', completionData.endTime));
+                      formData.append('remark', `Completed: ${completionData.remark}`);
                       if (completionData.image) {
-                        formData.append('serviceImage', completionData.image);
+                        formData.append('completedImage', completionData.image);
+                      }
+                      if (completionData.video) {
+                        formData.append('completedVideo', completionData.video);
                       }
 
-                      // 3. Single patch update
-                      await api.patch(`/tickets/${id}/`, formData, {
-                        headers: {
-                          'Content-Type': 'multipart/form-data',
-                        },
-                      });
+                      await api.patch(`/tickets/${id}/`, formData);
 
                       showNotification('Ticket finalized and completed', 'success');
                       setShowCompletionModal(false);

@@ -44,7 +44,7 @@ export default function SwitchDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
@@ -55,7 +55,7 @@ export default function SwitchDetail() {
     status: 'Online'
   });
 
-  const { allLocations, fetchAllLocations } = useSiteStore();
+  const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
 
   const unifiedActivity = useMemo(() => {
     if (!device) return [];
@@ -69,7 +69,7 @@ export default function SwitchDetail() {
     const moves = (device.relocations || []).map(move => ({
       ...move,
       type: 'move',
-      remark: `Network Node relocated from ${move.old_location} to ${move.new_location}`,
+      remark: `Network Asset relocated from ${move.old_location} to ${move.new_location}`,
       timestamp: move.date ? new Date(`${move.date} 00:00`).getTime() : 0
     }));
 
@@ -79,6 +79,7 @@ export default function SwitchDetail() {
   useEffect(() => {
     fetchDetails();
     fetchAllLocations();
+    fetchDivisions();
   }, [id]);
 
   const fetchDetails = async () => {
@@ -88,7 +89,7 @@ export default function SwitchDetail() {
       setDevice(res.data);
       setFormData({
         name: res.data.name || '',
-        collegeName: res.data.collegeName || '',
+        divisionName: res.data.divisionName || '',
         block: res.data.block || '',
         floor: res.data.floor || '',
         room: res.data.room || '',
@@ -148,11 +149,11 @@ export default function SwitchDetail() {
 
       const payload = {
         name: formData.name,
-        collegeName: formData.collegeName,
+        divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
-        location: `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
+        location: `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
         ipAddress: formData.ipAddress,
         brand: formData.brand,
         model: formData.model,
@@ -163,7 +164,7 @@ export default function SwitchDetail() {
       await api.patch(`/cameras/switches/${id}/`, payload);
 
       // Log the relocation
-      let moveLog = `Network Node Relocated/Updated. `;
+      let moveLog = `Network Asset Relocated/Updated. `;
       if (oldLocation !== payload.location) {
         moveLog += `Moved from ${oldLocation} to ${payload.location}. `;
       }
@@ -212,7 +213,7 @@ export default function SwitchDetail() {
       ['Status', device.status],
       ['Brand', device.brand],
       ['Model', device.model],
-      ['College', device.collegeName],
+      ['College', device.divisionName],
       ['Block', device.block],
       ['Floor', device.floor],
       ['Room', device.room],
@@ -238,10 +239,104 @@ export default function SwitchDetail() {
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
     document.body.removeChild(link);
     showNotification('Detailed Switch audit report generated');
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Network Switch Details - ${device.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+            h1 { color: #1a56db; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+            .section { margin-bottom: 30px; }
+            .section-title { font-size: 14px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+            .grid { display: flex; flex-wrap: wrap; margin: -10px; }
+            .grid-item { flex: 1 1 45%; padding: 10px; }
+            .label { font-size: 11px; color: #9ca3af; text-transform: uppercase; font-weight: bold; }
+            .value { font-size: 15px; font-weight: bold; color: #111827; }
+            .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+            .status-online { background-color: #d1fae5; color: #047857; }
+            .status-maintenance { background-color: #ffedd5; color: #c2410c; }
+            .status-offline { background-color: #fee2e2; color: #b91c1c; }
+          </style>
+        </head>
+        <body>
+          <h1>Network Switch Details - ${device.name || 'N/A'}</h1>
+          
+          <div class="section">
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Status</div>
+                <div class="value">
+                  <span class="badge ${device.status === 'Online' ? 'status-online' : device.status === 'Maintenance' ? 'status-maintenance' : 'status-offline'}">
+                    ${device.status || 'N/A'}
+                  </span>
+                </div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Hardware Brand & Model</div>
+                <div class="value">${device.brand || 'N/A'} - ${device.model || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Deployment Context</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Division</div>
+                <div class="value">${device.divisionName || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Block Assignment</div>
+                <div class="value">${device.block || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Level / Floor</div>
+                <div class="value">${device.floor || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Room / Area</div>
+                <div class="value">${device.room || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Hardware Intelligence</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Port Capacity</div>
+                <div class="value">${device.portCount || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Asset Number</div>
+                <div class="value">${device.serialNumber || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Static IPv4</div>
+                <div class="value">${device.ipAddress || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 50px; font-size: 12px; color: #9ca3af; text-align: center;">
+            Generated from CCTV System on ${new Date().toLocaleString()}
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   if (loading) {
@@ -251,7 +346,7 @@ export default function SwitchDetail() {
           <div className="w-16 h-16 border-4 border-emerald-500/20 rounded-full"></div>
           <div className="absolute top-0 w-16 h-16 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin"></div>
         </div>
-        <p className="text-dim font-bold animate-pulse text-xs uppercase tracking-widest">Probing Network Node...</p>
+        <p className="text-dim font-bold animate-pulse text-xs uppercase tracking-widest">Probing Network Asset...</p>
       </div>
     );
   }
@@ -262,7 +357,7 @@ export default function SwitchDetail() {
         <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-red-400">
           <Network size={32} />
         </div>
-        <h3 className="text-xl font-bold text-main mb-2">Node Offline</h3>
+        <h3 className="text-xl font-bold text-main mb-2">Asset Offline</h3>
         <p className="text-dim text-sm mb-8 leading-relaxed">{error || 'Network Switch not found.'}</p>
         <button onClick={() => navigate('/network-switches')} className="w-full glass-button py-3 flex items-center justify-center">
           <ArrowLeft size={18} className="mr-2" /> Return to Infrastructure
@@ -313,7 +408,7 @@ export default function SwitchDetail() {
               <Download size={20} />
             </button>
             <button 
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="p-2.5 rounded-lg text-secondary hover:text-blue-400 hover:bg-blue-500/10 transition-all"
               title="Export PDF"
             >
@@ -345,7 +440,7 @@ export default function SwitchDetail() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <IntelligenceCard 
           icon={Wifi} 
-          label="Backbone Node" 
+          label="IP Address" 
           value={device.ipAddress} 
           color="emerald"
         />
@@ -363,7 +458,7 @@ export default function SwitchDetail() {
         />
         <IntelligenceCard 
           icon={ShieldCheck} 
-          label="Serial ID" 
+          label="Asset Number" 
           value={device.serialNumber || '—'} 
           color="amber" 
           mono
@@ -391,14 +486,14 @@ export default function SwitchDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Target Institution</label>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Target Division</label>
                       <select 
-                        value={formData.collegeName} 
-                        onChange={(e) => setFormData({...formData, collegeName: e.target.value})}
+                        value={formData.divisionName} 
+                        onChange={(e) => setFormData({...formData, divisionName: e.target.value})}
                         className="glass-input w-full p-3 text-sm"
                       >
-                        <option value="">Select College</option>
-                        {Array.from(new Set(allLocations.map(l => l.collegeName))).map(c => (
+                        <option value="">Select Division</option>
+                        {divisions && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
@@ -411,7 +506,7 @@ export default function SwitchDetail() {
                         className="glass-input w-full p-3 text-sm"
                       >
                         <option value="">Select Block</option>
-                        {Array.from(new Set(allLocations.filter(l => l.collegeName === formData.collegeName).map(l => l.block))).map(b => (
+                        {Array.from(new Set(allLocations.filter(l => l.divisionName === formData.divisionName).map(l => l.block))).map(b => (
                           <option key={b} value={b}>{b}</option>
                         ))}
                       </select>
@@ -492,11 +587,11 @@ export default function SwitchDetail() {
                     <div className="h-px bg-emerald-500/10 flex-1"></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <DetailRow label="Node Designation" value={device.name} />
+                    <DetailRow label="Asset Designation" value={device.name} />
                     <DetailRow label="Switch Brand" value={device.brand} />
-                    <DetailRow label="Model Specification" value={device.model} />
+                    <DetailRow label="Model Name" value={device.model} />
                     <DetailRow label="Port Capacity" value={device.portCount} />
-                    <DetailRow label="Serial Number" value={device.serialNumber} mono />
+                    <DetailRow label="Asset Number" value={device.serialNumber} mono />
                   </div>
                 </section>
 
@@ -506,7 +601,7 @@ export default function SwitchDetail() {
                     <div className="h-px bg-blue-500/10 flex-1"></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <DetailRow label="Institution" value={device.collegeName} />
+                    <DetailRow label="Division" value={device.divisionName} />
                     <DetailRow label="Block Assignment" value={device.block} />
                     <DetailRow label="Level / Floor" value={device.floor} />
                     <DetailRow label="Room / Area" value={device.room} />
@@ -638,7 +733,7 @@ export default function SwitchDetail() {
                    <span className="text-[9px] font-bold text-dim uppercase">Back</span>
                 </button>
                 <button 
-                  onClick={() => window.print()}
+                  onClick={handlePrint}
                   className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center space-y-2 hover:bg-white/10 transition-all"
                 >
                    <FileText size={16} className="text-emerald-400" />

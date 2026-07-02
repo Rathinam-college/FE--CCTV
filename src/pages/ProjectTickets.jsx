@@ -5,7 +5,7 @@ import {
   Plus, Search, Download, Calendar, MapPin, Tag, 
   X, Edit2, Trash2, LayoutGrid, Briefcase, Upload,
   MessageSquare, Send, Info, Clock, User as UserIcon, CheckCircle,
-  Maximize2, Minimize2, Activity, Shield
+  Maximize2, Minimize2, Activity, Shield, ChevronLeft, ChevronRight, Printer
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -42,7 +42,7 @@ export default function ProjectTickets() {
   const { projectId, projectName } = useParams();
   const { showNotification } = useNotificationStore();
   const { showConfirm } = useConfirmStore();
-  const { occupations, fetchOccupations } = useSiteStore();
+  const { divisions, fetchDivisions } = useSiteStore();
   const [tickets, setTickets] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,18 +51,27 @@ export default function ProjectTickets() {
   const [editingId, setEditingId] = useState(null);
   const [currentTicket, setCurrentTicket] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [startMonth, setStartMonth] = useState('');
+  const [endMonth, setEndMonth] = useState('');
+  const [showInProgressModal, setShowInProgressModal] = useState(false);
+  const [inProgressTicket, setInProgressTicket] = useState(null);
+  const [inProgressData, setInProgressData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    image: null,
+    video: null
+  });
+
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionTicket, setCompletionTicket] = useState(null);
   const [completionData, setCompletionData] = useState({
     remark: '',
     endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
     date: new Date().toISOString().split('T')[0],
-    beforeImage: null,
-    afterImage: null,
-    beforeRemark: '',
-    beforeDate: new Date().toISOString().split('T')[0],
-    beforeTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    image: null,
+    video: null
   });
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Projects:EDIT');
 
@@ -81,7 +90,7 @@ export default function ProjectTickets() {
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
@@ -106,27 +115,28 @@ export default function ProjectTickets() {
 
   useEffect(() => {
     fetchData();
-    fetchOccupations();
+    fetchDivisions();
   }, [projectId]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [ticketRes, userRes, locRes, staffRes] = await Promise.all([
+      const [ticketRes, userRes, locRes] = await Promise.all([
         api.get('/tickets/'),
         api.get('/users/'),
-        api.get('/cameras/master_locations/'),
-        api.get('/tickets/staff/')
+        api.get('/cameras/master_locations/')
       ]);
       
-      const projectTickets = (ticketRes.data || []).filter(t => 
+      const allTickets = ticketRes.data || [];
+      const sortedTickets = [...allTickets].sort((a, b) => (b.id || 0) - (a.id || 0));
+      const projectTickets = sortedTickets.filter(t => 
         (t.projectId?.id || t.projectId || t.project?.id)?.toString() === projectId.toString()
       );
       
       setTickets(projectTickets);
       setUsers(userRes.data);
       setAllLocations(locRes.data);
-      setStaff(staffRes.data);
+      setStaff(userRes.data);
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -224,11 +234,16 @@ export default function ProjectTickets() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    let newValue = value;
+    if (typeof newValue === 'string' && !['date', 'status', 'receivedTime', 'endTime'].includes(name)) {
+      newValue = newValue.toUpperCase();
+    }
+
     setFormData(prev => {
-      const newData = { ...prev, [name]: value };
+      const newData = { ...prev, [name]: newValue };
       
-      if (name === 'collegeName' || name === 'block' || name === 'floor' || name === 'room') {
-        if (name === 'collegeName') {
+      if (name === 'divisionName' || name === 'block' || name === 'floor' || name === 'room') {
+        if (name === 'divisionName') {
           newData.block = ''; newData.floor = ''; newData.room = '';
         } else if (name === 'block') {
           newData.floor = ''; newData.room = '';
@@ -237,7 +252,7 @@ export default function ProjectTickets() {
         }
 
         const matchingLoc = allLocations.find(l => 
-          l.collegeName === (name === 'collegeName' ? value : newData.collegeName) &&
+          l.divisionName === (name === 'divisionName' ? value : newData.divisionName) &&
           l.block === (name === 'block' ? value : newData.block) &&
           l.floor === (name === 'floor' ? value : newData.floor) &&
           l.room === (name === 'room' ? value : newData.room)
@@ -266,7 +281,7 @@ export default function ProjectTickets() {
         assignedStaff: formData.assignedStaff || [],
         projectId: projectId, 
         operationDate: formData.date,
-        collegeName: formData.collegeName,
+        divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
@@ -280,9 +295,14 @@ export default function ProjectTickets() {
         raisedBy: user._id || user.id,
       };
 
+      if (!editingId) {
+        payload.createdDate = new Date().toISOString().split('T')[0];
+        payload.createdTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      }
+
       if (editingId) {
-        payload.cameraId = currentTicket?.cameraId?.id || currentTicket?.cameraId;
-        payload.raisedBy = currentTicket?.raisedBy?.id || currentTicket?.raisedBy || user._id || user.id;
+        payload.cameraId = currentTicket?.cameraId?._id || currentTicket?.cameraId?.id || (typeof currentTicket?.cameraId !== 'object' ? currentTicket?.cameraId : null);
+        payload.raisedBy = currentTicket?.raisedBy?._id || currentTicket?.raisedBy?.id || (typeof currentTicket?.raisedBy !== 'object' ? currentTicket?.raisedBy : null) || user?._id || user?.id;
       } else {
         payload.cameraId = null;
       }
@@ -300,7 +320,7 @@ export default function ProjectTickets() {
         formToSend.append('workImage', formData.workImage);
       }
 
-      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+      const config = {};
 
       if (editingId) {
         await api.patch(`/tickets/${editingId}/`, formToSend, config);
@@ -324,7 +344,7 @@ export default function ProjectTickets() {
   const resetForm = () => {
     setFormData({
       date: new Date().toISOString().split('T')[0],
-      collegeName: '',
+      divisionName: '',
       block: '',
       floor: '',
       room: '',
@@ -352,7 +372,7 @@ export default function ProjectTickets() {
     }
     setFormData({
       date: ticket.operationDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
-      collegeName: ticket.collegeName || '',
+      divisionName: ticket.divisionName || '',
       block: ticket.block || '',
       floor: ticket.floor || '',
       room: ticket.room || '',
@@ -390,18 +410,24 @@ export default function ProjectTickets() {
   const filteredTickets = Array.isArray(tickets) ? tickets.filter(ticket => {
     const meta = parseMetadata(ticket.remarks);
     const ticketDate = meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : '');
-    if (selectedDate && !ticketDate.startsWith(selectedDate)) return false;
+    if (startMonth || endMonth) {
+      if (!ticketDate) return false;
+      const tMonth = ticketDate.substring(0, 7); // 'YYYY-MM'
+      if (startMonth && tMonth < startMonth) return false;
+      if (endMonth && tMonth > endMonth) return false;
+    }
     const searchStr = `${ticket.issueDescription} ${meta.location} ${meta.category}`.toLowerCase();
     return searchStr.includes(searchQuery.toLowerCase());
   }) : [];
 
   const handleDownload = () => {
     if (filteredTickets.length === 0) return;
-    const headers = ['Date', 'Location', 'Category', 'Issue', 'Action Taken', 'Instruction By', 'Received', 'End', 'Total', 'Responsibility', 'Status'];
-    const rows = filteredTickets.map(t => {
+    const headers = ['S.No', 'Date', 'Location', 'Category', 'Issue', 'Action Taken', 'Instruction By', 'Received', 'End', 'Total', 'Responsibility', 'Status'];
+    const rows = filteredTickets.map((t, index) => {
       const meta = parseMetadata(t.remarks);
       return [
-        t.operationDate || meta.manualDate || t.createdAt?.split('T')[0],
+        index + 1,
+        escapeCSV(` ${t.operationDate || meta.manualDate || t.createdAt?.split('T')[0]}`.trim()),
         t.location || meta.location, t.category || meta.category, t.issueDescription,
         t.actionTaken || meta.actionTaken, t.instructionBy || meta.instructionBy, t.receivedTime || meta.receivedTime,
         t.endTime || meta.endTime, t.totalTime || meta.totalTime, t.assignedTo?.name || 'Unassigned', t.status
@@ -413,6 +439,70 @@ export default function ProjectTickets() {
     link.href = URL.createObjectURL(blob);
     link.download = `${projectName}_tickets_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
+  };
+
+  const printToPDF = () => {
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>${projectName} Logs Export</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
+            h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 20px; text-align: center; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+            th { background-color: #f3f4f6; font-weight: bold; text-transform: uppercase; color: #4b5563; }
+            tr:nth-child(even) { background-color: #f9fafb; }
+            .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            .status-open { background-color: #fee2e2; color: #b91c1c; }
+            .status-inprogress { background-color: #fef3c7; color: #d97706; }
+            .status-completed { background-color: #d1fae5; color: #047857; }
+            .footer { margin-top: 30px; font-size: 10px; color: #9ca3af; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <h1>${projectName} Logs Report</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Location</th>
+                <th>Issue Description</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredTickets.map((ticket, idx) => {
+                const meta = parseMetadata(ticket.remarks);
+                return `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td>${ticket.operationDate || meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : 'N/A')}</td>
+                  <td>${ticket.category || meta.category || 'CCTV'}</td>
+                  <td>${[ticket.divisionName, ticket.block, ticket.room].filter(Boolean).join(' / ') || ticket.location || meta.location || 'N/A'}</td>
+                  <td>${ticket.issueDescription || 'N/A'}</td>
+                  <td><span class="badge ${ticket.status === 'Completed' ? 'status-completed' : ticket.status === 'In Progress' ? 'status-inprogress' : 'status-open'}">${ticket.status || 'N/A'}</span></td>
+                </tr>
+                `
+              }).join('')}
+            </tbody>
+          </table>
+          <div class="footer">
+            Generated from CCTV System on ${new Date().toLocaleString()} &bull; Total Records: ${filteredTickets.length}
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   return (
@@ -431,14 +521,19 @@ export default function ProjectTickets() {
           </button>
           <div className="flex items-center space-x-2">
             <Calendar size={16} className="text-dim" />
-            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="glass-input px-3 py-2 text-xs w-40 cursor-pointer" />
+            <input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="glass-input px-3 py-2 text-xs w-36 cursor-pointer" title="From Month" />
+            <span className="text-secondary text-xs">to</span>
+            <input type="month" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} className="glass-input px-3 py-2 text-xs w-36 cursor-pointer" title="To Month" />
           </div>
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
-            <input type="text" placeholder="Search project tickets..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="glass-input w-full pl-10 pr-4 py-2 text-sm" />
+            <input type="text" placeholder="Search project tickets..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="glass-input w-full !pl-10 pr-4 py-2 text-sm" />
           </div>
           <button onClick={handleDownload} className="p-2 text-dim hover:text-main hover:bg-white/10 rounded-xl transition-all border border-transparent hover:border-white/10" title="Download CSV">
             <Download size={18} />
+          </button>
+          <button onClick={printToPDF} className="p-2 text-dim hover:text-purple-400 hover:bg-purple-500/10 rounded-xl transition-all border border-transparent hover:border-purple-500/30" title="Print PDF">
+            <Printer size={18} />
           </button>
           {canEdit && (
             <button onClick={() => { resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2 text-sm shrink-0">
@@ -451,27 +546,53 @@ export default function ProjectTickets() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Project Pipeline</p>
-            <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-amber-500 leading-none">{summaryStats.open + summaryStats.inProgress}</span>
-              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Open Issues</span>
+          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
+            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f59e0b', opacity: 0.1, filter: 'blur(20px)' }}></div>
+            <div className="flex justify-between items-start">
+              <h3 className="text-[10px] font-bold text-amber-500 tracking-[0.2em] uppercase">[Project Pipeline]</h3>
+              <Activity size={18} className="text-amber-500 opacity-50 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="flex flex-col space-y-3 mt-4 text-left">
+              <div className="flex items-end space-x-2 font-mono">
+                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.6)' }}>{summaryStats.open + summaryStats.inProgress}</span>
+                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Open Issues</span>
+              </div>
             </div>
           </div>
-          <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Site Resolution</p>
-            <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-emerald-500 leading-none">
-                {summaryStats.total > 0 ? Math.round((summaryStats.completed / summaryStats.total) * 100) : 0}%
-              </span>
-              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Completed</span>
+
+          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
+            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#10b981', opacity: 0.1, filter: 'blur(20px)' }}></div>
+            <div className="flex justify-between items-start">
+              <h3 className="text-[10px] font-bold text-emerald-500 tracking-[0.2em] uppercase">[Site Resolution]</h3>
+              <CheckCircle size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="flex flex-col space-y-3 mt-4 text-left">
+              <div className="flex items-end space-x-2 font-mono">
+                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>
+                  {summaryStats.total > 0 ? Math.round((summaryStats.completed / summaryStats.total) * 100) : 0}%
+                </span>
+                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Completed</span>
+              </div>
             </div>
           </div>
-          <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Total Activity</p>
-            <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-blue-500 leading-none">{summaryStats.total}</span>
-              <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Logs Recorded</span>
+
+          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
+            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#3b82f6', opacity: 0.1, filter: 'blur(20px)' }}></div>
+            <div className="flex justify-between items-start">
+              <h3 className="text-[10px] font-bold text-blue-500 tracking-[0.2em] uppercase">[Total Activity]</h3>
+              <Briefcase size={18} className="text-blue-500 opacity-50 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="flex flex-col space-y-3 mt-4 text-left">
+              <div className="flex items-end space-x-2 font-mono">
+                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>{summaryStats.total}</span>
+                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Logs Recorded</span>
+              </div>
             </div>
           </div>
         </div>
@@ -510,11 +631,43 @@ export default function ProjectTickets() {
         </div>
       </div>
 
+      <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 mr-2">
+            <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
+            >
+              <option value={10}>10</option>
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="flex items-center space-x-1">
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
+              {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
+            </span>
+            <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+
       <div className="glass-panel overflow-hidden border border-main shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-panel border-b border-main">
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center w-12">S.No</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Date</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Type of Work</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest w-[40%]">Working Details / Progress</th>
@@ -526,19 +679,22 @@ export default function ProjectTickets() {
             </thead>
             <tbody className="divide-y border-main text-main">
               {loading ? (
-                <tr><td colSpan="9" className="p-20 text-center text-dim">Loading project tickets...</td></tr>
+                <tr><td colSpan="10" className="p-20 text-center text-dim">Loading project tickets...</td></tr>
               ) : filteredTickets.length === 0 ? (
-                <tr><td colSpan="9" className="p-20 text-center text-dim">No tickets found for this project.</td></tr>
-              ) : filteredTickets.map((ticket) => {
+                <tr><td colSpan="10" className="p-20 text-center text-dim">No tickets found for this project.</td></tr>
+              ) : filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((ticket, index) => {
                 const meta = parseMetadata(ticket.remarks);
                 const assignedId = ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo;
-                const assignedUser = users.find(u => (u.id || u._id) === assignedId);
+                const assignedUser = ticket.assignedTo && typeof ticket.assignedTo === 'object'
+                  ? ticket.assignedTo
+                  : users.find(u => (u.id || u._id) === assignedId);
                 return (
                   <tr 
                     key={ticket.id || ticket._id} 
                     className="hover:bg-panel transition-colors group cursor-pointer"
                     onClick={() => navigate(`/tickets/${ticket.id || ticket._id}`)}
                   >
+                    <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
                     <td className="p-4 text-[11px] text-secondary font-mono">
                       {ticket.operationDate || meta.manualDate || ticket.createdAt?.split('T')[0]}
                     </td>
@@ -560,55 +716,29 @@ export default function ProjectTickets() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2 text-[11px] text-secondary">
-                        <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[8px] font-bold text-blue-400">
-                          {(assignedUser?.name || 'U').charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-bold text-white">{assignedUser?.name || 'Unassigned'}</span>
+                        {(() => {
+                          const displayUser = assignedUser || ticket.raisedBy;
+                          return (
+                            <>
+                              <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[8px] font-bold text-blue-400">
+                                {String(displayUser?.name || 'U').charAt(0).toUpperCase()}
+                              </div>
+                              <span className="font-bold text-white">
+                                {displayUser?.name || 'Unassigned'}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                      {canEdit && (ticket.status !== 'Completed' || user?.role === 'Super Admin') ? (
-                        <select
-                          value={ticket.status}
-                          onChange={async (e) => {
-                            const newStatus = e.target.value;
-                            if (newStatus === 'Completed') {
-                              setCompletionTicket(ticket);
-                              setCompletionData({
-                                remark: '',
-                                endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                                date: new Date().toISOString().split('T')[0],
-                                afterImage: null
-                              });
-                              setShowCompletionModal(true);
-                              return;
-                            }
-                            try {
-                              await api.patch(`/tickets/${ticket.id || ticket._id}/`, { status: newStatus });
-                              fetchData();
-                            } catch (err) {
-                              console.error('Error updating status:', err);
-                            }
-                          }}
-                          className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border bg-transparent cursor-pointer transition-all outline-none ${
-                            ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10' :
-                            ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20 hover:bg-orange-500/10' :
-                            'text-red-400 border-red-500/20 hover:bg-red-500/10'
-                          }`}
-                        >
-                          <option value="Open">Open</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Completed">Completed</option>
-                        </select>
-                      ) : (
-                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border ${
-                          ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20' :
-                          ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20' :
-                          'text-red-400 border-red-500/20'
-                        }`}>
-                          {ticket.status}
-                        </span>
-                      )}
+                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border ${
+                        ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20' :
+                        ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20' :
+                        'text-red-400 border-red-500/20'
+                      }`}>
+                        {ticket.status}
+                      </span>
                     </td>
                     {canEdit && (
                       <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -681,17 +811,16 @@ export default function ProjectTickets() {
                     <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">College</label>
                     <ComboInput 
                       required 
-                      name="collegeName" 
-                      value={formData.collegeName} 
+                      name="divisionName" 
+                      value={formData.divisionName} 
                       onChange={(e) => {
                         handleInputChange(e);
                         setFormData(prev => ({ ...prev, block: '', floor: '', room: '' }));
                       }}
                       options={Array.from(new Set([
-                        ...(occupations ? occupations.map(o => o.name) : []),
-                        ...allLocations.map(l => l.collegeName)
+                        ...(divisions ? divisions.map(o => o.name) : [])
                       ])).filter(Boolean).sort()}
-                      placeholder="Select or Type College..." 
+                      placeholder="Select or Type Division..." 
                     />
                   </div>
                   <div>
@@ -706,7 +835,7 @@ export default function ProjectTickets() {
                       }}
                       options={Array.from(new Set(
                         allLocations
-                          .filter(l => !formData.collegeName || l.collegeName === formData.collegeName)
+                          .filter(l => !formData.divisionName || !l.divisionName || l.divisionName === formData.divisionName)
                           .map(l => l.block)
                       )).filter(Boolean).sort()}
                       placeholder="Block name..." 
@@ -724,7 +853,7 @@ export default function ProjectTickets() {
                       }}
                       options={Array.from(new Set(
                         allLocations
-                          .filter(l => !formData.block || l.block === formData.block)
+                          .filter(l => (!formData.divisionName || !l.divisionName || l.divisionName === formData.divisionName) && (!formData.block || l.block === formData.block))
                           .map(l => l.floor)
                       )).filter(Boolean).sort()}
                       placeholder="Floor..." 
@@ -738,7 +867,7 @@ export default function ProjectTickets() {
                       onChange={handleInputChange} 
                       options={Array.from(new Set(
                         allLocations
-                          .filter(l => !formData.floor || l.floor === formData.floor)
+                          .filter(l => (!formData.divisionName || !l.divisionName || l.divisionName === formData.divisionName) && (!formData.block || l.block === formData.block) && (!formData.floor || l.floor === formData.floor))
                           .map(l => l.room)
                       )).filter(Boolean).sort()}
                       placeholder="Select or Type Room..." 
@@ -826,6 +955,173 @@ export default function ProjectTickets() {
         </div>
       )}
 
+      {showInProgressModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
+            <div className="p-8 border-b border-main bg-panel flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <Clock className="text-orange-500" size={32} />
+                <div>
+                  <h3 className="text-2xl font-black text-main uppercase tracking-tight">Staff On Site</h3>
+                  <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Transition to In Progress</p>
+                </div>
+              </div>
+              <button onClick={() => setShowInProgressModal(false)} className="text-secondary hover:text-main p-2 hover:bg-panel rounded-xl transition-all"><X size={24} /></button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">On Site Date</label>
+                  <input 
+                    type="date" 
+                    value={inProgressData.date}
+                    onChange={(e) => setInProgressData({...inProgressData, date: e.target.value})}
+                    className="glass-input w-full p-3 text-sm bg-panel border-main"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">On Site Time</label>
+                  <input 
+                    type="time" 
+                    value={inProgressData.time}
+                    onChange={(e) => setInProgressData({...inProgressData, time: e.target.value})}
+                    className="glass-input w-full p-3 text-sm font-mono bg-panel border-main"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Staff On Site Image (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Upload size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Upload Site Image</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 2 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, image: file});
+                          } else if (file) {
+                            showNotification('Image exceeds 2MB', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {inProgressData.image && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <span className="text-[10px] text-blue-400 font-bold truncate">{inProgressData.image.name}</span>
+                      <button onClick={() => setInProgressData({...inProgressData, image: null})} className="text-blue-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Staff On Site Video (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Upload size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Upload Site Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Camera size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Record Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {inProgressData.video && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <span className="text-[10px] text-blue-400 font-bold truncate">{inProgressData.video.name}</span>
+                      <button onClick={() => setInProgressData({...inProgressData, video: null})} className="text-blue-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-4">
+                <button onClick={() => setShowInProgressModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+                <button 
+                  disabled={submitting}
+                  onClick={async () => {
+                    try {
+                      setSubmitting(true);
+                      const id = inProgressTicket.id || inProgressTicket._id;
+                      
+                      const formDataToSend = new FormData();
+                      formDataToSend.append('status', 'In Progress');
+                      formDataToSend.append('inProgressDate', inProgressData.date);
+                      formDataToSend.append('inProgressTime', inProgressData.time);
+                      
+                      if (inProgressData.image) {
+                        formDataToSend.append('inProgressImage', inProgressData.image);
+                      }
+                      if (inProgressData.video) {
+                        formDataToSend.append('inProgressVideo', inProgressData.video);
+                      }
+                      formDataToSend.append('remark', 'Status updated to In Progress (Staff on Site)');
+
+                      await api.patch(`/tickets/${id}/`, formDataToSend);
+
+                      showNotification('Ticket status changed to In Progress', 'success');
+                      setShowInProgressModal(false);
+                      if (showModal) setShowModal(false);
+                      fetchData();
+                    } catch (err) {
+                      console.error(err);
+                      showNotification('Failed to update ticket status', 'error');
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                >
+                  {submitting ? 'PROCESSING...' : 'START WORK'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
           <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
@@ -841,121 +1137,170 @@ export default function ProjectTickets() {
             </div>
             
             <div className="p-8 space-y-6">
-              <div className="space-y-6 animate-slide-up">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Date</label>
-                    <input 
-                      type="date" 
-                      value={completionData.date}
-                      onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
-                      className="glass-input w-full p-3 text-sm bg-panel border-main"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Time</label>
-                    <input 
-                      type="time" 
-                      value={completionData.endTime}
-                      onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
-                      className="glass-input w-full p-3 text-sm font-mono bg-panel border-main"
-                    />
-                  </div>
-                </div>
-                
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Resolution Remark</label>
-                  <textarea 
-                    required
-                    value={completionData.remark}
-                    onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
-                    placeholder="Describe the final action taken to resolve this log..."
-                    className="glass-input w-full p-4 text-sm min-h-[120px] resize-none bg-panel border-main"
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Date</label>
+                  <input 
+                    type="date" 
+                    value={completionData.date}
+                    onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
+                    className="glass-input w-full p-3 text-sm bg-panel border-main font-bold"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (After Work)</label>
-                  <div className="mt-2">
-                    <div className="flex items-center justify-center w-full">
-                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <Upload size={24} className="text-dim mb-2" />
-                          <p className="mb-2 text-xs text-dim font-bold uppercase tracking-widest">Upload After Image</p>
-                        </div>
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file && file.size <= 2 * 1024 * 1024) {
-                              setCompletionData({...completionData, afterImage: file});
-                            } else if (file) {
-                              showNotification('Image exceeds 2MB', 'error');
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
-                    {completionData.afterImage && (
-                      <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                        <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.afterImage.name}</span>
-                        <button onClick={() => setCompletionData({...completionData, afterImage: null})} className="text-emerald-400"><X size={14} /></button>
-                      </div>
-                    )}
-                  </div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Time</label>
+                  <input 
+                    type="time" 
+                    value={completionData.endTime}
+                    onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
+                    className="glass-input w-full p-3 text-sm font-mono bg-panel border-main font-bold"
+                  />
                 </div>
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Resolution Remark</label>
+                <textarea 
+                  required
+                  value={completionData.remark}
+                  onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
+                  placeholder="Describe the final action taken to resolve this log..."
+                  className="glass-input w-full p-4 text-sm min-h-[120px] resize-none bg-panel border-main font-bold"
+                />
+              </div>
 
-                <div className="flex space-x-4 pt-4">
-                  <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
-                  <button 
-                    onClick={async () => {
-                      if (!completionData.remark.trim()) {
-                        showNotification('Please provide a completion remark', 'error');
-                        return;
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (Completed Image)</label>
+                <div className="mt-2">
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Upload size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Upload Completed Image</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 2 * 1024 * 1024) {
+                            setCompletionData({...completionData, image: file});
+                          } else if (file) {
+                            showNotification('Image exceeds 2MB', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {completionData.image && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <span className="text-[10px] text-emerald-400 font-bold truncate max-w-[200px]">{completionData.image.name}</span>
+                      <button onClick={() => setCompletionData({...completionData, image: null})} className="text-emerald-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Video (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Upload size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Upload Completed Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setCompletionData({...completionData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                      <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                        <Camera size={18} className="text-dim mb-1" />
+                        <p className="text-[10px] text-dim font-bold">Record Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setCompletionData({...completionData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {completionData.video && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.video.name}</span>
+                      <button onClick={() => setCompletionData({...completionData, video: null})} className="text-emerald-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-4 pt-4">
+                <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+                <button 
+                  disabled={submitting}
+                  onClick={async () => {
+                    if (!completionData.remark.trim()) {
+                      showNotification('Please provide a completion remark', 'error');
+                      return;
+                    }
+                    try {
+                      setSubmitting(true);
+                      const id = completionTicket.id || completionTicket._id;
+                      const meta = parseMetadata(completionTicket.remarks);
+
+                      const formData = new FormData();
+                      formData.append('status', 'Completed');
+                      formData.append('completedDate', completionData.date);
+                      formData.append('completedTime', completionData.endTime);
+                      formData.append('actionTaken', completionData.remark);
+                      formData.append('endTime', completionData.endTime);
+                      formData.append('totalTime', calculateTotalTime(completionTicket.receivedTime || meta.receivedTime || '09:00', completionData.endTime));
+                      formData.append('remark', `Completed: ${completionData.remark}`);
+                      if (completionData.image) {
+                        formData.append('completedImage', completionData.image);
                       }
-                      try {
-                        setSubmitting(true);
-                        const id = completionTicket.id || completionTicket._id;
-                        const meta = parseMetadata(completionTicket.remarks);
-                        
-                        const updatedMeta = {
-                          ...meta,
-                          endTime: completionData.endTime,
-                          manualDate: completionData.date,
-                          totalTime: calculateTotalTime(completionTicket.receivedTime || meta.receivedTime, completionData.endTime)
-                        };
-
-                      const formDataToSend = new FormData();
-                      formDataToSend.append('status', 'Completed');
-                      formDataToSend.append('remarks', JSON.stringify(updatedMeta));
-                      formDataToSend.append('remark', `Final Resolution: ${completionData.remark}`);
-                      
-                      if (completionData.afterImage) {
-                        formDataToSend.append('serviceImage', completionData.afterImage);
+                      if (completionData.video) {
+                        formData.append('completedVideo', completionData.video);
                       }
 
-                      await api.patch(`/tickets/${id}/`, formDataToSend, {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                      });
+                      await api.patch(`/tickets/${id}/`, formData);
 
                       showNotification('Log finalized and completed', 'success');
                       setShowCompletionModal(false);
                       if (showModal) setShowModal(false);
                       fetchData();
-                      } catch (err) {
-                        console.error(err);
-                        showNotification('Failed to finalize log', 'error');
-                      } finally {
-                        setSubmitting(false);
-                      }
-                    }}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
-                  >
-                    {submitting ? 'PROCESSING...' : 'COMPLETE WORK LOG'}
-                  </button>
-                </div>
+                    } catch (err) {
+                      console.error(err);
+                      showNotification('Failed to finalize log', 'error');
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                >
+                  {submitting ? 'PROCESSING...' : 'COMPLETE WORK LOG'}
+                </button>
               </div>
             </div>
           </div>
