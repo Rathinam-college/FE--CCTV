@@ -43,14 +43,13 @@ export default function CameraDetail() {
   const [camera, setCamera] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [remarks, setRemarks] = useState('');
-  const [isRemarkModalOpen, setIsRemarkModalOpen] = useState(false);
-  const [savingRemarks, setSavingRemarks] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTab, setEditTab] = useState('status'); // 'status' or 'location'
+  const [confirmStatus, setConfirmStatus] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  const { allLocations, fetchAllLocations } = useSiteStore();
+  const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
 
   const unifiedActivity = useMemo(() => {
     if (!camera) return [];
@@ -76,7 +75,7 @@ export default function CameraDetail() {
     block: '',
     floor: '',
     room: '',
-    collegeName: '',
+    divisionName: '',
     brand: '',
     ipAddress: '',
     ipv4Gateway: '',
@@ -88,6 +87,7 @@ export default function CameraDetail() {
   useEffect(() => {
     fetchCameraDetails();
     fetchAllLocations();
+    fetchDivisions();
   }, [id]);
 
   const fetchCameraDetails = async () => {
@@ -95,20 +95,18 @@ export default function CameraDetail() {
     try {
       const res = await api.get(`/cameras/${id}/`);
       setCamera(res.data);
-      setRemarks(res.data.remarks || '');
       const { block: parsedBlock, floor: parsedFloor } = parseSiteName(res.data.siteName);
-      const net = parseNetworkDetails(res.data.dvrNvrDetails);
       setFormData({
         name: res.data.name || '',
         block: res.data.block || parsedBlock || '',
         floor: res.data.floor || parsedFloor || '',
         room: res.data.room || '',
-        collegeName: res.data.collegeName || net.collegeName || '',
+        divisionName: res.data.divisionName || '',
         brand: res.data.brand || '',
         ipAddress: res.data.ipAddress || '',
-        ipv4Gateway: net.gateway || '',
-        subnetMask: net.subnet || '',
-        macAddress: net.mac || '',
+        ipv4Gateway: res.data.gateway || '',
+        subnetMask: res.data.subnetMask || '',
+        macAddress: res.data.macAddress || '',
         campusZone: res.data.campusZone || 'INSIDE'
       });
       setLoading(false);
@@ -119,34 +117,15 @@ export default function CameraDetail() {
     }
   };
   
-  const handleSaveRemarks = async (remarkText) => {
-    const textToSave = typeof remarkText === 'string' ? remarkText : remarks;
-    if (!textToSave.trim()) return;
-    
-    try {
-      setSavingRemarks(true);
-      const res = await api.post(`/cameras/${id}/add_remark/`, { remark: textToSave });
-      setCamera({ 
-        ...camera, 
-        message_history: [res.data, ...(camera.message_history || [])] 
-      });
-      setRemarks('');
-      showNotification('Message logged successfully');
-      setIsRemarkModalOpen(false);
-    } catch (err) {
-      console.error(err);
-      showNotification('Failed to log message', 'error');
-    } finally {
-      setSavingRemarks(false);
-    }
-  };
-  
+
   const handleStatusChange = async (newStatus) => {
     try {
       setUpdatingStatus(true);
       await api.patch(`/cameras/${id}/`, { status: newStatus });
       setCamera({ ...camera, status: newStatus });
-      showNotification(`Asset status transitioned to ${newStatus}`);
+      showNotification(`Asset status changed to ${newStatus}`);
+      setConfirmStatus(null);
+      setShowEditModal(false);
     } catch (err) {
       console.error(err);
       showNotification('Failed to update asset status', 'error');
@@ -166,18 +145,19 @@ export default function CameraDetail() {
         name: formData.name,
         siteName: `${formData.block} - ${formData.floor}${formData.room ? ` - ${formData.room}` : ''}`,
         ipAddress: formData.ipAddress,
-        dvrNvrDetails: `Gateway: ${formData.ipv4Gateway} | Subnet: ${formData.subnetMask} | MAC: ${formData.macAddress} | College: ${formData.collegeName}`,
+        gateway: formData.ipv4Gateway,
+        subnetMask: formData.subnetMask,
+        macAddress: formData.macAddress,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
-        collegeName: formData.collegeName,
+        divisionName: formData.divisionName,
         brand: formData.brand,
         campusZone: formData.campusZone
       };
 
       await api.patch(`/cameras/${id}/`, payload);
 
-      // Log the relocation
       let moveLog = `Asset Relocated/Updated. `;
       if (oldBlock !== formData.block || oldFloor !== formData.floor) {
         moveLog += `Moved from ${oldBlock}/${oldFloor} to ${formData.block}/${formData.floor}. `;
@@ -195,7 +175,7 @@ export default function CameraDetail() {
       });
 
       showNotification('Asset successfully relocated and logs updated');
-      setEditMode(false);
+      setShowEditModal(false);
       fetchCameraDetails();
     } catch (err) {
       console.error(err);
@@ -230,7 +210,7 @@ export default function CameraDetail() {
       ['Block', camera.block || parseSiteName(camera.siteName).block],
       ['Floor', camera.floor || parseSiteName(camera.siteName).floor],
       ['Room', camera.room || '—'],
-      ['College', camera.collegeName || '—'],
+      ['College', camera.divisionName || '—'],
       [''],
       ['NETWORK CONFIGURATION'],
       ['Gateway', netInfo.gateway],
@@ -265,22 +245,131 @@ export default function CameraDetail() {
   };
 
   const downloadPDF = () => {
-    window.print();
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Camera Details - ${camera.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+            h1 { color: #1a56db; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+            .section { margin-bottom: 30px; }
+            .section-title { font-size: 14px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+            .grid { display: flex; flex-wrap: wrap; margin: -10px; }
+            .grid-item { flex: 1 1 45%; padding: 10px; }
+            .label { font-size: 11px; color: #9ca3af; text-transform: uppercase; font-weight: bold; }
+            .value { font-size: 15px; font-weight: bold; color: #111827; }
+            .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+            .status-online { background-color: #d1fae5; color: #047857; }
+            .status-maintenance { background-color: #ffedd5; color: #c2410c; }
+            .status-offline { background-color: #fee2e2; color: #b91c1c; }
+          </style>
+        </head>
+        <body>
+          <h1>Camera Details - ${camera.name || 'N/A'}</h1>
+          
+          <div class="section">
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Status</div>
+                <div class="value">
+                  <span class="badge ${camera.status === 'Online' ? 'status-online' : camera.status === 'Maintenance' ? 'status-maintenance' : 'status-offline'}">
+                    ${camera.status || 'N/A'}
+                  </span>
+                </div>
+              </div>
+              <div class="grid-item">
+                <div class="label">System ID / Serial</div>
+                <div class="value">${camera.cameraId || 'N/A'} <br/> ${camera.serialNumber || ''}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Deployment Context</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Division</div>
+                <div class="value">${camera.divisionName || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Block Assignment</div>
+                <div class="value">${camera.block || parseSiteName(camera.siteName).block || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Level / Floor</div>
+                <div class="value">${camera.floor || parseSiteName(camera.siteName).floor || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Room / Area</div>
+                <div class="value">${camera.room || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Campus Zone</div>
+                <div class="value">${camera.campusZone || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Hardware Specifications</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Hardware Brand</div>
+                <div class="value">${camera.brand || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Network Configuration</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Static IPv4</div>
+                <div class="value">${camera.ipAddress || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">IPv4 Gateway</div>
+                <div class="value">${netInfo.gateway || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Subnet Mask</div>
+                <div class="value">${netInfo.subnet || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">MAC Physical</div>
+                <div class="value">${netInfo.mac || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Port Number</div>
+                <div class="value">${netInfo.portNumber || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 50px; font-size: 12px; color: #9ca3af; text-align: center;">
+            Generated from CCTV System on ${new Date().toLocaleString()}
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
-  const parseNetworkDetails = (details) => {
-    if (!details) return { gateway: '—', subnet: '—', mac: '—', index: '—', collegeName: '' };
-    const gwMatch = details.match(/Gateway:\s*([^|]+)/);
-    const subMatch = details.match(/Subnet:\s*([^|]+)/);
-    const macMatch = details.match(/MAC:\s*([^|]+)/);
-    const idxMatch = details.match(/Index:\s*([^|]+)/);
-    const collMatch = details.match(/College:\s*([^|]+)/);
+  const parseNetworkDetails = (camera) => {
+    if (!camera) return { gateway: '—', subnet: '—', mac: '—', index: '—', divisionName: '' };
     return {
-      gateway: gwMatch ? gwMatch[1].trim() : '—',
-      subnet: subMatch ? subMatch[1].trim() : '—',
-      mac: macMatch ? macMatch[1].trim() : '—',
-      index: idxMatch ? idxMatch[1].trim() : '—',
-      collegeName: collMatch ? collMatch[1].trim() : ''
+      gateway: camera.gateway || '—',
+      subnet: camera.subnetMask || '—',
+      mac: camera.macAddress || '—',
+      portNumber: camera.portNumber || '—',
+      divisionName: camera.divisionName || ''
     };
   };
 
@@ -290,7 +379,7 @@ export default function CameraDetail() {
     return { block: parts[0] || '', floor: parts[1] || '' };
   };
 
-  const netInfo = useMemo(() => camera ? parseNetworkDetails(camera.dvrNvrDetails) : null, [camera]);
+  const netInfo = useMemo(() => camera ? parseNetworkDetails(camera) : null, [camera]);
 
   if (loading) {
     return (
@@ -382,13 +471,11 @@ export default function CameraDetail() {
           </div>
 
           <button 
-            onClick={() => setEditMode(!editMode)} 
-            className={`flex items-center space-x-3 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl ${
-              editMode ? 'bg-amber-500 text-black border-amber-400' : 'bg-blue-600 text-white hover:bg-blue-500 border-blue-400/50'
-            } border-t border-white/20`}
+            onClick={() => { setShowEditModal(true); setConfirmStatus(null); }} 
+            className="flex items-center space-x-3 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl bg-sky-600 text-white hover:bg-sky-500 border-t border-white/20"
           >
-            {editMode ? <XCircle size={18} /> : <ArrowRightLeft size={18} />}
-            <span>{editMode ? 'Cancel Protocol' : 'Update Registry'}</span>
+            <Settings2 size={18} />
+            <span>Edit Camera</span>
           </button>
         </div>
       </div>
@@ -397,7 +484,7 @@ export default function CameraDetail() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <IntelligenceCard 
           icon={Globe} 
-          label="Network Node" 
+          label="IP Address" 
           value={camera.ipAddress} 
           color="blue"
           action={() => {
@@ -450,101 +537,8 @@ export default function CameraDetail() {
         {/* Left Section: Core Intelligence */}
         <div className="lg:col-span-2 space-y-6 print:w-full">
           
-          {editMode ? (
-            <div className="glass-panel overflow-hidden border-amber-500/30 shadow-2xl animate-slide-up">
-              <div className="p-5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Settings2 size={20} className="text-amber-400" />
-                  <div>
-                    <h3 className="text-sm font-black text-main uppercase tracking-widest">Protocol Override</h3>
-                    <p className="text-[9px] text-amber-400/60 uppercase font-bold tracking-widest">Relocation & Registry Update</p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-8 space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Target Institution</label>
-                      <select 
-                        value={formData.collegeName} 
-                        onChange={(e) => setFormData({...formData, collegeName: e.target.value})}
-                        className="glass-input w-full p-3 text-sm"
-                      >
-                        <option value="">Select College</option>
-                        {Array.from(new Set(allLocations.map(l => l.collegeName))).map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Block Designation</label>
-                      <select 
-                        value={formData.block} 
-                        onChange={(e) => setFormData({...formData, block: e.target.value})}
-                        className="glass-input w-full p-3 text-sm"
-                      >
-                        <option value="">Select Block</option>
-                        {Array.from(new Set(allLocations.filter(l => l.collegeName === formData.collegeName).map(l => l.block))).map(b => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Floor</label>
-                        <select 
-                          value={formData.floor} 
-                          onChange={(e) => setFormData({...formData, floor: e.target.value})}
-                          className="glass-input w-full p-3 text-sm"
-                        >
-                          <option value="">Select Floor</option>
-                          {Array.from(new Set(allLocations.filter(l => l.block === formData.block).map(l => l.floor))).map(f => (
-                            <option key={f} value={f}>{f}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Room / Area</label>
-                        <select 
-                          value={formData.room} 
-                          onChange={(e) => setFormData({...formData, room: e.target.value})}
-                          className="glass-input w-full p-3 text-sm"
-                        >
-                          <option value="">Select Room</option>
-                          {Array.from(new Set(allLocations.filter(l => l.floor === formData.floor).map(l => l.room))).map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">IPv4 Address Assignment</label>
-                      <input 
-                        type="text" 
-                        value={formData.ipAddress} 
-                        onChange={(e) => setFormData({...formData, ipAddress: e.target.value})}
-                        className="glass-input w-full p-3 text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={handleSaveRelocation}
-                  disabled={isSaving}
-                  className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-black rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center space-x-3 transition-all shadow-2xl"
-                >
-                  {isSaving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                  <span>{isSaving ? 'Synchronizing Registry...' : 'Confirm Protocol Update'}</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="glass-panel overflow-hidden border-white/10 shadow-2xl bg-card/30">
-              <div className="p-5 bg-panel border-b border-white/10 flex items-center justify-between">
+            <div className="glass-panel overflow-hidden border-main shadow-2xl bg-card/30">
+              <div className="p-5 bg-panel border-b border-main flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
                     <Database size={20} />
@@ -563,7 +557,7 @@ export default function CameraDetail() {
                     <div className="h-px bg-blue-500/10 flex-1"></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <DetailRow label="Node Designation" value={camera.name} />
+                    <DetailRow label="Asset Designation" value={camera.name} />
                     <DetailRow label="Hardware Brand" value={camera.brand} />
                     <DetailRow label="System ID" value={camera.cameraId} mono />
                     <DetailRow label="Serial Number" value={camera.serialNumber} mono />
@@ -577,7 +571,7 @@ export default function CameraDetail() {
                     <div className="h-px bg-emerald-500/10 flex-1"></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <DetailRow label="Institution" value={camera.collegeName} />
+                    <DetailRow label="Division" value={camera.divisionName} />
                     <DetailRow label="Block Assignment" value={camera.block} />
                     <DetailRow label="Level / Floor" value={camera.floor} />
                     <DetailRow label="Room / Area" value={camera.room} />
@@ -593,69 +587,17 @@ export default function CameraDetail() {
                     <DetailRow label="Static IPv4" value={camera.ipAddress} mono />
                     <DetailRow label="IPv4 Gateway" value={netInfo.gateway} mono />
                     <DetailRow label="Subnet Mask" value={netInfo.subnet} mono />
+                    <DetailRow label="Port Number" value={netInfo.portNumber} mono />
                     <DetailRow label="MAC Physical" value={netInfo.mac} mono />
-                    <DetailRow label="Stream Index" value={netInfo.index} />
                   </div>
                 </section>
               </div>
             </div>
-          )}
         </div>
 
         {/* Right Section: Administrative Hub */}
         <div className="space-y-6 no-print">
           
-          {/* Quick Command Box */}
-          <div className="glass-panel overflow-hidden border-white/10 shadow-xl flex flex-col bg-panel/30">
-            <div className="p-4 bg-white/5 border-b border-white/10 flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
-                <Send size={18} />
-              </div>
-              <h3 className="text-sm font-bold text-main tracking-wide uppercase">Registry Entry</h3>
-            </div>
-            <div className="p-5 space-y-4">
-              <textarea
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Log activity or maintenance..."
-                className="glass-input w-full p-4 text-sm text-dim resize-none rounded-xl min-h-[100px] border-white/5 focus:border-blue-500/30 transition-all"
-              />
-              <button 
-                onClick={handleSaveRemarks}
-                disabled={savingRemarks || !remarks.trim()}
-                className="w-full py-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl hover:bg-blue-600 hover:text-white transition-all disabled:opacity-30 flex items-center justify-center space-x-2 font-bold text-xs uppercase tracking-widest"
-              >
-                {savingRemarks ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                <span>{savingRemarks ? 'Logging...' : 'Append to History'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Status Transition */}
-          <div className="glass-panel overflow-hidden border-white/10 shadow-xl bg-panel/30">
-            <div className="p-4 bg-white/5 border-b border-white/10 flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400">
-                <Zap size={18} />
-              </div>
-              <h3 className="text-sm font-bold text-main tracking-wide uppercase">Status Transition</h3>
-            </div>
-            <div className="p-5 grid grid-cols-2 gap-2">
-              {['Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => handleStatusChange(s)}
-                  disabled={updatingStatus || camera.status === s}
-                  className={`py-2 rounded-lg text-[9px] font-black uppercase tracking-tighter transition-all border ${
-                    camera.status === s 
-                      ? 'bg-amber-500 text-black border-amber-500 shadow-lg' 
-                      : 'bg-white/5 text-dim border-white/5 hover:border-amber-500/30 hover:text-amber-400'
-                  } disabled:opacity-50`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Activity Timeline Hub */}
           <div className="glass-panel overflow-hidden border-blue-500/20 shadow-xl flex flex-col bg-blue-500/5">
@@ -725,7 +667,7 @@ export default function CameraDetail() {
                    <span className="text-[9px] font-bold text-dim uppercase">Back</span>
                 </button>
                 <button 
-                  onClick={() => window.print()}
+                  onClick={downloadPDF}
                   className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center space-y-2 hover:bg-white/10 transition-all"
                 >
                    <FileText size={16} className="text-blue-400" />
@@ -908,6 +850,210 @@ export default function CameraDetail() {
         <p>© 2026 RATHINAM GLOBAL UNIVERSITY</p>
         <p className="mt-1">This is a system-generated document. Unauthorized alteration is prohibited.</p>
       </div>
+
+      {/* Edit Modal Overlay */}
+      {showEditModal && (
+        <div className="fixed inset-0 modal-overlay z-[120] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-3xl overflow-hidden border border-main shadow-2xl relative my-8 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-main bg-panel flex justify-between items-center shrink-0">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-sky-500/10 rounded-2xl">
+                  <Settings2 className="text-sky-500" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-main uppercase tracking-tight">
+                    Edit Camera Details
+                  </h2>
+                </div>
+              </div>
+              <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-white/10 rounded-xl text-secondary hover:text-main transition-all">
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className="flex border-b border-main bg-card shrink-0">
+              <button 
+                onClick={() => { setEditTab('status'); setConfirmStatus(null); }}
+                className={`flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all ${editTab === 'status' ? 'text-sky-500 border-b-2 border-sky-500 bg-sky-500/5' : 'text-dim hover:bg-panel hover:text-main'}`}
+              >
+                Change Status
+              </button>
+              <button 
+                onClick={() => setEditTab('location')}
+                className={`flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all ${editTab === 'location' ? 'text-amber-500 border-b-2 border-amber-500 bg-amber-500/5' : 'text-dim hover:bg-panel hover:text-main'}`}
+              >
+                Change Location / Info
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 bg-card custom-scrollbar">
+              {editTab === 'status' && (
+                <div className="space-y-6">
+                  <p className="text-sm font-bold text-dim mb-4">Select the new operational status for this asset:</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {['Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setConfirmStatus(s)}
+                        disabled={camera.status === s}
+                        className={`py-4 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${
+                          camera.status === s 
+                            ? 'bg-sky-500/10 text-sky-600 border-sky-500/30 shadow-lg cursor-not-allowed' 
+                            : confirmStatus === s
+                              ? 'bg-sky-500 text-white border-sky-500 shadow-lg scale-105'
+                              : 'bg-panel text-main border-main hover:border-sky-500/50 hover:text-sky-500 shadow-sm'
+                        }`}
+                      >
+                        {s} {camera.status === s && '(Current)'}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {confirmStatus && (
+                    <div className="mt-8 p-6 bg-sky-50 border border-sky-200 rounded-2xl animate-fade-in">
+                      <h4 className="text-sky-800 font-bold mb-2">Confirm Status Change</h4>
+                      <p className="text-sky-600 text-sm mb-6">Are you sure you want to change the status of {camera.name} to <strong>{confirmStatus}</strong>?</p>
+                      <div className="flex space-x-4">
+                        <button 
+                          onClick={() => setConfirmStatus(null)}
+                          className="flex-1 py-3 bg-white text-slate-700 border border-slate-300 rounded-xl font-bold text-xs uppercase hover:bg-slate-50 transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={() => handleStatusChange(confirmStatus)}
+                          disabled={updatingStatus}
+                          className="flex-1 py-3 bg-sky-600 text-white rounded-xl font-bold text-xs uppercase hover:bg-sky-500 transition-all shadow-md flex items-center justify-center space-x-2"
+                        >
+                          {updatingStatus ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                          <span>Confirm & Save</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {editTab === 'location' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-1.5">Asset Name</label>
+                        <input 
+                          type="text" 
+                          value={formData.name} 
+                          onChange={(e) => setFormData({...formData, name: e.target.value})}
+                          className="glass-input w-full p-3 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-1.5">Target Division</label>
+                        <select 
+                          value={formData.divisionName} 
+                          onChange={(e) => setFormData({...formData, divisionName: e.target.value})}
+                          className="glass-input w-full p-3 text-sm cursor-pointer"
+                        >
+                          <option value="">Select Division</option>
+                          {divisions && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-1.5">Block Designation</label>
+                        <select 
+                          value={formData.block} 
+                          onChange={(e) => setFormData({...formData, block: e.target.value})}
+                          className="glass-input w-full p-3 text-sm cursor-pointer"
+                        >
+                          <option value="">Select Block</option>
+                          {Array.from(new Set(allLocations.filter(l => l.divisionName === formData.divisionName).map(l => l.block))).map(b => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-1.5">Floor</label>
+                          <select 
+                            value={formData.floor} 
+                            onChange={(e) => setFormData({...formData, floor: e.target.value})}
+                            className="glass-input w-full p-3 text-sm cursor-pointer"
+                          >
+                            <option value="">Select Floor</option>
+                            {Array.from(new Set(allLocations.filter(l => l.block === formData.block).map(l => l.floor))).map(f => (
+                              <option key={f} value={f}>{f}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-1.5">Room / Area</label>
+                          <select 
+                            value={formData.room} 
+                            onChange={(e) => setFormData({...formData, room: e.target.value})}
+                            className="glass-input w-full p-3 text-sm cursor-pointer"
+                          >
+                            <option value="">Select Room</option>
+                            {Array.from(new Set(allLocations.filter(l => l.floor === formData.floor).map(l => l.room))).map(r => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-1.5">Campus Zone</label>
+                        <select 
+                          value={formData.campusZone} 
+                          onChange={(e) => setFormData({...formData, campusZone: e.target.value})}
+                          className="glass-input w-full p-3 text-sm cursor-pointer"
+                        >
+                          <option value="INSIDE">INSIDE</option>
+                          <option value="OUTSIDE">OUTSIDE</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-1.5">IPv4 Address Assignment</label>
+                        <input 
+                          type="text" 
+                          value={formData.ipAddress} 
+                          onChange={(e) => setFormData({...formData, ipAddress: e.target.value})}
+                          className="glass-input w-full p-3 text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl">
+                    <h4 className="text-amber-800 font-bold mb-2">Confirm Modifications</h4>
+                    <p className="text-amber-600 text-sm mb-6">Review the changes above. This will update the asset's registry and record a relocation log if the block, floor, or IP address has changed.</p>
+                    <div className="flex space-x-4">
+                      <button 
+                        onClick={() => setShowEditModal(false)}
+                        className="flex-1 py-3 bg-white text-slate-700 border border-slate-300 rounded-xl font-bold text-xs uppercase hover:bg-slate-50 transition-all"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleSaveRelocation}
+                        disabled={isSaving}
+                        className="flex-1 py-3 bg-amber-500 text-black rounded-xl font-bold text-xs uppercase hover:bg-amber-400 transition-all shadow-md flex items-center justify-center space-x-2"
+                      >
+                        {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                        <span>Confirm Relocation & Save</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

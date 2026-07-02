@@ -20,10 +20,7 @@ export default function AssetRegistration() {
   const { currentSite, fetchSite, allLocations, fetchAllLocations } = useSiteStore();
   const [isAddingNewBrand, setIsAddingNewBrand] = useState(false);
   
-  const [existingBlocks, setExistingBlocks] = useState([]);
-  const [existingColleges, setExistingColleges] = useState([]);
-  const [existingFloors, setExistingFloors] = useState([]);
-  const [existingRooms, setExistingRooms] = useState([]);
+  const [knownLocations, setKnownLocations] = useState([]);
   
   const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
   const [isAddingNewCollege, setIsAddingNewCollege] = useState(false);
@@ -38,30 +35,27 @@ export default function AssetRegistration() {
   const fetchExistingLocations = async () => {
     try {
       const res = await api.get('/cameras/');
-      const blocks = new Set();
-      const colleges = new Set();
-      const floors = new Set();
-      const rooms = new Set();
-      
+      const locations = [];
       res.data.forEach(c => {
-        if (c.block) blocks.add(c.block);
-        if (c.collegeName) colleges.add(c.collegeName);
-        if (c.floor) floors.add(c.floor);
-        if (c.room) rooms.add(c.room);
-        
+        if (c.divisionName || c.block || c.floor || c.room) {
+          locations.push({
+            divisionName: (c.divisionName || '').toUpperCase(),
+            block: (c.block || '').toUpperCase(),
+            floor: (c.floor || '').toUpperCase(),
+            room: (c.room || '').toUpperCase()
+          });
+        }
         if (c.siteName) {
-          const parts = c.siteName.split('|').map(p => p.trim());
-          if (parts[0]) colleges.add(parts[0]);
-          if (parts[1]) blocks.add(parts[1]);
-          if (parts[2]) floors.add(parts[2]);
-          if (parts[3]) rooms.add(parts[3]);
+          const parts = c.siteName.split('|').map(p => p.trim().toUpperCase());
+          locations.push({
+            divisionName: parts[0] || '',
+            block: parts[1] || '',
+            floor: parts[2] || '',
+            room: parts[3] || ''
+          });
         }
       });
-      
-      setExistingBlocks(Array.from(blocks).sort());
-      setExistingColleges(Array.from(colleges).sort());
-      setExistingFloors(Array.from(floors).sort());
-      setExistingRooms(Array.from(rooms).sort());
+      setKnownLocations(locations);
     } catch (err) {
       console.error('Error fetching locations:', err);
     }
@@ -77,7 +71,7 @@ export default function AssetRegistration() {
 
   const [formData, setFormData] = useState({
     // Shared Fields
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
@@ -119,10 +113,10 @@ export default function AssetRegistration() {
   }, []);
 
   useEffect(() => {
-    if (currentSite?.collegeName) {
+    if (currentSite?.divisionName) {
       setFormData(prev => ({
         ...prev,
-        collegeName: currentSite.collegeName,
+        divisionName: currentSite.divisionName,
         block: currentSite.block,
         floor: currentSite.floor,
         room: currentSite.room
@@ -130,22 +124,44 @@ export default function AssetRegistration() {
     }
   }, [currentSite]);
 
+  useEffect(() => {
+    if (!submitting) {
+      localStorage.setItem(`cctv_draft_assetregistration_${assetType}`, JSON.stringify(formData));
+    }
+  }, [formData, assetType, submitting]);
+
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
     
-    if (name === 'brand' && value === 'NEW') {
+    let newValue = value;
+    if (type === 'text') {
+      newValue = value.toUpperCase();
+    }
+    
+    if (name === 'brand' && newValue === 'NEW') {
       setIsAddingNewBrand(true);
       setFormData(prev => ({ ...prev, brand: '' }));
       return;
     }
 
     setFormData(prev => {
-      const nextData = { ...prev, [name]: value };
+      const nextData = { ...prev, [name]: newValue };
+      
+      if (name === 'divisionName') {
+        nextData.block = '';
+        nextData.floor = '';
+        nextData.room = '';
+      } else if (name === 'block') {
+        nextData.floor = '';
+        nextData.room = '';
+      } else if (name === 'floor') {
+        nextData.room = '';
+      }
       
       // Auto-populate brand if location is found in Master Registry
-      if (['collegeName', 'block', 'floor', 'room'].includes(name)) {
+      if (['divisionName', 'block', 'floor', 'room'].includes(name)) {
         const matchingLoc = allLocations.find(loc => 
-          (loc.collegeName || '') === (name === 'collegeName' ? value : (prev.collegeName || '')) &&
+          (loc.divisionName || '') === (name === 'divisionName' ? value : (prev.divisionName || '')) &&
           (loc.block || '') === (name === 'block' ? value : (prev.block || '')) &&
           (loc.floor || '') === (name === 'floor' ? value : (prev.floor || '')) &&
           (loc.room || '') === (name === 'room' ? value : (prev.room || ''))
@@ -161,7 +177,7 @@ export default function AssetRegistration() {
 
   const resetForm = () => {
     setFormData({
-      collegeName: currentSite?.collegeName || '', 
+      divisionName: currentSite?.divisionName || '', 
       block: currentSite?.block || '', 
       floor: currentSite?.floor || '', 
       room: currentSite?.room || '', 
@@ -181,7 +197,7 @@ export default function AssetRegistration() {
       let payload = {};
 
       // Common mapping for location string
-      const locationString = `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room || 'N/A'}`;
+      const locationString = `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room || 'N/A'}`;
 
       if (assetType === 'CCTV') {
         endpoint = '/cameras/';
@@ -196,7 +212,7 @@ export default function AssetRegistration() {
           block: formData.block,
           floor: formData.floor,
           room: formData.room,
-          collegeName: formData.collegeName,
+          divisionName: formData.divisionName,
           campusZone: formData.campusZone,
           gateway: formData.gateway,
           subnetMask: formData.subnetMask,
@@ -216,7 +232,7 @@ export default function AssetRegistration() {
           block: formData.block,
           floor: formData.floor,
           room: formData.room,
-          collegeName: formData.collegeName,
+          divisionName: formData.divisionName,
           campusZone: formData.campusZone
         };
       } else if (assetType === 'Biometric') {
@@ -231,7 +247,7 @@ export default function AssetRegistration() {
           block: formData.block,
           floor: formData.floor,
           room: formData.room,
-          collegeName: formData.collegeName,
+          divisionName: formData.divisionName,
           campusZone: formData.campusZone
         };
       } else if (assetType === 'Switch') {
@@ -247,13 +263,23 @@ export default function AssetRegistration() {
           block: formData.block,
           floor: formData.floor,
           room: formData.room,
-          collegeName: formData.collegeName,
+          divisionName: formData.divisionName,
           campusZone: formData.campusZone
         };
       }
 
+      if (!payload.serialNumber || payload.serialNumber.trim() === '') {
+        payload.serialNumber = null;
+      }
+
       await api.post(endpoint, payload);
       showNotification(`${assetType} asset registered successfully`, 'success');
+      try {
+        localStorage.setItem(`cctv_last_assetregistration_${assetType}`, JSON.stringify(formData));
+        localStorage.removeItem(`cctv_draft_assetregistration_${assetType}`);
+      } catch (e) {
+        console.error(e);
+      }
       resetForm();
     } catch (err) {
       console.error(err);
@@ -288,7 +314,7 @@ export default function AssetRegistration() {
           <h3 className="text-xs font-black uppercase tracking-widest">Location</h3>
         </div>
         <div className="flex flex-wrap gap-3">
-          {existingBlocks.map(block => (
+          {Array.from(new Set([...knownLocations, ...allLocations].map(l => (l.block || '').toUpperCase()))).filter(Boolean).sort().slice(0, 10).map(block => (
             <div key={block} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-dim hover:text-white hover:border-cyan-500/30 transition-all cursor-default">
               {block}
             </div>
@@ -332,6 +358,49 @@ export default function AssetRegistration() {
           )}
         </div>
 
+        {/* Draft & Reuse Controls */}
+        <div className="flex items-center space-x-3 mb-6 relative z-10">
+          {localStorage.getItem(`cctv_last_assetregistration_${assetType}`) && (
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  const last = JSON.parse(localStorage.getItem(`cctv_last_assetregistration_${assetType}`));
+                  setFormData(prev => ({
+                    ...prev,
+                    ...last,
+                    serialNumber: '',
+                    cameraId: ''
+                  }));
+                  showNotification('Last entry data loaded');
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-md"
+            >
+              📋 Reuse Last Data
+            </button>
+          )}
+          {localStorage.getItem(`cctv_draft_assetregistration_${assetType}`) && (
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  const draft = JSON.parse(localStorage.getItem(`cctv_draft_assetregistration_${assetType}`));
+                  setFormData(prev => ({ ...prev, ...draft }));
+                  showNotification('Draft restored');
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-md"
+            >
+              📂 Restore Draft
+            </button>
+          )}
+        </div>
+
         {/* Location Section */}
         <div className="space-y-6">
           <div className="flex items-center space-x-3 text-blue-400 border-b border-white/10 pb-2">
@@ -342,20 +411,20 @@ export default function AssetRegistration() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2 flex justify-between">
-                College / Institution
+                Division Name
                 {!isAddingNewCollege && (
-                  <button type="button" onClick={() => setIsAddingNewCollege(true)} className="text-cyan-400 hover:text-white transition-colors text-[9px] font-black underline">NEW COLLEGE</button>
+                  <button type="button" onClick={() => setIsAddingNewCollege(true)} className="text-cyan-400 hover:text-white transition-colors text-[9px] font-black underline">NEW DIVISION</button>
                 )}
               </label>
               {isAddingNewCollege ? (
                 <div className="relative">
-                  <input required type="text" name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm border-cyan-500/30" placeholder="Type new college name..." />
+                  <input required type="text" name="divisionName" value={formData.divisionName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm border-cyan-500/30" placeholder="Type new division name..." />
                   <button onClick={() => setIsAddingNewCollege(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white"><X size={14} /></button>
                 </div>
               ) : (
-                <select required name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
-                  <option value="">Select Existing College</option>
-                  {existingColleges.map(c => <option key={c} value={c}>{c}</option>)}
+                <select required name="divisionName" value={formData.divisionName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
+                  <option value="">Select Existing Division</option>
+                  {Array.from(new Set([...knownLocations, ...allLocations].map(l => (l.divisionName || '').toUpperCase()))).filter(Boolean).sort().map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               )}
             </div>
@@ -375,7 +444,10 @@ export default function AssetRegistration() {
               ) : (
                 <select required name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Existing Block</option>
-                  {existingBlocks.map(b => <option key={b} value={b}>{b}</option>)}
+                  {Array.from(new Set([...knownLocations, ...allLocations]
+                    .filter(l => !formData.divisionName || (l.divisionName || '').toUpperCase() === formData.divisionName.toUpperCase())
+                    .map(l => (l.block || '').toUpperCase())
+                  )).filter(Boolean).sort().map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
               )}
             </div>
@@ -394,7 +466,11 @@ export default function AssetRegistration() {
               ) : (
                 <select required name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Existing Floor</option>
-                  {existingFloors.map(f => <option key={f} value={f}>{f}</option>)}
+                  {Array.from(new Set([...knownLocations, ...allLocations]
+                    .filter(l => (!formData.divisionName || (l.divisionName || '').toUpperCase() === formData.divisionName.toUpperCase()) && 
+                                 (!formData.block || (l.block || '').toUpperCase() === formData.block.toUpperCase()))
+                    .map(l => (l.floor || '').toUpperCase())
+                  )).filter(Boolean).sort().map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               )}
             </div>
@@ -414,7 +490,12 @@ export default function AssetRegistration() {
               ) : (
                 <select name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                   <option value="">Select Existing Room</option>
-                  {existingRooms.map(r => <option key={r} value={r}>{r}</option>)}
+                  {Array.from(new Set([...knownLocations, ...allLocations]
+                    .filter(l => (!formData.divisionName || (l.divisionName || '').toUpperCase() === formData.divisionName.toUpperCase()) && 
+                                 (!formData.block || (l.block || '').toUpperCase() === formData.block.toUpperCase()) &&
+                                 (!formData.floor || (l.floor || '').toUpperCase() === formData.floor.toUpperCase()))
+                    .map(l => (l.room || '').toUpperCase())
+                  )).filter(Boolean).sort().map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               )}
             </div>
@@ -456,7 +537,7 @@ export default function AssetRegistration() {
             {assetType === 'NVR' && (
               <>
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Storage Node Name</label>
+                  <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Storage Asset Name</label>
                   <input required type="text" name="nvrName" value={formData.nvrName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm" placeholder="e.g. Block A Server Room Storage" />
                 </div>
                 <div>
@@ -473,15 +554,27 @@ export default function AssetRegistration() {
             {assetType === 'Biometric' && (
               <>
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Identity Node Name</label>
+                  <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Identity Asset Name</label>
                   <input required type="text" name="bioName" value={formData.bioName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm" placeholder="e.g. Staff Attendance - Admin Block" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Device Type</label>
                   <select name="bioType" value={formData.bioType} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                     <option value="Fingerprint">Fingerprint</option>
-                    <option value="Face Recognition">Face Recognition</option>
-                    <option value="Card Reader">Card Reader</option>
+                    <option value="Face">Face</option>
+                    <option value="Palm">Palm</option>
+                    <option value="Card">Card</option>
+                    <option value="Face + Fingerprint">Face + Fingerprint</option>
+                    <option value="Face + Palm">Face + Palm</option>
+                    <option value="Fingerprint + Palm">Fingerprint + Palm</option>
+                    <option value="Card + Face">Card + Face</option>
+                    <option value="Card + Fingerprint">Card + Fingerprint</option>
+                    <option value="Card + Palm">Card + Palm</option>
+                    <option value="Face + Fingerprint + Palm">Face + Fingerprint + Palm</option>
+                    <option value="Card + Face + Fingerprint">Card + Face + Fingerprint</option>
+                    <option value="Card + Face + Palm">Card + Face + Palm</option>
+                    <option value="Card + Fingerprint + Palm">Card + Fingerprint + Palm</option>
+                    <option value="Card + Face + Fingerprint + Palm">Card + Face + Fingerprint + Palm</option>
                   </select>
                 </div>
               </>

@@ -5,52 +5,40 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #082f49; /* Deep Sky Blue Dark */
-  --bg-secondary: #0c4a6e;
-  --bg-tertiary: #075985;
+  --bg-primary:    #f0f4f8;  /* Light grey-blue page bg */
+  --bg-secondary:  #ffffff;  /* White card bg */
+  --bg-tertiary:   #f8fafc;  /* Very light panel bg */
   
-  --accent-primary: #00bfff; /* Sky Blue */
-  --accent-secondary: #00e5ff; /* Neon Cyan */
-  --accent-violet: #8b5cf6; 
+  --accent-primary:   #0284c7;  /* Sky blue */
+  --accent-secondary: #0ea5e9;  /* Lighter sky blue */
+  --accent-violet:    #7c3aed;
   
-  --text-primary: #ffffff;
-  --text-secondary: #a098c0;
-  --text-dim: #5c5380;
+  --text-primary:   #0f172a;  /* Dark navy */
+  --text-secondary: #334155;  /* Slate */
+  --text-dim:       #64748b;  /* Light slate */
   
-  --glass-bg: rgba(255, 255, 255, 0.03); /* High transparency */
-  --glass-border: rgba(255, 255, 255, 0.05); /* Subtle border */
-  --panel-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.6); /* Deep shadow */
+  --glass-bg:     rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --panel-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.10);
+  --nav-bg:       #1e293b;  /* Keep sidebar dark for contrast */
+}
+
+[data-theme='gaming'] {
+  --bg-primary:    #082f49;
+  --bg-secondary:  #0c3a55;
+  --bg-tertiary:   #0a2d45;
+  --accent-primary:   #00bfff;
+  --accent-secondary: #00e5ff;
+  --text-primary:   #ffffff;
+  --text-secondary: #cbd5e1;
+  --text-dim:       #94a3b8;
+  --glass-bg:     rgba(10, 45, 69, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --panel-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.6);
   --nav-bg: #082f49;
 }
 
-[data-theme='light'] {
-  /* Sky Blue Glass Theme */
-  --bg-primary: #e0f2fe; /* Tailwind Sky-100 */
-  --bg-secondary: rgba(255, 255, 255, 0.2); 
-  --bg-tertiary: rgba(255, 255, 255, 0.4); 
-  
-  --accent-primary: #0284c7; /* Sky 600 */
-  --accent-secondary: #0ea5e9; /* Sky 500 */
-  --accent-violet: #8b5cf6;
-  
-  --text-primary: #0f172a;
-  --text-secondary: #1e293b;
-  --text-dim: #64748b;
-  
-  --glass-bg: rgba(255, 255, 255, 0.2); /* High transparency */
-  --glass-border: rgba(255, 255, 255, 0.4);
-  --panel-shadow: 0 10px 40px -10px rgba(2, 132, 199, 0.2); /* Elevated shadow */
-  --nav-bg: rgba(255, 255, 255, 0.5);
-}
 
-[data-theme='gaming'] body {
-  background-color: var(--bg-primary);
-  background-image: 
-    radial-gradient(circle at 15% 40%, rgba(0, 229, 255, 0.06), transparent 30%),
-    radial-gradient(circle at 85% 20%, rgba(139, 92, 246, 0.06), transparent 30%),
-    radial-gradient(circle at 50% 100%, rgba(2, 132, 199, 0.1), transparent 50%);
-  background-attachment: fixed;
-}
 
 @layer base {
   * {
@@ -140,19 +128,28 @@
 }
 
 .glass-input {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--glass-border);
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.12) !important;
   @apply rounded-xl px-4 py-3 text-sm transition-all duration-200 outline-none;
-  color: var(--text-primary);
+  color: #0f172a !important;
+}
+
+.glass-input:not([type="email"]):not([type="password"]) {
+  text-transform: uppercase;
 }
 
 select.glass-input option {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.glass-input::placeholder {
+  color: rgba(0, 0, 0, 0.35);
 }
 
 .glass-input:focus {
-  @apply border-teal-500 ring-4 ring-teal-500/5;
+  border-color: #0284c7 !important;
+  @apply ring-4 ring-sky-500/10;
 }
 
 .neon-button {
@@ -185,15 +182,28 @@ select.glass-input option {
   color: var(--accent-violet);
 }
 
-.text-main { color: var(--text-primary); }
+.text-main      { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
-.text-dim { color: var(--text-dim); }
+.text-dim       { color: var(--text-dim); }
 
-.bg-main { background-color: var(--bg-primary); }
-.bg-card { background-color: var(--bg-secondary); }
-.bg-panel { background-color: var(--bg-tertiary); }
-.bg-body { background-color: var(--bg-primary); }
-.border-main { border-color: var(--glass-border); }
+.bg-main   { background-color: var(--bg-primary); }
+.bg-card   { background-color: #ffffff !important; }
+.bg-panel  { background-color: #f8fafc !important; }
+.bg-body   { background-color: var(--bg-primary); }
+.border-main { border-color: rgba(0,0,0,0.08) !important; }
+
+/* Modal overlay */
+.modal-overlay {
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+/* White theme - force card/panel overrides per context */
+[data-theme='gaming'] .bg-card  { background-color: #0c3a55 !important; }
+[data-theme='gaming'] .bg-panel { background-color: #0a2d45 !important; }
+[data-theme='gaming'] .border-main { border-color: rgba(255,255,255,0.10) !important; }
+[data-theme='gaming'] .glass-input { background-color: #0c3a55 !important; color: #ffffff !important; border-color: rgba(255,255,255,0.12) !important; }
+[data-theme='gaming'] select.glass-input option { background-color: #0a2d45 !important; color: #ffffff !important; }
 
 /* --- Gaming Specific Utilities --- */
 .gaming-pattern {
@@ -317,4 +327,23 @@ select.glass-input option {
   0% { left: -100%; }
   20% { left: 200%; }
   100% { left: 200%; }
+}
+
+/* --- Mobile Responsive Overrides --- */
+@media (max-width: 1024px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Force tables to allow horizontal scrolling on small screens instead of squishing */
+  table {
+    min-width: 800px; /* Forces scrolling on mobile */
+  }
+  
+  /* Make all table container divs naturally scrollable if they aren't already */
+  .bg-panel > div:has(table), 
+  .bg-card > div:has(table) {
+    overflow-x: auto;
+    width: 100%;
+  }
 }

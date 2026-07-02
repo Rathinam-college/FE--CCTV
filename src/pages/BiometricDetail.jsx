@@ -37,24 +37,23 @@ export default function BiometricDetail() {
   const [device, setDevice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [remarks, setRemarks] = useState('');
-  const [savingRemarks, setSavingRemarks] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
     ipAddress: '',
     brand: '',
     type: '',
+    usage: '',
     status: 'Online'
   });
 
-  const { allLocations, fetchAllLocations } = useSiteStore();
+  const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
 
   const unifiedActivity = useMemo(() => {
     if (!device) return [];
@@ -68,7 +67,7 @@ export default function BiometricDetail() {
     const moves = (device.relocations || []).map(move => ({
       ...move,
       type: 'move',
-      remark: `Identity Node relocated from ${move.old_location} to ${move.new_location}`,
+      remark: `Identity Asset relocated from ${move.old_location} to ${move.new_location}`,
       timestamp: move.date ? new Date(`${move.date} 00:00`).getTime() : 0
     }));
 
@@ -78,6 +77,7 @@ export default function BiometricDetail() {
   useEffect(() => {
     fetchDetails();
     fetchAllLocations();
+    fetchDivisions();
   }, [id]);
 
   const fetchDetails = async () => {
@@ -87,13 +87,14 @@ export default function BiometricDetail() {
       setDevice(res.data);
       setFormData({
         name: res.data.name || '',
-        collegeName: res.data.collegeName || '',
+        divisionName: res.data.divisionName || '',
         block: res.data.block || '',
         floor: res.data.floor || '',
         room: res.data.room || '',
         ipAddress: res.data.ipAddress || '',
         brand: res.data.brand || '',
         type: res.data.type || '',
+        usage: res.data.usage || '',
         status: res.data.status || 'Online'
       });
       setLoading(false);
@@ -101,26 +102,6 @@ export default function BiometricDetail() {
       console.error(err);
       setError('Failed to fetch biometric details.');
       setLoading(false);
-    }
-  };
-  
-  const handleSaveRemarks = async (remarkText) => {
-    const textToSave = typeof remarkText === 'string' ? remarkText : remarks;
-    if (!textToSave.trim()) return;
-    try {
-      setSavingRemarks(true);
-      const res = await api.post(`/cameras/biometrics/${id}/add_remark/`, { remark: textToSave });
-      setDevice({ 
-        ...device, 
-        message_history: [res.data, ...(device.message_history || [])] 
-      });
-      setRemarks('');
-      showNotification('Message logged successfully');
-    } catch (err) {
-      console.error(err);
-      showNotification('Failed to log message', 'error');
-    } finally {
-      setSavingRemarks(false);
     }
   };
   
@@ -145,22 +126,23 @@ export default function BiometricDetail() {
       const oldIp = device.ipAddress;
 
       const payload = {
-        name: formData.name,
-        collegeName: formData.collegeName,
+        name: formData.name?.trim() || formData.type || 'Unknown Biometric',
+        divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
-        location: `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
+        location: `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
         ipAddress: formData.ipAddress,
         brand: formData.brand,
         type: formData.type,
+        usage: formData.usage,
         status: formData.status
       };
 
       await api.patch(`/cameras/biometrics/${id}/`, payload);
 
       // Log the relocation
-      let moveLog = `Identity Node Relocated/Updated. `;
+      let moveLog = `Identity Asset Relocated/Updated. `;
       if (oldLocation !== payload.location) {
         moveLog += `Moved from ${oldLocation} to ${payload.location}. `;
       }
@@ -208,7 +190,7 @@ export default function BiometricDetail() {
       ['IP Address', device.ipAddress],
       ['Status', device.status],
       ['Brand', device.brand],
-      ['College', device.collegeName],
+      ['College', device.divisionName],
       ['Block', device.block],
       ['Floor', device.floor],
       ['Room', device.room],
@@ -234,10 +216,108 @@ export default function BiometricDetail() {
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
     document.body.removeChild(link);
     showNotification('Detailed Biometric audit report generated');
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Biometric Details - ${device.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+            h1 { color: #1a56db; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+            .section { margin-bottom: 30px; }
+            .section-title { font-size: 14px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+            .grid { display: flex; flex-wrap: wrap; margin: -10px; }
+            .grid-item { flex: 1 1 45%; padding: 10px; }
+            .label { font-size: 11px; color: #9ca3af; text-transform: uppercase; font-weight: bold; }
+            .value { font-size: 15px; font-weight: bold; color: #111827; }
+            .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+            .status-online { background-color: #d1fae5; color: #047857; }
+            .status-maintenance { background-color: #ffedd5; color: #c2410c; }
+            .status-offline { background-color: #fee2e2; color: #b91c1c; }
+          </style>
+        </head>
+        <body>
+          <h1>Biometric Details - ${device.name || 'N/A'}</h1>
+          
+          <div class="section">
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Status</div>
+                <div class="value">
+                  <span class="badge ${device.status === 'Online' ? 'status-online' : device.status === 'Maintenance' ? 'status-maintenance' : 'status-offline'}">
+                    ${device.status || 'N/A'}
+                  </span>
+                </div>
+              </div>
+              <div class="grid-item">
+                <div class="label">System Brand / Type</div>
+                <div class="value">${device.brand || 'N/A'} - ${device.type || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Deployment Context</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Division</div>
+                <div class="value">${device.divisionName || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Block Assignment</div>
+                <div class="value">${device.block || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Level / Floor</div>
+                <div class="value">${device.floor || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Room / Area</div>
+                <div class="value">${device.room || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Hardware Intelligence</div>
+            <div class="grid">
+              <div class="grid-item">
+                <div class="label">Device Usage</div>
+                <div class="value">${device.usage || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Serial Number</div>
+                <div class="value">${device.serialNumber || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">IP Address</div>
+                <div class="value">${device.ipAddress || 'N/A'}</div>
+              </div>
+              <div class="grid-item">
+                <div class="label">Sync Status</div>
+                <div class="value">${device.syncStatus || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 50px; font-size: 12px; color: #9ca3af; text-align: center;">
+            Generated from CCTV System on ${new Date().toLocaleString()}
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   if (loading) {
@@ -309,7 +389,7 @@ export default function BiometricDetail() {
               <Download size={20} />
             </button>
             <button 
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="p-2.5 rounded-lg text-secondary hover:text-blue-400 hover:bg-blue-500/10 transition-all"
               title="Export PDF"
             >
@@ -341,7 +421,7 @@ export default function BiometricDetail() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <IntelligenceCard 
           icon={ShieldCheck} 
-          label="Secure Node" 
+          label="Secure Asset" 
           value={device.ipAddress} 
           color="rose"
         />
@@ -386,14 +466,14 @@ export default function BiometricDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Target Institution</label>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Target Division</label>
                       <select 
-                        value={formData.collegeName} 
-                        onChange={(e) => setFormData({...formData, collegeName: e.target.value})}
+                        value={formData.divisionName} 
+                        onChange={(e) => setFormData({...formData, divisionName: e.target.value})}
                         className="glass-input w-full p-3 text-sm"
                       >
-                        <option value="">Select College</option>
-                        {Array.from(new Set(allLocations.map(l => l.collegeName))).map(c => (
+                        <option value="">Select Division</option>
+                        {divisions && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
@@ -406,7 +486,7 @@ export default function BiometricDetail() {
                         className="glass-input w-full p-3 text-sm"
                       >
                         <option value="">Select Block</option>
-                        {Array.from(new Set(allLocations.filter(l => l.collegeName === formData.collegeName).map(l => l.block))).map(b => (
+                        {Array.from(new Set(allLocations.filter(l => l.divisionName === formData.divisionName).map(l => l.block))).map(b => (
                           <option key={b} value={b}>{b}</option>
                         ))}
                       </select>
@@ -440,6 +520,40 @@ export default function BiometricDetail() {
                           ))}
                         </select>
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Biometric Type</label>
+                      <select
+                        value={formData.type}
+                        onChange={(e) => setFormData({...formData, type: e.target.value})}
+                        className="glass-input w-full p-3 text-sm"
+                      >
+                        <option value="Fingerprint">Fingerprint</option>
+                        <option value="Face">Face</option>
+                        <option value="Palm">Palm</option>
+                        <option value="Card">Card</option>
+                        <option value="Face + Fingerprint">Face + Fingerprint</option>
+                        <option value="Face + Palm">Face + Palm</option>
+                        <option value="Fingerprint + Palm">Fingerprint + Palm</option>
+                        <option value="Card + Face">Card + Face</option>
+                        <option value="Card + Fingerprint">Card + Fingerprint</option>
+                        <option value="Card + Palm">Card + Palm</option>
+                        <option value="Face + Fingerprint + Palm">Face + Fingerprint + Palm</option>
+                        <option value="Card + Face + Fingerprint">Card + Face + Fingerprint</option>
+                        <option value="Card + Face + Palm">Card + Face + Palm</option>
+                        <option value="Card + Fingerprint + Palm">Card + Fingerprint + Palm</option>
+                        <option value="Card + Face + Fingerprint + Palm">Card + Face + Fingerprint + Palm</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Device Usage</label>
+                      <input 
+                        type="text"
+                        value={formData.usage}
+                        onChange={(e) => setFormData({...formData, usage: e.target.value.toUpperCase()})}
+                        className="glass-input w-full p-3 text-sm"
+                        placeholder="e.g. Staff, Students..."
+                      />
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-dim uppercase tracking-widest mb-2">Operational Status</label>
@@ -490,6 +604,7 @@ export default function BiometricDetail() {
                     <DetailRow label="Device Designation" value={device.name} />
                     <DetailRow label="System Brand" value={device.brand} />
                     <DetailRow label="Identity Type" value={device.type} />
+                    <DetailRow label="Device Usage" value={device.usage} />
                     <DetailRow label="Serial Number" value={device.serialNumber} mono />
                   </div>
                 </section>
@@ -500,7 +615,7 @@ export default function BiometricDetail() {
                     <div className="h-px bg-emerald-500/10 flex-1"></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <DetailRow label="Institution" value={device.collegeName} />
+                    <DetailRow label="Division" value={device.divisionName} />
                     <DetailRow label="Block Assignment" value={device.block} />
                     <DetailRow label="Level / Floor" value={device.floor} />
                     <DetailRow label="Room / Area" value={device.room} />
@@ -513,32 +628,6 @@ export default function BiometricDetail() {
 
         {/* Right Section: Administrative Hub */}
         <div className="space-y-6">
-          
-          {/* Quick Command Box */}
-          <div className="glass-panel overflow-hidden border-white/10 shadow-xl flex flex-col bg-panel/30">
-            <div className="p-4 bg-white/5 border-b border-white/10 flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-400">
-                <Send size={18} />
-              </div>
-              <h3 className="text-sm font-bold text-main tracking-wide uppercase">Registry Entry</h3>
-            </div>
-            <div className="p-5 space-y-4">
-              <textarea
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Log activity or maintenance..."
-                className="glass-input w-full p-4 text-sm text-dim resize-none rounded-xl min-h-[100px] border-white/5 focus:border-rose-500/30 transition-all"
-              />
-              <button 
-                onClick={handleSaveRemarks}
-                disabled={savingRemarks || !remarks.trim()}
-                className="w-full py-3 bg-rose-600/20 text-rose-400 border border-rose-500/30 rounded-xl hover:bg-rose-600 hover:text-white transition-all disabled:opacity-30 flex items-center justify-center space-x-2 font-bold text-xs uppercase tracking-widest"
-              >
-                {savingRemarks ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                <span>{savingRemarks ? 'Logging...' : 'Append to History'}</span>
-              </button>
-            </div>
-          </div>
 
           {/* Quick Status Transition */}
           <div className="glass-panel overflow-hidden border-white/10 shadow-xl bg-panel/30">
@@ -631,7 +720,7 @@ export default function BiometricDetail() {
                    <span className="text-[9px] font-bold text-dim uppercase">Back</span>
                 </button>
                 <button 
-                  onClick={() => window.print()}
+                  onClick={handlePrint}
                   className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center space-y-2 hover:bg-white/10 transition-all"
                 >
                    <FileText size={16} className="text-rose-400" />

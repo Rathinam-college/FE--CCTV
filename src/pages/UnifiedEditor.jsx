@@ -10,6 +10,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useNavigate } from 'react-router-dom';
+import { useSiteStore } from '../store/siteStore';
 
 export default function UnifiedEditor() {
   const { user } = useAuthStore();
@@ -17,6 +18,7 @@ export default function UnifiedEditor() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { divisions, fetchDivisions } = useSiteStore();
   
   // All Assets for search
   const [allItems, setAllItems] = useState([]);
@@ -30,7 +32,7 @@ export default function UnifiedEditor() {
     name: '',
     ipAddress: '',
     serialNumber: '',
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
@@ -59,6 +61,7 @@ export default function UnifiedEditor() {
 
   useEffect(() => {
     fetchAllAssets();
+    fetchDivisions();
   }, []);
 
   const fetchAllAssets = async () => {
@@ -86,7 +89,7 @@ export default function UnifiedEditor() {
       const flrs = new Set();
       const rms = new Set();
       formatted.forEach(item => {
-        if (item.collegeName) cols.add(item.collegeName);
+        if (item.divisionName) cols.add(item.divisionName);
         if (item.block) blks.add(item.block);
         if (item.floor) flrs.add(item.floor);
         if (item.room) rms.add(item.room);
@@ -125,7 +128,7 @@ export default function UnifiedEditor() {
       name: item.displayName || '',
       ipAddress: item.ipAddress || '',
       serialNumber: item.serialNumber || item.cameraId || '',
-      collegeName: item.collegeName || '',
+      divisionName: item.divisionName || '',
       block: item.block || '',
       floor: item.floor || '',
       room: item.room || '',
@@ -152,7 +155,12 @@ export default function UnifiedEditor() {
   };
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type } = e.target;
+    let newValue = value;
+    if (type === 'text') {
+      newValue = value.toUpperCase();
+    }
+    setFormData({ ...formData, [name]: newValue });
   };
 
   const handleUpdate = async (e) => {
@@ -161,7 +169,7 @@ export default function UnifiedEditor() {
     try {
       let endpoint = '';
       let payload = {};
-      const locationString = `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room || 'N/A'}`;
+      const locationString = `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room || 'N/A'}`;
 
       if (formData.type === 'CCTV') {
         endpoint = `/cameras/${formData.id}/`;
@@ -239,7 +247,7 @@ export default function UnifiedEditor() {
         {filteredResults.length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-3 glass-panel border-white/20 overflow-hidden z-[100] shadow-2xl animate-scale-up">
             <div className="bg-white/5 px-4 py-2 border-b border-white/10">
-              <span className="text-[10px] font-black text-dim uppercase tracking-widest">Found {filteredResults.length} Matching Nodes</span>
+              <span className="text-[10px] font-black text-dim uppercase tracking-widest">Found {filteredResults.length} Matching Assets</span>
             </div>
             {filteredResults.map(item => (
               <button 
@@ -276,7 +284,7 @@ export default function UnifiedEditor() {
         <form onSubmit={handleUpdate} className="space-y-10 animate-slide-up">
           <div className="glass-panel p-8 bg-white/[0.02] border-white/10 relative overflow-hidden group">
              <div className="absolute top-0 right-0 p-8 flex items-center space-x-2">
-                <span className="px-3 py-1 rounded-full bg-white/10 border border-white/10 text-[9px] font-black text-white uppercase tracking-widest">{formData.type} NODE</span>
+                <span className="px-3 py-1 rounded-full bg-white/10 border border-white/10 text-[9px] font-black text-white uppercase tracking-widest">{formData.type} ASSET</span>
                 <button type="button" onClick={() => setSelectedItem(null)} className="p-2 text-dim hover:text-white hover:bg-white/10 rounded-full transition-all"><X size={16} /></button>
              </div>
 
@@ -289,8 +297,11 @@ export default function UnifiedEditor() {
               {/* Common Location Fields */}
               <div>
                 <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">College</label>
-                <input list="cols" name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm" />
-                <datalist id="cols">{locations.colleges.map(c => <option key={c} value={c} />)}</datalist>
+                <input list="cols" name="divisionName" value={formData.divisionName} onChange={handleInputChange} className="glass-input w-full p-4 text-sm" />
+                <datalist id="cols">
+                  {divisions && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(c => <option key={c} value={c} />)}
+                  {locations.colleges.filter(c => !divisions?.some(d => d.name === c)).map(c => <option key={c} value={c} />)}
+                </datalist>
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Block</label>
@@ -362,8 +373,20 @@ export default function UnifiedEditor() {
                   <label className="block text-[10px] font-bold text-dim uppercase tracking-widest mb-2">Device Type</label>
                   <select name="bioType" value={formData.bioType} onChange={handleInputChange} className="glass-input w-full p-4 text-sm">
                     <option value="Fingerprint">Fingerprint</option>
-                    <option value="Face Recognition">Face Recognition</option>
-                    <option value="RFID Card">RFID Card</option>
+                    <option value="Face">Face</option>
+                    <option value="Palm">Palm</option>
+                    <option value="Card">Card</option>
+                    <option value="Face + Fingerprint">Face + Fingerprint</option>
+                    <option value="Face + Palm">Face + Palm</option>
+                    <option value="Fingerprint + Palm">Fingerprint + Palm</option>
+                    <option value="Card + Face">Card + Face</option>
+                    <option value="Card + Fingerprint">Card + Fingerprint</option>
+                    <option value="Card + Palm">Card + Palm</option>
+                    <option value="Face + Fingerprint + Palm">Face + Fingerprint + Palm</option>
+                    <option value="Card + Face + Fingerprint">Card + Face + Fingerprint</option>
+                    <option value="Card + Face + Palm">Card + Face + Palm</option>
+                    <option value="Card + Fingerprint + Palm">Card + Fingerprint + Palm</option>
+                    <option value="Card + Face + Fingerprint + Palm">Card + Face + Fingerprint + Palm</option>
                   </select>
                 </div>
               )}
@@ -404,7 +427,7 @@ export default function UnifiedEditor() {
               <Monitor size={32} className="text-dim opacity-20" />
            </div>
            <div className="max-w-xs">
-              <p className="text-sm font-bold text-dim uppercase tracking-widest">No Node Selected</p>
+              <p className="text-sm font-bold text-dim uppercase tracking-widest">No Asset Selected</p>
               <p className="text-xs text-secondary mt-1">Use the search bar above to locate an asset and begin editing its parameters.</p>
            </div>
         </div>

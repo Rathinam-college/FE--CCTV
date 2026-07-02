@@ -3,22 +3,32 @@ import api from '../services/api';
 
 export const useSiteStore = create((set, get) => ({
   currentSite: {
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
     brand: ''
   },
   allLocations: [],
-  occupations: [],
+  divisions: [],
+  brands: [],
   loading: false,
 
-  fetchOccupations: async () => {
+  fetchBrands: async () => {
     try {
-      const res = await api.get('/cameras/occupations/');
-      set({ occupations: res.data });
+      const res = await api.get('/cameras/brands/');
+      set({ brands: res.data });
     } catch (err) {
-      console.error('Failed to fetch occupations:', err);
+      console.error('Failed to fetch brands:', err);
+    }
+  },
+
+  fetchDivisions: async () => {
+    try {
+      const res = await api.get('/cameras/divisions/');
+      set({ divisions: res.data });
+    } catch (err) {
+      console.error('Failed to fetch divisions:', err);
     }
   },
 
@@ -38,8 +48,48 @@ export const useSiteStore = create((set, get) => ({
 
   fetchAllLocations: async () => {
     try {
-      const res = await api.get('/cameras/master_locations/');
-      set({ allLocations: res.data });
+      const res = await api.get('/cameras/locations/');
+      let locations = res.data || [];
+
+      // Extract legacy locations directly from cameras to ensure nothing is missing
+      try {
+        const camRes = await api.get('/cameras/');
+        const legacyLocs = [];
+        camRes.data.forEach(c => {
+          if (c.divisionName || c.block || c.floor || c.room) {
+            legacyLocs.push({
+              id: `legacy-${c.id || Math.random()}`,
+              divisionName: (c.divisionName || '').toUpperCase(),
+              block: (c.block || '').toUpperCase(),
+              floor: (c.floor || '').toUpperCase(),
+              room: (c.room || '').toUpperCase()
+            });
+          }
+          if (c.siteName) {
+            const parts = c.siteName.split('|').map(p => p.trim().toUpperCase());
+            legacyLocs.push({
+              id: `legacy-site-${c.id || Math.random()}`,
+              divisionName: parts[0] || '',
+              block: parts[1] || '',
+              floor: parts[2] || '',
+              room: parts[3] || ''
+            });
+          }
+        });
+        // Deduplicate and merge
+        const uniqueKeys = new Set(locations.map(l => `${(l.divisionName||'').toUpperCase()}|${(l.block||'').toUpperCase()}|${(l.floor||'').toUpperCase()}|${(l.room||'').toUpperCase()}`));
+        legacyLocs.forEach(ll => {
+          const key = `${ll.divisionName}|${ll.block}|${ll.floor}|${ll.room}`;
+          if (!uniqueKeys.has(key)) {
+            uniqueKeys.add(key);
+            locations.push(ll);
+          }
+        });
+      } catch (camErr) {
+        console.error('Failed to aggregate camera locations:', camErr);
+      }
+
+      set({ allLocations: locations });
     } catch (err) {
       console.error('Failed to fetch all locations:', err);
     }
@@ -47,19 +97,19 @@ export const useSiteStore = create((set, get) => ({
 
   deleteLocation: async (id) => {
     try {
-      await api.delete(`/cameras/master_locations/${id}/`);
+      await api.delete(`/cameras/locations/${id}/`);
       const locs = get().allLocations.filter(l => l.id !== id);
       set({ allLocations: locs });
-      return true;
+      return { success: true };
     } catch (err) {
       console.error('Failed to delete location:', err);
-      return false;
+      return { success: false, message: err.response?.data?.message || 'Failed to delete' };
     }
   },
 
   updateLocation: async (id, data) => {
     try {
-      const res = await api.put(`/cameras/master_locations/${id}/`, data);
+      const res = await api.put(`/cameras/locations/${id}/`, data);
       const locs = get().allLocations.map(l => l.id === id ? res.data : l);
       set({ allLocations: locs });
       return true;
@@ -71,30 +121,32 @@ export const useSiteStore = create((set, get) => ({
 
   addLocation: async (data) => {
     try {
-      const res = await api.post('/cameras/master_locations/', data);
-      set((state) => ({ allLocations: [...state.allLocations, res.data] }));
+      const res = await api.post('/cameras/locations/', data);
+      await get().fetchAllLocations();
       return res.data;
     } catch (err) {
       console.error('Failed to add location:', err);
-      return null;
+      throw err;
     }
   },
 
   ensureLocationExists: async (data) => {
-    const { collegeName, block, floor, room, brand } = data;
-    
-    // Only check if we actually have some location data
-    if (!collegeName && !block && !floor && !room) return;
+    const { divisionName, block, floor, room, brand } = data;
+    if (!divisionName && !block && !floor && !room) return;
 
     const exists = get().allLocations.find(loc => 
-      (loc.collegeName || '') === (collegeName || '') &&
+      (loc.divisionName || '') === (divisionName || '') &&
       (loc.block || '') === (block || '') &&
       (loc.floor || '') === (floor || '') &&
       (loc.room || '') === (room || '')
     );
     
     if (!exists) {
-      await get().addLocation({ collegeName, block, floor, room, brand });
+      try {
+        await get().addLocation({ divisionName, block, floor, room, brand });
+      } catch (err) {
+        console.warn('ensureLocationExists caught an error (likely a duplicate backend constraint), ignoring:', err);
+      }
     }
   },
 
@@ -104,13 +156,7 @@ export const useSiteStore = create((set, get) => ({
       const res = await api.post('/cameras/global-site-config/apply_site/', siteData);
       set({ currentSite: res.data });
       
-      // Try to refresh locations list, but don't crash if it fails
-      try {
-        await get().fetchAllLocations();
-      } catch (e) {
-        console.warn('Registry list refresh failed:', e);
-      }
-      
+
       return { success: true };
     } catch (err) {
       console.error('Failed to apply site config:', err);
@@ -120,5 +166,5 @@ export const useSiteStore = create((set, get) => ({
     }
   },
 
-  clearSite: () => set({ currentSite: { collegeName: '', block: '', floor: '', room: '', brand: '' } })
+  clearSite: () => set({ currentSite: { divisionName: '', block: '', floor: '', room: '', brand: '' } })
 }));

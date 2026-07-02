@@ -39,7 +39,7 @@ export default function Network() {
             <Server size={28} />
           </div>
           <div>
-            <p className="text-xs text-dim font-semibold uppercase tracking-wider mb-1">Total Nodes</p>
+            <p className="text-xs text-dim font-semibold uppercase tracking-wider mb-1">Total Assets</p>
             <h3 className="text-3xl font-bold text-blue-400">{stats.total}</h3>
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function Network() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/5 bg-black/20">
-                <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Node Signature</th>
+                <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Asset Signature</th>
                 <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Logical Zone</th>
                 <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">IP Address</th>
                 <th className="p-5 text-xs font-semibold text-dim uppercase tracking-wider">Status</th>

@@ -188,7 +188,7 @@ export default function RoutesPage() {
                         const newSites = [...formData.sitesToVisit];
                         newSites[index].siteName = e.target.value;
                         setFormData({...formData, sitesToVisit: newSites});
-                      }} className="glass-input w-full pl-10 pr-4 py-2 text-sm" />
+                      }} className="glass-input w-full !pl-10 pr-4 py-2 text-sm" />
                       {formData.sitesToVisit.length > 1 && (
                         <button type="button" onClick={() => {
                           const newSites = [...formData.sitesToVisit];

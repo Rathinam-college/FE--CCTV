@@ -22,6 +22,8 @@ export default function DeviceDetail() {
       if (type === 'nvrs') url = `/cameras/nvrs/${id}/`;
       if (type === 'biometrics') url = `/cameras/biometrics/${id}/`;
       if (type === 'barriers') url = `/cameras/barriers/${id}/`;
+      if (type === 'switches') url = `/cameras/switches/${id}/`;
+      if (type === 'racks') url = `/cameras/racks/${id}/`;
 
       const res = await api.get(url);
       setDevice(res.data);
@@ -45,7 +47,7 @@ export default function DeviceDetail() {
     return (
       <div className="max-w-md mx-auto mt-10 glass-panel p-6 text-center border-red-500/20 shadow-sm">
         <AlertTriangle size={48} className="mx-auto text-red-500 mb-4 animate-bounce" />
-        <h3 className="text-lg font-bold text-main">Error Resolving Node</h3>
+        <h3 className="text-lg font-bold text-main">Error Resolving Asset</h3>
         <p className="text-secondary text-sm mt-2">{error || 'Hardware target lost.'}</p>
         <button onClick={() => navigate(-1)} className="glass-button px-4 py-2 mt-6 flex items-center justify-center mx-auto">
           <ArrowLeft size={16} className="mr-2" /> Go Back
@@ -85,6 +87,8 @@ export default function DeviceDetail() {
                 {type === 'nvrs' && <Server size={36} className="text-teal-600" />}
                 {type === 'biometrics' && <Fingerprint size={36} className="text-teal-600" />}
                 {type === 'barriers' && <Lock size={36} className="text-teal-600" />}
+                {type === 'switches' && <Wifi size={36} className="text-teal-600" />}
+                {type === 'racks' && <Server size={36} className="text-teal-600" />}
               </div>
             </div>
 
@@ -152,6 +156,32 @@ export default function DeviceDetail() {
                   <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
                     <span className="text-dim text-xs">SYSTEM CONTROLLER:</span>
                     <span className="text-main font-bold">{device.controller || 'UNKNOWN'}</span>
+                  </div>
+                </>
+              )}
+
+              {type === 'switches' && (
+                <>
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
+                    <span className="text-dim text-xs">PORT COUNT:</span>
+                    <span className="text-emerald-400 font-bold">{device.ports || '—'}</span>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
+                    <span className="text-dim text-xs">SWITCH TYPE:</span>
+                    <span className="text-main font-bold">{device.switchType || '—'}</span>
+                  </div>
+                </>
+              )}
+
+              {type === 'racks' && (
+                <>
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
+                    <span className="text-dim text-xs">U-SPACE CAPACITY:</span>
+                    <span className="text-indigo-400 font-bold">{device.uSpace || '—'} U</span>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
+                    <span className="text-dim text-xs">HEIGHT:</span>
+                    <span className="text-main font-bold">{device.height || '—'}</span>
                   </div>
                 </>
               )}

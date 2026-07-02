@@ -140,7 +140,7 @@ export default function DeviceHistory() {
       <div className="max-w-md mx-auto mt-20 glass-panel p-8 text-center border-red-500/20">
         <Shield size={48} className="mx-auto text-red-400 mb-6" />
         <h3 className="text-xl font-bold text-main mb-2">Protocol Interrupted</h3>
-        <p className="text-dim text-sm mb-8 leading-relaxed">{error || 'Unable to decrypt historical data for this node.'}</p>
+        <p className="text-dim text-sm mb-8 leading-relaxed">{error || 'Unable to decrypt historical data for this asset.'}</p>
         <button onClick={() => navigate(-1)} className="w-full glass-button py-3 flex items-center justify-center">
           <ArrowLeft size={18} className="mr-2" /> Resume Previous Operation
         </button>
@@ -155,7 +155,7 @@ export default function DeviceHistory() {
         <div className="space-y-2">
           <div className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-dim">
             <button onClick={() => navigate(-1)} className="hover:text-blue-400 transition-colors flex items-center">
-              <ArrowLeft size={12} className="mr-1" /> BACK TO NODE
+              <ArrowLeft size={12} className="mr-1" /> BACK TO ASSET
             </button>
             <ChevronRight size={10} />
             <span className="text-blue-400">MASTER AUDIT LOG</span>
@@ -216,7 +216,7 @@ export default function DeviceHistory() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter archive by remark, user, or date..."
-            className="glass-input w-full pl-12 pr-4 py-3 text-sm"
+            className="glass-input w-full !pl-12 pr-4 py-3 text-sm"
           />
         </div>
       </div>
@@ -267,7 +267,7 @@ export default function DeviceHistory() {
           <div className="glass-panel p-20 text-center border-dashed border-white/10">
             <Activity size={48} className="mx-auto text-dim/20 mb-6" />
             <h3 className="text-lg font-bold text-dim uppercase tracking-widest">No Log Entries Found</h3>
-            <p className="text-sm text-dim/60 mt-2">The historical archive for this node is currently empty.</p>
+            <p className="text-sm text-dim/60 mt-2">The historical archive for this asset is currently empty.</p>
           </div>
         )}
       </div>

@@ -1,17 +1,42 @@
 import { useState, useEffect, useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import api from '../services/api';
+import { compressImage } from '../utils/imageCompression';
 import { 
   Plus, Search, Download, Calendar, MapPin, Tag, 
   X, Edit2, Trash2, LayoutGrid, Briefcase, Upload,
   MessageSquare, Send, Info, Clock, User as UserIcon, CheckCircle,
-  Maximize2, Minimize2, Activity, Shield
+  Maximize2, Minimize2, Activity, Shield, Camera, Image as ImageIcon, AlertCircle, ChevronLeft, ChevronRight, Printer
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import { useNavigate } from 'react-router-dom';
+const getImageUrl = (path) => {
+  if (!path) return '';
+  try {
+    const url = new URL(path);
+    path = url.pathname;
+  } catch (e) {
+  }
+  let cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  if (cleanPath.startsWith('cctv/')) {
+    cleanPath = cleanPath.substring(5);
+  }
+  if (!cleanPath.startsWith('media/') && !cleanPath.startsWith('api/')) {
+    cleanPath = 'media/' + cleanPath;
+  }
+  const baseUrl = import.meta.env.BASE_URL || '/cctv/';
+  return `${baseUrl}${cleanPath}`;
+};
+
+const getFileName = (path) => {
+  if (!path) return '';
+  const parts = path.split('/');
+  const name = parts[parts.length - 1];
+  return name.length > 20 ? name.substring(0, 10) + '...' + name.substring(name.length - 7) : name;
+};
 
 export default function Tickets() {
   const { user } = useAuthStore();
@@ -28,36 +53,118 @@ export default function Tickets() {
   const [staff, setStaff] = useState([]);
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [startMonth, setStartMonth] = useState('');
+  const [endMonth, setEndMonth] = useState('');
+  const [knownLocations, setKnownLocations] = useState([]);
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [filterProject, setFilterProject] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterDivision, setFilterDivision] = useState('');
   const [projects, setProjects] = useState([]);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [expandedSidePanel, setExpandedSidePanel] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [newRemark, setNewRemark] = useState('');
+  const [showVisualAnalytics, setShowVisualAnalytics] = useState(false);
+
+  // Simplified Completion Modal States
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionTicket, setCompletionTicket] = useState(null);
   const [completionData, setCompletionData] = useState({
     remark: '',
     endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
     date: new Date().toISOString().split('T')[0],
-    beforeImage: null,
-    afterImage: null,
-    beforeRemark: '',
-    beforeDate: new Date().toISOString().split('T')[0],
-    beforeTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    image: null,
+    video: null
   });
-  const [completionStep, setCompletionStep] = useState(1);
-  const { allLocations, fetchAllLocations } = useSiteStore();
+
+  // In Progress Modal States
+  const [showInProgressModal, setShowInProgressModal] = useState(false);
+  const [inProgressTicket, setInProgressTicket] = useState(null);
+  const [inProgressData, setInProgressData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    image: null,
+    video: null
+  });
+
+  const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Maintenance:EDIT');
 
+  const parseMetadata = (remarks) => {
+    try {
+      const parsed = JSON.parse(remarks);
+      if (parsed && typeof parsed === 'object') return parsed;
+      throw new Error("Not an object");
+    } catch (e) {
+      return {
+        location: '',
+        category: 'CCTV',
+        actionTaken: '',
+        instructionBy: '',
+        receivedTime: '',
+        endTime: '',
+        totalTime: ''
+      };
+    }
+  };
+
+  const baseFilteredTickets = useMemo(() => {
+    return Array.isArray(tickets) ? tickets.filter(ticket => {
+      const meta = parseMetadata(ticket.remarks);
+      const ticketDate = meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+      
+      // Month range filter
+      if (startMonth || endMonth) {
+        if (!ticketDate) return false;
+        const tMonth = String(ticketDate).substring(0, 7); // 'YYYY-MM'
+        if (startMonth && tMonth < startMonth) return false;
+        if (endMonth && tMonth > endMonth) return false;
+      }
+
+      // Advanced Filters
+      if (filterProject && String(ticket.projectId?.id || ticket.projectId || ticket.project?.id || '') !== String(filterProject)) return false;
+      if (filterCategory && (ticket.category || meta.category) !== filterCategory) return false;
+      if (filterDivision && ticket.divisionName !== filterDivision) return false;
+
+      // Search filter
+      const searchStr = `${ticket.issueDescription} ${meta.location} ${meta.category} ${ticket.project?.name || ''}`.toLowerCase();
+      if (searchQuery && !searchStr.includes(searchQuery.toLowerCase())) return false;
+
+      return true;
+    }) : [];
+  }, [tickets, startMonth, endMonth, filterProject, filterCategory, filterDivision, searchQuery]);
+
+  const filteredTickets = useMemo(() => {
+    return baseFilteredTickets.filter(ticket => {
+      if (statusFilter !== 'ALL' && ticket.status !== statusFilter) return false;
+      return true;
+    });
+  }, [baseFilteredTickets, statusFilter]);
+
   const summaryStats = useMemo(() => ({
-    total: tickets.length,
-    open: tickets.filter(t => t.status === 'Open').length,
-    inProgress: tickets.filter(t => t.status === 'In Progress').length,
-    completed: tickets.filter(t => t.status === 'Completed').length
-  }), [tickets]);
+    total: baseFilteredTickets.length,
+    open: baseFilteredTickets.filter(t => t.status === 'Open').length,
+    inProgress: baseFilteredTickets.filter(t => t.status === 'In Progress').length,
+    completed: baseFilteredTickets.filter(t => t.status === 'Completed').length
+  }), [baseFilteredTickets]);
+
+  const filterCounts = useMemo(() => {
+    const counts = { division: {}, category: {} };
+    (Array.isArray(tickets) ? tickets : []).forEach(ticket => {
+      const meta = parseMetadata(ticket.remarks);
+      const division = String(ticket.divisionName || '');
+      const category = String(ticket.category || meta.category || '');
+
+      if (division) counts.division[division] = (counts.division[division] || 0) + 1;
+      if (category) counts.category[category] = (counts.category[category] || 0) + 1;
+    });
+    return counts;
+  }, [tickets]);
 
   const chartData = useMemo(() => [
     { name: 'Open', value: summaryStats.open, color: '#f43f5e' },
@@ -65,9 +172,58 @@ export default function Tickets() {
     { name: 'Completed', value: summaryStats.completed, color: '#10b981' }
   ].filter(d => d.value > 0), [summaryStats]);
 
+  const categoryStats = useMemo(() => {
+    const stats = {};
+    baseFilteredTickets.forEach(t => {
+      const meta = parseMetadata(t.remarks);
+      const cat = t.category || meta.category || 'CCTV';
+      if (!stats[cat]) {
+        stats[cat] = { count: 0, spend: 0 };
+      }
+      stats[cat].count += 1;
+      
+      const bills = t.billing_records || [];
+      const billSpend = bills
+        .filter(b => b.record_type === 'Bill')
+        .reduce((sum, b) => {
+          const val = parseFloat(String(b.amount || '0').replace(/[^0-9.-]/g, ''));
+          return sum + (isNaN(val) ? 0 : val);
+        }, 0);
+      stats[cat].spend += billSpend;
+    });
+
+    return Object.entries(stats).map(([name, val]) => ({
+      name,
+      count: val.count,
+      spend: val.spend
+    }));
+  }, [baseFilteredTickets]);
+
+  const CATEGORY_COLORS = {
+    'Camera': '#3b82f6',
+    'CCTV': '#3b82f6',
+    'NVR': '#8b5cf6',
+    'Storage': '#8b5cf6',
+    'Biometric': '#ec4899',
+    'Identity': '#ec4899',
+    'Switch': '#f59e0b',
+    'Network': '#f59e0b',
+    'Upgrade': '#10b981',
+    'Default': '#64748b'
+  };
+
+  const getCategoryColor = (name) => {
+    return CATEGORY_COLORS[name] || CATEGORY_COLORS['Default'];
+  };
+
+  const uniqueDivisions = useMemo(() => {
+    const storeDivs = Array.isArray(divisions) ? divisions.map(d => String(d.name || '').toUpperCase()) : [];
+    return Array.from(new Set(storeDivs)).filter(Boolean).sort();
+  }, [divisions]);
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    collegeName: '',
+    divisionName: '',
     block: '',
     floor: '',
     room: '',
@@ -75,38 +231,131 @@ export default function Tickets() {
     assignedTo: '',
     assignedStaff: [],
     location: '',
-    category: 'CCTV',
+    category: 'Camera',
     issueDescription: '',
     actionTaken: '',
     instructionBy: '',
-    receivedTime: '',
+    receivedTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    receivedDate: new Date().toISOString().split('T')[0],
     endTime: '',
     projectId: '',
-    status: 'Open'
+    status: 'Open',
+    
+    // Workflow tracking fields
+    createdImage: null,
+    createdDate: new Date().toISOString().split('T')[0],
+    createdTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    createdVideo: null,
+    inProgressImage: null,
+    inProgressVideo: null,
+    inProgressDate: '',
+    inProgressTime: '',
+    completedImage: null,
+    completedVideo: null,
+    completedDate: '',
+    completedTime: ''
   });
+
+  const allAvailableLocations = useMemo(() => {
+    return [...(Array.isArray(knownLocations) ? knownLocations : []), ...(Array.isArray(allLocations) ? allLocations : [])];
+  }, [knownLocations, allLocations]);
+
+  const uniqueBlocks = useMemo(() => {
+    const blocks = new Set();
+    const targetDivision = String(formData.divisionName || '').trim().toUpperCase();
+    allAvailableLocations.forEach(l => {
+      const div = String(l.divisionName || '').trim().toUpperCase();
+      const matchDiv = !targetDivision || div === targetDivision || !div;
+      if (matchDiv && l.block) blocks.add(String(l.block).toUpperCase().trim());
+    });
+    return Array.from(blocks).filter(Boolean).sort();
+  }, [allAvailableLocations, formData.divisionName]);
+
+  const uniqueFloors = useMemo(() => {
+    const floors = new Set();
+    const targetDivision = String(formData.divisionName || '').trim().toUpperCase();
+    const targetBlock = String(formData.block || '').trim().toUpperCase();
+    allAvailableLocations.forEach(l => {
+      const div = String(l.divisionName || '').trim().toUpperCase();
+      const blk = String(l.block || '').trim().toUpperCase();
+      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchBlk = !targetBlock || blk === targetBlock;
+      if (matchDiv && matchBlk && l.floor) floors.add(String(l.floor).toUpperCase().trim());
+    });
+    return Array.from(floors).filter(Boolean).sort();
+  }, [allAvailableLocations, formData.divisionName, formData.block]);
+
+  const uniqueRooms = useMemo(() => {
+    const rooms = new Set();
+    const targetDivision = String(formData.divisionName || '').trim().toUpperCase();
+    const targetBlock = String(formData.block || '').trim().toUpperCase();
+    const targetFloor = String(formData.floor || '').trim().toUpperCase();
+    allAvailableLocations.forEach(l => {
+      const div = String(l.divisionName || '').trim().toUpperCase();
+      const blk = String(l.block || '').trim().toUpperCase();
+      const flr = String(l.floor || '').trim().toUpperCase();
+      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchBlk = !targetBlock || blk === targetBlock;
+      const matchFlr = !targetFloor || flr === targetFloor;
+      if (matchDiv && matchBlk && matchFlr && l.room) rooms.add(String(l.room).toUpperCase().trim());
+    });
+    return Array.from(rooms).filter(Boolean).sort();
+  }, [allAvailableLocations, formData.divisionName, formData.block, formData.floor]);
 
   useEffect(() => {
     fetchData();
-    fetchStaff();
     fetchAllLocations();
+    fetchDivisions();
+    fetchStaff();
+    fetchExistingLocations();
   }, []);
 
-  const fetchStaff = async () => {
+  const fetchExistingLocations = async () => {
     try {
-      const res = await api.get('/tickets/staff/');
-      setStaff(res.data);
+      const res = await api.get('/cameras/');
+      const locations = [];
+      const camData = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+      camData.forEach(c => {
+        if (c.divisionName || c.block || c.floor || c.room) {
+          locations.push({
+            divisionName: String(c.divisionName || '').toUpperCase(),
+            block: String(c.block || '').toUpperCase(),
+            floor: String(c.floor || '').toUpperCase(),
+            room: String(c.room || '').toUpperCase()
+          });
+        }
+        if (c.siteName) {
+          const parts = String(c.siteName).split('|').map(p => p.trim().toUpperCase());
+          locations.push({
+            divisionName: parts[0] || '',
+            block: parts[1] || '',
+            floor: parts[2] || '',
+            room: parts[3] || ''
+          });
+        }
+      });
+      setKnownLocations(locations);
     } catch (err) {
-      console.error('Error fetching staff:', err);
+      console.error('Error fetching locations:', err);
     }
+  };
+
+  const fetchStaff = async () => {
+    // Staff are now populated directly from users during fetchData to avoid 404 error since the endpoint was removed
+    return;
   };
 
   const handleEditStaff = async (e, s) => {
     e.stopPropagation();
     const newName = prompt('Enter new name for staff member:', s.name);
-    if (!newName || newName === s.name) return;
+    if (!newName) return;
+    const newEmail = prompt('Enter email address:', s.email || '');
+    if (newName === s.name && newEmail === (s.email || '')) return;
     try {
-      const res = await api.put(`/tickets/staff/${s.id || s._id}/`, { name: newName.trim() });
-      setStaff(staff.map(item => (item.id || item._id) === (s.id || s._id) ? res.data : item));
+      const res = await api.patch(`/users/${s.id || s._id}/`, { name: newName.trim(), email: newEmail ? newEmail.trim() : s.email });
+      const updatedStaff = staff.map(item => (item.id || item._id) === (s.id || s._id) ? { ...item, ...res.data } : item);
+      setStaff(updatedStaff);
+      setUsers(updatedStaff);
       showNotification('Staff member updated', 'success');
     } catch (err) {
       showNotification('Failed to update staff member', 'error');
@@ -115,17 +364,19 @@ export default function Tickets() {
 
   const handleDeleteStaff = async (e, id) => {
     e.stopPropagation();
-    showConfirm('Are you sure?', async () => {
+    showConfirm('Are you sure you want to delete this user entirely?', async () => {
       try {
-        await api.delete(`/tickets/staff/${id}/`);
-        setStaff(staff.filter(s => (s.id || s._id) !== id));
+        await api.delete(`/users/${id}/`);
+        const updatedStaff = staff.filter(s => (s.id || s._id) !== id);
+        setStaff(updatedStaff);
+        setUsers(updatedStaff);
         setFormData(prev => ({
           ...prev,
-          assignedStaff: prev.assignedStaff.filter(sId => sId !== id)
+          assignedStaff: (prev.assignedStaff || []).filter(sId => sId !== id)
         }));
-        showNotification('Staff member removed', 'success');
+        showNotification('User removed', 'success');
       } catch (err) {
-        showNotification('Failed to delete staff member', 'error');
+        showNotification('Failed to delete user', 'error');
       }
     });
   };
@@ -133,17 +384,27 @@ export default function Tickets() {
   const handleAddQuickStaff = async () => {
     if (!newStaffName.trim()) return;
     try {
-      const res = await api.post('/tickets/staff/', { name: newStaffName.trim() });
-      setStaff([...staff, res.data]);
+      const emailToUse = newStaffEmail.trim() || `staff_${Date.now()}@cctv.local`;
+      const res = await api.post('/users/', { 
+        name: newStaffName.trim(), 
+        email: emailToUse,
+        password: 'password123',
+        role: 'Staff'
+      });
+      
+      const newStaffList = [...staff, res.data];
+      setStaff(newStaffList);
+      setUsers(newStaffList); // sync with users array
       setFormData(prev => ({
         ...prev,
-        assignedStaff: [...prev.assignedStaff, res.data.id || res.data._id]
+        assignedStaff: [...(prev.assignedStaff || []), res.data.id || res.data._id]
       }));
       setNewStaffName('');
+      setNewStaffEmail('');
       setIsAddingStaff(false);
-      showNotification('New staff member added', 'success');
+      showNotification('New staff user added with default password "password123"', 'success');
     } catch (err) {
-      showNotification('Failed to add staff member', 'error');
+      showNotification(err.response?.data?.email ? 'Email already exists' : 'Failed to add staff member', 'error');
     }
   };
 
@@ -166,46 +427,40 @@ export default function Tickets() {
         api.get('/users/'),
         api.get('/tickets/projects/')
       ]);
-      setTickets((ticketRes.data || []).filter(t => {
+      const tData = Array.isArray(ticketRes.data) ? ticketRes.data : (ticketRes.data?.results || []);
+      const sortedTData = [...tData].sort((a, b) => (b.id || 0) - (a.id || 0));
+      setTickets(sortedTData.filter(t => {
+        if (!t) return false;
         if (t.projectId || t.project) return false;
         
         let isUpgrade = false;
         try {
-          const meta = JSON.parse(t.remarks || '{}');
-          if (t.category === 'Upgrade' || meta.category === 'Upgrade' || t.issueDescription?.toLowerCase().includes('upgrade')) {
+          const meta = parseMetadata(t.remarks);
+          if (t.category === 'Upgrade' || meta.category === 'Upgrade' || String(t.issueDescription || '').toLowerCase().includes('upgrade')) {
             isUpgrade = true;
           }
         } catch(e) {
-          if (t.category === 'Upgrade' || t.issueDescription?.toLowerCase().includes('upgrade')) {
+          if (t.category === 'Upgrade' || String(t.issueDescription || '').toLowerCase().includes('upgrade')) {
             isUpgrade = true;
           }
         }
         return !isUpgrade;
       }));
-      setUsers(userRes.data);
-      setProjects(projectRes.data);
+      const fetchedUsers = Array.isArray(userRes.data) ? userRes.data : (userRes.data?.results || []);
+      setUsers(fetchedUsers);
+      setStaff(fetchedUsers);
+      setProjects(Array.isArray(projectRes.data) ? projectRes.data : (projectRes.data?.results || []));
     } catch (err) {
       console.error('Error fetching data:', err);
+      if (err.response && err.response.data && err.response.data.error_debug) {
+        console.error("BACKEND CRASH TRACEBACK:\n", err.response.data.error_debug);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const parseMetadata = (remarks) => {
-    try {
-      return JSON.parse(remarks);
-    } catch (e) {
-      return {
-        location: '',
-        category: 'CCTV',
-        actionTaken: '',
-        instructionBy: '',
-        receivedTime: '',
-        endTime: '',
-        totalTime: ''
-      };
-    }
-  };
+
 
   const calculateTotalTime = (start, end) => {
     if (!start || !end) return '';
@@ -219,13 +474,18 @@ export default function Tickets() {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    let newValue = value;
+    if (type === 'text') {
+      newValue = value.toUpperCase();
+    }
+    
     setFormData(prev => {
-      const newData = { ...prev, [name]: value };
+      const newData = { ...prev, [name]: newValue };
       
-      // Cascading clear logic for location
-      if (name === 'collegeName' || name === 'block' || name === 'floor' || name === 'room') {
-        if (name === 'collegeName') {
+      // Cascading resets for division/block/floor/room
+      if (name === 'divisionName' || name === 'block' || name === 'floor' || name === 'room') {
+        if (name === 'divisionName') {
           newData.block = '';
           newData.floor = '';
           newData.room = '';
@@ -238,10 +498,10 @@ export default function Tickets() {
 
         // Auto-assign site responsibility from registry
         const matchingLoc = allLocations.find(l => 
-          l.collegeName === (name === 'collegeName' ? value : newData.collegeName) &&
-          l.block === (name === 'block' ? value : newData.block) &&
-          l.floor === (name === 'floor' ? value : newData.floor) &&
-          l.room === (name === 'room' ? value : newData.room)
+          String(l.divisionName || '').toUpperCase() === String(name === 'divisionName' ? value : newData.divisionName || '').toUpperCase() &&
+          String(l.block || '').toUpperCase() === String(name === 'block' ? value : newData.block || '').toUpperCase() &&
+          String(l.floor || '').toUpperCase() === String(name === 'floor' ? value : newData.floor || '').toUpperCase() &&
+          String(l.room || '').toUpperCase() === String(name === 'room' ? value : newData.room || '').toUpperCase()
         );
 
         if (matchingLoc && matchingLoc.assignedTo) {
@@ -256,78 +516,104 @@ export default function Tickets() {
     });
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target.result;
-      const rows = text.split('\n').map(row => row.split(','));
-      const headers = rows[0].map(h => h.trim());
-      const data = rows.slice(1).filter(row => row.length > 1).map(row => {
-        const obj = {};
-        headers.forEach((header, index) => {
-          let val = row[index]?.trim() || '';
-          if (header.toLowerCase() === 'date') obj['date'] = val;
-          else if (header.toLowerCase() === 'location') obj['location'] = val;
-          else if (header.toLowerCase() === 'category') obj['category'] = val || 'CCTV';
-          else if (header.toLowerCase() === 'issue description') obj['issueDescription'] = val;
-          else if (header.toLowerCase() === 'action taken') obj['actionTaken'] = val;
-          else if (header.toLowerCase() === 'assigned to') obj['assignedTo'] = val;
-          else if (header.toLowerCase() === 'status') obj['status'] = val || 'Open';
-          else obj[header] = val;
-        });
-        if (!obj.date) obj.date = new Date().toISOString().split('T')[0];
-        return obj;
-      });
-
-      try {
-        await api.post('/tickets/bulk_create/', data);
-        showNotification(`Successfully imported ${data.length} maintenance tickets`);
-        fetchData();
-      } catch (err) {
-        console.error(err);
-        showNotification('Failed to import data. Check CSV format.', 'error');
-      }
-    };
-    reader.readAsText(file);
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       setSubmitting(true);
-      const payload = {
-        issueDescription: formData.issueDescription,
-        status: formData.status,
-        assignedTo: formData.assignedTo || null,
-        assignedStaff: formData.assignedStaff || [],
-        projectId: formData.projectId || null,
-        operationDate: formData.date,
-        collegeName: formData.collegeName,
-        block: formData.block,
-        floor: formData.floor,
-        room: formData.room,
-        location: `${formData.collegeName} | ${formData.block} | ${formData.floor} | ${formData.room}` || formData.location,
-        category: formData.category,
-        actionTaken: formData.actionTaken,
-        instructionBy: formData.instructionBy,
-        receivedTime: formData.receivedTime,
-        endTime: formData.endTime,
-        totalTime: calculateTotalTime(formData.receivedTime, formData.endTime),
-        remarks: formData.remarks || '',
-        raisedBy: user._id || user.id,
-      };
+      
+      const formDataToSend = new FormData();
+      formDataToSend.append('issueDescription', formData.issueDescription);
+      formDataToSend.append('status', formData.status);
+      if (formData.assignedTo) formDataToSend.append('assignedTo', formData.assignedTo);
+      if (formData.operationDate || formData.date) formDataToSend.append('operationDate', formData.operationDate || formData.date);
+      formDataToSend.append('divisionName', formData.divisionName);
+      formDataToSend.append('block', formData.block);
+      formDataToSend.append('floor', formData.floor);
+      formDataToSend.append('room', formData.room);
+      formDataToSend.append('location', `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}` || formData.location);
+      formDataToSend.append('category', formData.category);
+      formDataToSend.append('actionTaken', formData.actionTaken || '');
+      formDataToSend.append('instructionBy', formData.instructionBy || '');
+      formDataToSend.append('receivedTime', formData.receivedTime || '');
+      if (formData.receivedDate || formData.createdDate) formDataToSend.append('receivedDate', formData.receivedDate || formData.createdDate);
+      formDataToSend.append('endTime', formData.endTime || '');
+      formDataToSend.append('totalTime', calculateTotalTime(formData.receivedTime, formData.endTime));
+      formDataToSend.append('remarks', formData.remarks || '');
+      if (formData.projectId) formDataToSend.append('projectId', formData.projectId);
+
+      // Append assignedStaff individually
+      if (formData.assignedStaff && formData.assignedStaff.length > 0) {
+        formData.assignedStaff.forEach(staffId => {
+          formDataToSend.append('assignedStaff', staffId);
+        });
+      }
+
+      // Handle Image Fields
+      // If it's a File object, append it. If it is null or empty, don't append (or append empty string if cleared)
+      if (formData.createdImage instanceof File) {
+        formDataToSend.append('createdImage', formData.createdImage);
+      } else if (!formData.createdImage) {
+        formDataToSend.append('createdImage', '');
+      }
+
+      if (formData.createdVideo instanceof File) {
+        formDataToSend.append('createdVideo', formData.createdVideo);
+      } else if (!formData.createdVideo) {
+        formDataToSend.append('createdVideo', '');
+      }
+
+      if (formData.inProgressImage instanceof File) {
+        formDataToSend.append('inProgressImage', formData.inProgressImage);
+      } else if (!formData.inProgressImage) {
+        formDataToSend.append('inProgressImage', '');
+      }
+
+      if (formData.inProgressVideo instanceof File) {
+        formDataToSend.append('inProgressVideo', formData.inProgressVideo);
+      } else if (!formData.inProgressVideo) {
+        formDataToSend.append('inProgressVideo', '');
+      }
+
+      if (formData.completedImage instanceof File) {
+        formDataToSend.append('completedImage', formData.completedImage);
+      } else if (!formData.completedImage) {
+        formDataToSend.append('completedImage', '');
+      }
+
+      if (formData.completedVideo instanceof File) {
+        formDataToSend.append('completedVideo', formData.completedVideo);
+      } else if (!formData.completedVideo) {
+        formDataToSend.append('completedVideo', '');
+      }
+
+      // Append Dates and Times
+      if (!editingId) {
+        formDataToSend.append('createdDate', new Date().toISOString().split('T')[0]);
+        formDataToSend.append('createdTime', new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+      } else {
+        formDataToSend.append('createdDate', formData.createdDate || '');
+        formDataToSend.append('createdTime', formData.createdTime || '');
+      }
+      formDataToSend.append('inProgressDate', formData.inProgressDate || '');
+      formDataToSend.append('inProgressTime', formData.inProgressTime || '');
+      formDataToSend.append('completedDate', formData.completedDate || '');
+      formDataToSend.append('completedTime', formData.completedTime || '');
 
       if (editingId) {
-        payload.cameraId = currentTicket?.cameraId?.id || currentTicket?.cameraId;
-        payload.raisedBy = currentTicket?.raisedBy?.id || currentTicket?.raisedBy || user._id || user.id;
-        await api.put(`/tickets/${editingId}/`, payload);
+        const camId = currentTicket?.cameraId?._id || currentTicket?.cameraId?.id || (typeof currentTicket?.cameraId !== 'object' ? currentTicket?.cameraId : null);
+        if (camId) formDataToSend.append('cameraId', camId);
+        
+        const raisedId = currentTicket?.raisedBy?._id || currentTicket?.raisedBy?.id || (typeof currentTicket?.raisedBy !== 'object' ? currentTicket?.raisedBy : null) || user?._id || user?.id;
+        if (raisedId) formDataToSend.append('raisedBy', raisedId);
+        
+        await api.put(`/tickets/${editingId}/`, formDataToSend);
         showNotification('Ticket updated successfully');
       } else {
-        payload.cameraId = null;
-        await api.post('/tickets/', payload);
+        if (user._id || user.id) formDataToSend.append('raisedBy', user._id || user.id);
+        
+        await api.post('/tickets/', formDataToSend);
         showNotification('New ticket created successfully');
       }
 
@@ -370,21 +656,35 @@ export default function Tickets() {
   const resetForm = () => {
     setFormData({
       date: new Date().toISOString().split('T')[0],
-      collegeName: '',
+      divisionName: '',
       block: '',
       floor: '',
       room: '',
       location: '',
-      category: 'CCTV',
+      category: 'Camera',
       issueDescription: '',
       actionTaken: '',
       instructionBy: '',
-      receivedTime: '',
+      receivedTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      receivedDate: new Date().toISOString().split('T')[0],
       endTime: '',
       assignedTo: '',
       assignedStaff: [],
       projectId: '',
-      status: 'Open'
+      status: 'Open',
+      
+      createdImage: null,
+      createdVideo: null,
+      createdDate: new Date().toISOString().split('T')[0],
+      createdTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      inProgressImage: null,
+      inProgressVideo: null,
+      inProgressDate: '',
+      inProgressTime: '',
+      completedImage: null,
+      completedVideo: null,
+      completedDate: '',
+      completedTime: ''
     });
     setEditingId(null);
     setCurrentTicket(null);
@@ -398,21 +698,35 @@ export default function Tickets() {
     const meta = parseMetadata(ticket.remarks);
     setFormData({
       date: ticket.operationDate || meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
-      collegeName: ticket.collegeName || '',
+      divisionName: ticket.divisionName || '',
       block: ticket.block || '',
       floor: ticket.floor || '',
       room: ticket.room || '',
       location: ticket.location || meta.location || '',
-      category: ticket.category || meta.category || 'CCTV',
+      category: ticket.category || meta.category || 'Camera',
       issueDescription: ticket.issueDescription || '',
       actionTaken: ticket.actionTaken || meta.actionTaken || '',
       instructionBy: ticket.instructionBy || meta.instructionBy || '',
+      receivedDate: ticket.receivedDate || (ticket.createdDate ? ticket.createdDate : (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0])),
       receivedTime: ticket.receivedTime || meta.receivedTime || '',
       endTime: ticket.endTime || meta.endTime || '',
       assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
       assignedStaff: ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id) : [],
       projectId: ticket.projectId?.id || ticket.projectId || '',
-      status: ticket.status || 'Open'
+      status: ticket.status || 'Open',
+      
+      createdImage: ticket.createdImage || null,
+      createdVideo: ticket.createdVideo || null,
+      createdDate: ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+      createdTime: ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })),
+      inProgressImage: ticket.inProgressImage || null,
+      inProgressVideo: ticket.inProgressVideo || null,
+      inProgressDate: ticket.inProgressDate || '',
+      inProgressTime: ticket.inProgressTime || '',
+      completedImage: ticket.completedImage || null,
+      completedVideo: ticket.completedVideo || null,
+      completedDate: ticket.completedDate || '',
+      completedTime: ticket.completedTime || ''
     });
     setEditingId(ticket.id || ticket._id);
     setCurrentTicket(ticket);
@@ -432,20 +746,7 @@ export default function Tickets() {
     });
   };
 
-  const filteredTickets = Array.isArray(tickets) ? tickets.filter(ticket => {
-    const meta = parseMetadata(ticket.remarks);
-    const ticketDate = meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : '');
-    
-    // Date filter
-    if (selectedDate && !ticketDate.startsWith(selectedDate)) return false;
 
-    // Status filter
-    if (statusFilter !== 'ALL' && ticket.status !== statusFilter) return false;
-
-    // Search filter
-    const searchStr = `${ticket.issueDescription} ${meta.location} ${meta.category} ${ticket.project?.name || ''}`.toLowerCase();
-    return searchStr.includes(searchQuery.toLowerCase());
-  }) : [];
 
   const handleDownload = () => {
     if (filteredTickets.length === 0) {
@@ -454,7 +755,7 @@ export default function Tickets() {
     }
 
     const headers = [
-      'Date', 'College', 'Block', 'Floor', 'Room', 'Location String', 'Category', 'Project', 'Issue Description', 
+      'S.No', 'Date', 'Division', 'Block', 'Floor', 'Room', 'Location String', 'Category', 'Project', 'Issue Description', 
       'Action Taken', 'Instruction By', 'Received Time', 
       'End Time', 'Total Time', 'Assigned To', 'Status'
     ];
@@ -468,14 +769,15 @@ export default function Tickets() {
       return str;
     };
 
-    const rows = filteredTickets.map(ticket => {
+    const rows = filteredTickets.map((ticket, index) => {
       const meta = parseMetadata(ticket.remarks);
       const assignedId = ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo;
       const assignedUser = users.find(u => (u.id || u._id) === assignedId);
       
       return [
-        escapeCSV(ticket.operationDate || meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : 'N/A')),
-        escapeCSV(ticket.collegeName || ''),
+        index + 1,
+        escapeCSV(` ${ticket.operationDate || meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : 'N/A')}`.trim()),
+        escapeCSV(ticket.divisionName || ''),
         escapeCSV(ticket.block || ''),
         escapeCSV(ticket.floor || ''),
         escapeCSV(ticket.room || ''),
@@ -510,29 +812,101 @@ export default function Tickets() {
     showNotification('Export successful');
   };
 
+  const printToPDF = () => {
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Tickets Export</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
+            h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 20px; text-align: center; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+            th { background-color: #f3f4f6; font-weight: bold; text-transform: uppercase; color: #4b5563; }
+            tr:nth-child(even) { background-color: #f9fafb; }
+            .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            .status-open { background-color: #fee2e2; color: #b91c1c; }
+            .status-inprogress { background-color: #fef3c7; color: #d97706; }
+            .status-completed { background-color: #d1fae5; color: #047857; }
+            .footer { margin-top: 30px; font-size: 10px; color: #9ca3af; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <h1>Tickets Report</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Location</th>
+                <th>Issue Description</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredTickets.map((ticket, idx) => {
+                const meta = parseMetadata(ticket.remarks);
+                return `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td>${ticket.operationDate || meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : 'N/A')}</td>
+                  <td>${ticket.category || meta.category || 'CCTV'}</td>
+                  <td>${[ticket.divisionName, ticket.block, ticket.room].filter(Boolean).join(' / ') || ticket.location || meta.location || 'N/A'}</td>
+                  <td>${ticket.issueDescription || 'N/A'}</td>
+                  <td><span class="badge ${ticket.status === 'Completed' ? 'status-completed' : ticket.status === 'In Progress' ? 'status-inprogress' : 'status-open'}">${ticket.status || 'N/A'}</span></td>
+                </tr>
+                `
+              }).join('')}
+            </tbody>
+          </table>
+          <div class="footer">
+            Generated from CCTV System on ${new Date().toLocaleString()} &bull; Total Records: ${filteredTickets.length}
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-white/10 pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <Tag className="mr-3 text-blue-400" size={28} />
             Ticket Management
           </h1>
         </div>
-        <div className="flex items-center space-x-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 shrink-0">
             <Calendar size={16} className="text-dim" />
             <input 
-              type="date" 
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-40 cursor-pointer"
-              title="Filter by Date"
+              type="month" 
+              value={startMonth}
+              onChange={(e) => setStartMonth(e.target.value)}
+              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
+              title="From Month"
+            />
+            <span className="text-secondary text-xs">to</span>
+            <input 
+              type="month" 
+              value={endMonth}
+              onChange={(e) => setEndMonth(e.target.value)}
+              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
+              title="To Month"
             />
           </div>
-          <div className="relative flex-1 md:w-64">
+          <div className="relative flex-1 min-w-[200px] md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
             <input 
               type="text" 
@@ -542,50 +916,275 @@ export default function Tickets() {
               className="glass-input w-full !pl-14 pr-4 py-2 text-sm"
             />
           </div>
-          <div className="flex space-x-3">
-            <button onClick={handleDownload} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-teal-500/10 border-teal-500/30 text-teal-600 hover:bg-teal-500/20 transition-all">
+          <div className="flex space-x-3 shrink-0">
+            <button 
+              onClick={() => setShowVisualAnalytics(!showVisualAnalytics)} 
+              className={`glass-panel flex items-center px-5 py-2.5 text-sm font-medium border transition-all shrink-0 whitespace-nowrap ${showVisualAnalytics ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'border-white/10 text-dim hover:text-indigo-400 hover:bg-white/10'}`}
+            >
+              <Activity size={18} className="mr-2" />
+              {showVisualAnalytics ? 'Close Dashboard' : 'Ticket Dashboard'}
+            </button>
+            <button onClick={handleDownload} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-teal-500/10 border-teal-500/30 text-teal-600 hover:bg-teal-500/20 transition-all shrink-0 whitespace-nowrap">
               <Download size={18} className="mr-2" />
               Export CSV
             </button>
             {canEdit && (
-              <>
-                <label className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/20 transition-all cursor-pointer">
-                  <Upload size={18} className="mr-2" /> Upload CSV
-                  <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                </label>
-                <button onClick={() => { resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2.5 text-sm font-medium">
-                  <Plus size={18} className="mr-2" />
-                  Raise Ticket
-                </button>
-              </>
+              <button onClick={() => { resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2.5 text-sm font-medium shrink-0 whitespace-nowrap">
+                <Plus size={18} className="mr-2" />
+                Raise Ticket
+              </button>
             )}
           </div>
         </div>
       </div>
+
+      {showVisualAnalytics && (
+        <div className="hud-panel p-5 animate-fade-in mb-6 relative bg-card border-main">
+          <div className="hud-corner-tr"></div>
+          <div className="hud-corner-bl"></div>
+          
+          <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-1.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                <Activity className="text-indigo-400 animate-pulse" size={16} />
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-indigo-400">
+                  Ticket Analytics & Category Spend
+                </h3>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowVisualAnalytics(false)} 
+              className="p-1 hover:bg-white/5 rounded-lg text-dim hover:text-white transition-all"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Metric Cards Row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="hud-panel p-4 flex flex-col justify-between overflow-hidden h-24 relative group">
+              <div className="hud-corner-tr"></div>
+              <div className="hud-corner-bl"></div>
+              <div className="flex justify-between items-start">
+                <span className="text-[9px] font-bold text-indigo-400 tracking-wider uppercase">[Total Tickets]</span>
+                <Activity size={14} className="text-indigo-400 opacity-50" />
+              </div>
+              <div className="flex items-baseline space-x-1.5 font-mono">
+                <span className="text-2xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(129, 140, 248, 0.6)' }}>{summaryStats.total}</span>
+                <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest">entries</span>
+              </div>
+            </div>
+
+            <div className="hud-panel p-4 flex flex-col justify-between overflow-hidden h-24 relative group">
+              <div className="hud-corner-tr"></div>
+              <div className="hud-corner-bl"></div>
+              <div className="flex justify-between items-start">
+                <span className="text-[9px] font-bold text-emerald-400 tracking-wider uppercase">[Category Spend]</span>
+                <Briefcase size={14} className="text-emerald-400 opacity-50" />
+              </div>
+              <div className="flex items-baseline space-x-1.5 font-mono">
+                <span className="text-2xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>
+                  ₹{categoryStats.reduce((sum, item) => sum + item.spend, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">spent</span>
+              </div>
+            </div>
+
+            <div className="hud-panel p-4 flex flex-col justify-between overflow-hidden h-24 relative group">
+              <div className="hud-corner-tr"></div>
+              <div className="hud-corner-bl"></div>
+              <div className="flex justify-between items-start">
+                <span className="text-[9px] font-bold text-blue-400 tracking-wider uppercase">[Avg Cost]</span>
+                <Info size={14} className="text-blue-400 opacity-50" />
+              </div>
+              <div className="flex items-baseline space-x-1.5 font-mono">
+                <span className="text-2xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>
+                  ₹{(summaryStats.total > 0 ? (categoryStats.reduce((sum, item) => sum + item.spend, 0) / summaryStats.total) : 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">avg</span>
+              </div>
+            </div>
+
+            <div className="hud-panel p-4 flex flex-col justify-between overflow-hidden h-24 relative group">
+              <div className="hud-corner-tr"></div>
+              <div className="hud-corner-bl"></div>
+              <div className="flex justify-between items-start">
+                <span className="text-[9px] font-bold text-rose-500 tracking-wider uppercase">[Pending Active]</span>
+                <AlertCircle size={14} className="text-rose-500 opacity-50" />
+              </div>
+              <div className="flex items-baseline space-x-1.5 font-mono">
+                <span className="text-2xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(244, 63, 94, 0.6)' }}>{summaryStats.open + summaryStats.inProgress}</span>
+                <span className="text-[8px] font-bold text-rose-500 uppercase tracking-widest">active</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Chart 1: Category Distribution */}
+            <div className="hud-panel p-4 bg-card border-main relative group">
+              <div className="hud-corner-tr"></div>
+              <div className="hud-corner-bl"></div>
+              <div className="flex justify-between items-center mb-3 border-b border-white/5 pb-2">
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-secondary">Ticket Volume by Category</h4>
+                <span className="px-2 py-0.5 bg-white/5 rounded text-[8px] font-black text-dim uppercase tracking-wider">Share %</span>
+              </div>
+              <div className="h-44 flex items-center justify-center">
+                {categoryStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryStats}
+                        dataKey="count"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={35}
+                        outerRadius={55}
+                        paddingAngle={3}
+                      >
+                        {categoryStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getCategoryColor(entry.name)} stroke="rgba(0,0,0,0.5)" strokeWidth={1} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'var(--bg-secondary)', 
+                          border: '1px solid var(--glass-border)', 
+                          borderRadius: '8px', 
+                          fontSize: '10px',
+                          padding: '6px'
+                        }}
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={24} 
+                        formatter={(value) => <span className="text-[9px] font-black uppercase tracking-wider text-secondary">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-dim text-[10px] font-black uppercase tracking-widest">No data available</div>
+                )}
+              </div>
+            </div>
+
+            {/* Chart 2: Category Spend */}
+            <div className="hud-panel p-4 bg-card border-main relative group">
+              <div className="hud-corner-tr"></div>
+              <div className="hud-corner-bl"></div>
+              <div className="flex justify-between items-center mb-3 border-b border-white/5 pb-2">
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-secondary">Financial Spend by Category</h4>
+                <span className="px-2 py-0.5 bg-emerald-500/10 rounded text-[8px] font-black text-emerald-400 uppercase tracking-wider">INR (₹)</span>
+              </div>
+              <div className="h-44">
+                {categoryStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={categoryStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#64748b" 
+                        tick={{ fontSize: 8, fontWeight: 'bold' }} 
+                        formatter={(v) => String(v).toUpperCase()}
+                      />
+                      <YAxis 
+                        stroke="#64748b" 
+                        tick={{ fontSize: 8, fontWeight: 'bold' }} 
+                        tickFormatter={(v) => `₹${v}`}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'var(--bg-secondary)', 
+                          border: '1px solid var(--glass-border)', 
+                          borderRadius: '8px', 
+                          fontSize: '10px',
+                          padding: '6px'
+                        }}
+                        formatter={(value) => [`₹${parseFloat(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 'Cost']}
+                      />
+                      <Bar dataKey="spend" radius={[5, 5, 0, 0]}>
+                        {categoryStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getCategoryColor(entry.name)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-dim text-[10px] font-black uppercase tracking-widest">No data available</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Active Ticket</p>
-            <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-amber-500 leading-none">{summaryStats.open + summaryStats.inProgress}</span>
-              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Requires Action</span>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
+            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f43f5e', opacity: 0.1, filter: 'blur(20px)' }}></div>
+            <div className="flex justify-between items-start">
+              <h3 className="text-[10px] font-bold text-rose-500 tracking-[0.2em] uppercase">[Open Tickets]</h3>
+              <AlertCircle size={18} className="text-rose-500 opacity-50 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="flex flex-col space-y-3 mt-4 text-left">
+              <div className="flex items-end space-x-2 font-mono">
+                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(244, 63, 94, 0.6)' }}>{summaryStats.open}</span>
+                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest pb-1">Pending</span>
+              </div>
             </div>
           </div>
-          <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Resolution Rate</p>
-            <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-emerald-500 leading-none">
-                {summaryStats.total > 0 ? Math.round((summaryStats.completed / summaryStats.total) * 100) : 0}%
-              </span>
-              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Efficiency</span>
+
+          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
+            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f59e0b', opacity: 0.1, filter: 'blur(20px)' }}></div>
+            <div className="flex justify-between items-start">
+              <h3 className="text-[10px] font-bold text-amber-500 tracking-[0.2em] uppercase">[In Progress]</h3>
+              <Activity size={18} className="text-amber-500 opacity-50 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="flex flex-col space-y-3 mt-4 text-left">
+              <div className="flex items-end space-x-2 font-mono">
+                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.6)' }}>{summaryStats.inProgress}</span>
+                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Working</span>
+              </div>
             </div>
           </div>
-          <div className="glass-panel p-6 bg-card border-main shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Total Managed</p>
-            <div className="flex items-end space-x-3">
-              <span className="text-3xl font-black text-blue-500 leading-none">{summaryStats.total}</span>
-              <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Log Entries</span>
+
+          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
+            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#10b981', opacity: 0.1, filter: 'blur(20px)' }}></div>
+            <div className="flex justify-between items-start">
+              <h3 className="text-[10px] font-bold text-emerald-500 tracking-[0.2em] uppercase">[Completed]</h3>
+              <CheckCircle size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="flex flex-col space-y-3 mt-4 text-left">
+              <div className="flex items-end space-x-2 font-mono">
+                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>{summaryStats.completed}</span>
+                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Resolved</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
+            <div className="hud-corner-tr"></div>
+            <div className="hud-corner-bl"></div>
+            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#3b82f6', opacity: 0.1, filter: 'blur(20px)' }}></div>
+            <div className="flex justify-between items-start">
+              <h3 className="text-[10px] font-bold text-blue-500 tracking-[0.2em] uppercase">[Total Managed]</h3>
+              <Briefcase size={18} className="text-blue-500 opacity-50 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="flex flex-col space-y-3 mt-4 text-left">
+              <div className="flex items-end space-x-2 font-mono">
+                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>{summaryStats.total}</span>
+                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Log Entries</span>
+              </div>
             </div>
           </div>
         </div>
@@ -644,26 +1243,99 @@ export default function Tickets() {
 
         <div className="h-4 w-[1px] bg-main mx-2"></div>
 
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-6 ml-auto">
+          <div className="flex items-center space-x-2">
+            <select 
+              value={filterDivision} 
+              onChange={(e) => setFilterDivision(e.target.value)} 
+              className="glass-input px-3 py-1.5 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-transparent hover:border-main focus:border-teal-500 transition-colors"
+            >
+              <option value="">All Divisions ({Array.isArray(tickets) ? tickets.length : 0})</option>
+              {Array.isArray(divisions) && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(d => (
+                <option key={d} value={d}>{d} ({filterCounts.division[d] || 0})</option>
+              ))}
+            </select>
+            <select 
+              value={filterCategory} 
+              onChange={(e) => setFilterCategory(e.target.value)} 
+              className="glass-input px-3 py-1.5 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-transparent hover:border-main focus:border-teal-500 transition-colors"
+            >
+              <option value="">All Categories ({Array.isArray(tickets) ? tickets.length : 0})</option>
+              <option value="Issue">Issue ({filterCounts.category['Issue'] || 0})</option>
+              <option value="Service">Service ({filterCounts.category['Service'] || 0})</option>
+              <option value="Maintenance">Maintenance ({filterCounts.category['Maintenance'] || 0})</option>
+              <option value="Installation">Installation ({filterCounts.category['Installation'] || 0})</option>
+              <option value="Other">Other ({filterCounts.category['Other'] || 0})</option>
+            </select>
+          </div>
+          <div className="h-4 w-[1px] bg-main mx-2"></div>
           <div className="flex items-center space-x-2">
             <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">Displaying:</span>
             <span className="text-[10px] font-bold text-teal-600 uppercase tracking-widest">{filteredTickets.length} Records</span>
           </div>
+          <div className="h-4 w-[1px] bg-main mx-2"></div>
+          <button 
+            onClick={handleDownload}
+            className="glass-panel flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20 transition-all"
+          >
+            <Download size={12} className="mr-1.5" />
+            Download CSV
+          </button>
+          <button 
+            onClick={printToPDF}
+            className="glass-panel flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest bg-purple-500/10 border-purple-500/30 text-purple-500 hover:bg-purple-500/20 transition-all ml-2"
+          >
+            <Printer size={12} className="mr-1.5" />
+            Print PDF
+          </button>
         </div>
       </div>
 
       {/* Main Content Table */}
-      <div className="glass-panel overflow-hidden border border-main shadow-sm">
+        <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 mr-2">
+              <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
+              >
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
+                {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
+              </span>
+              <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+
+<div className="glass-panel overflow-hidden border border-main shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-panel border-b border-main">
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center w-12">S.No</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Date</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Location</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Received At</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Division</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Block / Location</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Category</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Project</th>
                 <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest w-1/4">Nature of Problem</th>
-                <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest">Action Taken</th>
                 <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest">Instruction By</th>
                 <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest text-center">Time (R/E/T)</th>
                 <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest">Responsibility</th>
@@ -672,23 +1344,25 @@ export default function Tickets() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-main">
-              {loading ? (
+               {loading ? (
                 <tr>
-                  <td colSpan="11" className="p-20 text-center text-dim">
+                  <td colSpan="14" className="p-20 text-center text-dim">
                     Loading tickets...
                   </td>
                 </tr>
               ) : filteredTickets.length === 0 ? (
                 <tr>
-                  <td colSpan="11" className="p-20 text-center text-dim">
+                  <td colSpan="14" className="p-20 text-center text-dim">
                     No tickets found.
                   </td>
                 </tr>
               ) : (
-                filteredTickets.map((ticket) => {
+                filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((ticket, index) => {
                   const meta = parseMetadata(ticket.remarks);
                   const assignedId = ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo;
-                  const assignedUser = users.find(u => (u.id || u._id) === assignedId);
+                  const assignedUser = ticket.assignedTo && typeof ticket.assignedTo === 'object'
+                    ? ticket.assignedTo
+                    : (Array.isArray(users) ? users.find(u => (u.id || u._id) === assignedId) : null);
                   
                   return (
                       <tr 
@@ -699,26 +1373,39 @@ export default function Tickets() {
                           navigate(`/tickets/${ticket.id || ticket._id}`);
                         }}
                       >
+                      <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
                       <td className="p-4">
                         <div className="flex items-center text-dim font-mono text-xs">
                           <Calendar size={12} className="mr-2 text-dim/50" />
-                          {ticket.operationDate || meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : 'N/A')}
+                          {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="flex flex-col text-main font-semibold text-[10px] space-y-0.5">
-                          <div className="flex items-center text-blue-400">
-                             <MapPin size={10} className="mr-1" />
-                             {ticket.collegeName || 'N/A'}
+                        <div className="flex flex-col text-dim font-mono text-[10px] space-y-0.5">
+                          <div className="flex items-center text-teal-400">
+                            <Calendar size={10} className="mr-1" />
+                            {ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
                           </div>
-                          <div className="pl-3.5 text-dim">
-                             {ticket.block} | {ticket.floor} | {ticket.room}
+                          <div className="flex items-center text-teal-400/80">
+                            <Clock size={10} className="mr-1" />
+                            {ticket.receivedTime || '--:--'}
                           </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center text-blue-400 font-semibold text-[10px]">
+                           <MapPin size={10} className="mr-1" />
+                           {ticket.divisionName || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-dim font-medium text-[10px]">
+                           {[ticket.block, ticket.floor, ticket.room].filter(Boolean).join(' | ') || 'N/A'}
                         </div>
                       </td>
                       <td className="p-4">
                         <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase tracking-wider">
-                          {ticket.category || meta.category || 'CCTV'}
+                          {ticket.category || meta.category || 'Camera'}
                         </span>
                       </td>
                       <td className="p-4">
@@ -731,9 +1418,6 @@ export default function Tickets() {
                         <p className="text-xs text-dim line-clamp-2 leading-relaxed italic">
                           {ticket.issueDescription}
                         </p>
-                      </td>
-                      <td className="p-4 text-xs text-dim">
-                        {ticket.actionTaken || meta.actionTaken || <span className="text-dim/40 italic">Pending...</span>}
                       </td>
                       <td className="p-4 text-xs text-main font-medium">
                         {ticket.instructionBy || meta.instructionBy || 'N/A'}
@@ -748,7 +1432,7 @@ export default function Tickets() {
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col space-y-1">
-                          {ticket.assignedStaff && ticket.assignedStaff.length > 0 ? (
+                          {Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {ticket.assignedStaff.map(s => (
                                 <span key={s.id || s._id} className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded text-[9px] font-black uppercase tracking-wider">
@@ -758,62 +1442,31 @@ export default function Tickets() {
                             </div>
                           ) : (
                             <div className="flex items-center space-x-2">
-                              <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
-                                {(assignedUser?.name || 'U').charAt(0)?.toUpperCase() || 'U'}
-                              </div>
-                              <span className="text-[11px] text-dim font-medium">{assignedUser?.name || 'Unassigned'}</span>
+                              {(() => {
+                                const displayUser = assignedUser || ticket.raisedBy;
+                                return (
+                                  <>
+                                    <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
+                                      {String(displayUser?.name || 'U').charAt(0)?.toUpperCase() || 'U'}
+                                    </div>
+                                    <span className="text-[11px] text-dim font-medium">
+                                      {displayUser?.name || 'Unassigned'}
+                                    </span>
+                                  </>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="p-4">
-                        {canEdit && (ticket.status !== 'Completed' || user?.role === 'Super Admin') ? (
-                          <select
-                            value={ticket.status}
-                            onChange={async (e) => {
-                              const newStatus = e.target.value;
-                              if (newStatus === 'Completed') {
-                                setCompletionTicket(ticket);
-                                setCompletionData({
-                                  remark: '',
-                                  endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                                  date: new Date().toISOString().split('T')[0],
-                                  beforeImage: null,
-                                  afterImage: null,
-                                  beforeRemark: '',
-                                  beforeDate: new Date().toISOString().split('T')[0],
-                                  beforeTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-                                });
-                                setCompletionStep(1);
-                                setShowCompletionModal(true);
-                                return;
-                              }
-                              try {
-                                await api.patch(`/tickets/${ticket.id || ticket._id}/`, { status: newStatus });
-                                fetchData();
-                              } catch (err) {
-                                console.error('Error updating status:', err);
-                              }
-                            }}
-                            className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border bg-transparent cursor-pointer transition-all outline-none ${
-                              ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10' :
-                              ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20 hover:bg-orange-500/10' :
-                              'text-red-400 border-red-500/20 hover:bg-red-500/10'
-                            }`}
-                          >
-                            <option value="Open" className="bg-card">Open</option>
-                            <option value="In Progress" className="bg-card">In Progress</option>
-                            <option value="Completed" className="bg-card">Completed</option>
-                          </select>
-                        ) : (
-                          <span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border ${
-                            ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20' :
-                            ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20' :
-                            'text-red-400 border-red-500/20'
-                          }`}>
-                            {ticket.status}
-                          </span>
-                        )}
+                        <span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border ${
+                          ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20' :
+                          ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20' :
+                          'text-red-400 border-red-500/20'
+                        }`}>
+                          {ticket.status}
+                        </span>
                       </td>
                       {canEdit && (
                         <td className="p-4 text-right">
@@ -861,57 +1514,31 @@ export default function Tickets() {
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-panel/30 rounded-3xl border border-main">
                   <div>
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">College</label>
-                    <select name="collegeName" value={formData.collegeName} onChange={handleInputChange} className="glass-input w-full p-2.5 text-xs cursor-pointer bg-panel border-main">
-                      <option value="">Select College</option>
-                      {Array.from(new Set(allLocations.map(l => l.collegeName))).map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
+                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Division</label>
+                    <select name="divisionName" value={formData.divisionName} onChange={handleInputChange} className="glass-input w-full p-2.5 text-xs cursor-pointer bg-panel border-main">
+                      <option value="">Select Division</option>
+                      {uniqueDivisions.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Block</label>
-                    <select name="block" value={formData.block} onChange={(e) => {
-                      const { name, value } = e.target;
-                      setFormData(prev => ({ ...prev, [name]: value, floor: '', room: '' }));
-                    }} className="glass-input w-full p-2.5 text-xs cursor-pointer bg-panel border-main">
+                    <select name="block" value={formData.block} onChange={handleInputChange} className="glass-input w-full p-2.5 text-xs cursor-pointer bg-panel border-main">
                       <option value="">Select Block</option>
-                      {Array.from(new Set(
-                        allLocations
-                          .filter(l => !formData.collegeName || l.collegeName === formData.collegeName)
-                          .map(l => l.block)
-                      )).map(b => (
-                        <option key={b} value={b}>{b}</option>
-                      ))}
+                      {uniqueBlocks.map(b => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Floor</label>
-                    <select name="floor" value={formData.floor} onChange={(e) => {
-                      const { name, value } = e.target;
-                      setFormData(prev => ({ ...prev, [name]: value, room: '' }));
-                    }} className="glass-input w-full p-2.5 text-xs cursor-pointer bg-panel border-main">
+                    <select name="floor" value={formData.floor} onChange={handleInputChange} className="glass-input w-full p-2.5 text-xs cursor-pointer bg-panel border-main">
                       <option value="">Select Floor</option>
-                      {Array.from(new Set(
-                        allLocations
-                          .filter(l => !formData.block || l.block === formData.block)
-                          .map(l => l.floor)
-                      )).map(f => (
-                        <option key={f} value={f}>{f}</option>
-                      ))}
+                      {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Room</label>
                     <select name="room" value={formData.room} onChange={handleInputChange} className="glass-input w-full p-2.5 text-xs cursor-pointer bg-panel border-main">
                       <option value="">Select Room</option>
-                      {Array.from(new Set(
-                        allLocations
-                          .filter(l => !formData.floor || l.floor === formData.floor)
-                          .map(l => l.room)
-                      )).map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
+                      {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                 </div>
@@ -926,43 +1553,167 @@ export default function Tickets() {
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Operation Date</label>
                       <input required type="date" name="date" value={formData.date} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Start Time</label>
+                        <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">End Time</label>
+                        <input type="time" name="endTime" value={formData.endTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" />
+                      </div>
+                    </div>
                     <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Asset Category</label>
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Ticket Category</label>
                       <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-xs cursor-pointer bg-panel border-main">
-                        <option value="Assets">Assets</option>
-                        <option value="Storage">Storage Units</option>
-                        <option value="Identity">Identity Access</option>
-                        <option value="Network">Network Nodes</option>
-                        <option value="Other">Other Hardware</option>
+                        <option value="Issue">Issue</option>
+                        <option value="Service">Service</option>
+                        <option value="Maintenance">Maintenance</option>
+                        <option value="Installation">Installation</option>
+                        <option value="Other">Other</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Instruction By</label>
-                      <input type="text" name="instructionBy" value={formData.instructionBy} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Name of authorize officer" />
-                    </div>
+                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Instruction By</label>
+                       <input type="text" name="instructionBy" value={formData.instructionBy} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Name of authorize officer" />
+                     </div>
+                     <div>
+                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Initial Issue Image (Optional)</label>
+                       {formData.createdImage && typeof formData.createdImage === 'string' ? (
+                         <div className="relative group rounded-xl overflow-hidden border border-main bg-panel p-2">
+                           <img src={getImageUrl(formData.createdImage)} className="w-full h-24 object-cover rounded-lg" alt="Initial Issue" />
+                           <button 
+                             type="button" 
+                             onClick={() => setFormData(prev => ({ ...prev, createdImage: null }))}
+                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                           >
+                             <Trash2 size={12} />
+                           </button>
+                         </div>
+                       ) : formData.createdImage instanceof File ? (
+                         <div className="mt-2 flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                           <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.createdImage.name}</span>
+                           <button type="button" onClick={() => setFormData(prev => ({ ...prev, createdImage: null }))} className="text-blue-400"><X size={14} /></button>
+                         </div>
+                       ) : (
+                         <div className="flex space-x-2 w-full">
+                           <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                             <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                               <ImageIcon size={18} className="text-dim mb-1" />
+                               <p className="text-[10px] text-dim font-bold">Gallery</p>
+                             </div>
+                             <input 
+                               type="file" 
+                               className="hidden" 
+                               accept="image/*"
+                               onChange={async (e) => {
+                                 const file = e.target.files[0];
+                                 if (file) {
+                                   try {
+                                     const compressedFile = await compressImage(file, 50);
+                                     setFormData(prev => ({ ...prev, createdImage: compressedFile }));
+                                   } catch (err) {
+                                     showNotification('Failed to process image', 'error');
+                                   }
+                                 }
+                               }}
+                             />
+                           </label>
+                           <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                             <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                               <Camera size={18} className="text-dim mb-1" />
+                               <p className="text-[10px] text-dim font-bold">Camera</p>
+                             </div>
+                             <input 
+                               type="file" 
+                               className="hidden" 
+                               accept="image/*"
+                               capture="environment"
+                               onChange={async (e) => {
+                                 const file = e.target.files[0];
+                                 if (file) {
+                                   try {
+                                     const compressedFile = await compressImage(file, 50);
+                                     setFormData(prev => ({ ...prev, createdImage: compressedFile }));
+                                   } catch (err) {
+                                     showNotification('Failed to process image', 'error');
+                                   }
+                                 }
+                               }}
+                             />
+                           </label>
+                         </div>
+                       )}
+                     </div>
+                     <div className="mt-4">
+                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Initial Issue Video (Optional)</label>
+                       {formData.createdVideo && typeof formData.createdVideo === 'string' ? (
+                         <div className="relative group rounded-xl overflow-hidden border border-main bg-panel p-2">
+                           <video src={getImageUrl(formData.createdVideo)} className="w-full h-24 object-cover rounded-lg" controls />
+                           <button 
+                             type="button" 
+                             onClick={() => setFormData(prev => ({ ...prev, createdVideo: null }))}
+                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                           >
+                             <Trash2 size={12} />
+                           </button>
+                         </div>
+                       ) : formData.createdVideo instanceof File ? (
+                         <div className="mt-2 flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                           <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.createdVideo.name}</span>
+                           <button type="button" onClick={() => setFormData(prev => ({ ...prev, createdVideo: null }))} className="text-blue-400"><X size={14} /></button>
+                         </div>
+                       ) : (
+                         <div className="flex space-x-2 w-full">
+                           <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                             <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                               <ImageIcon size={18} className="text-dim mb-1" />
+                               <p className="text-[10px] text-dim font-bold">Video Gallery</p>
+                             </div>
+                             <input 
+                               type="file" 
+                               className="hidden" 
+                               accept="video/*"
+                               onChange={(e) => {
+                                 const file = e.target.files[0];
+                                 if (file && file.size <= 5 * 1024 * 1024) {
+                                   setFormData(prev => ({ ...prev, createdVideo: file }));
+                                 } else if (file) {
+                                   showNotification('Video exceeds 5MB limit', 'error');
+                                 }
+                               }}
+                             />
+                           </label>
+                           <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                             <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                               <Camera size={18} className="text-dim mb-1" />
+                               <p className="text-[10px] text-dim font-bold">Record Video</p>
+                             </div>
+                             <input 
+                               type="file" 
+                               className="hidden" 
+                               accept="video/*"
+                               capture="environment"
+                               onChange={(e) => {
+                                 const file = e.target.files[0];
+                                 if (file && file.size <= 5 * 1024 * 1024) {
+                                   setFormData(prev => ({ ...prev, createdVideo: file }));
+                                 } else if (file) {
+                                   showNotification('Video exceeds 5MB limit', 'error');
+                                 }
+                               }}
+                             />
+                           </label>
+                         </div>
+                       )}
+                     </div>
                   </div>
                 </div>
 
                 <div className="md:col-span-2 space-y-6">
 
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Site Administrator (Responsible)</label>
-                      <select 
-                        name="assignedTo" 
-                        value={formData.assignedTo} 
-                        onChange={handleInputChange} 
-                        className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer"
-                      >
-                        <option value="">No Administrator Linked</option>
-                        {users.map(u => (
-                          <option key={u.id || u._id} value={u.id || u._id}>{u.name} ({u.role})</option>
-                        ))}
-                      </select>
-                      {formData.assignedTo && (
-                        <p className="text-[8px] text-teal-500 font-bold mt-1 uppercase tracking-widest">Linked from Location Registry</p>
-                      )}
-                    </div>
+
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Nature of Problem</label>
                       <textarea required name="issueDescription" value={formData.issueDescription} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[90px] resize-none bg-panel border-main" placeholder="Describe the technical failure..." />
@@ -994,16 +1745,25 @@ export default function Tickets() {
                   </div>
 
                   {isAddingStaff && (
-                    <div className="flex space-x-2 animate-slide-down bg-panel p-4 rounded-2xl border border-teal-500/30">
+                    <div className="flex flex-col space-y-2 animate-slide-down bg-panel p-4 rounded-2xl border border-teal-500/30">
                       <input 
                         autoFocus
                         type="text" 
                         value={newStaffName}
                         onChange={(e) => setNewStaffName(e.target.value)}
-                        className="glass-input flex-1 p-2 text-xs bg-panel border-main"
+                        className="glass-input w-full p-2 text-xs bg-panel border-main"
                         placeholder="Staff Name..."
                       />
-                      <button type="button" onClick={handleAddQuickStaff} className="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">Save</button>
+                      <div className="flex space-x-2">
+                        <input 
+                          type="email" 
+                          value={newStaffEmail}
+                          onChange={(e) => setNewStaffEmail(e.target.value)}
+                          className="glass-input flex-1 p-2 text-xs bg-panel border-main"
+                          placeholder="Email (Optional)..."
+                        />
+                        <button type="button" onClick={handleAddQuickStaff} className="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-700 transition-colors">Save</button>
+                      </div>
                     </div>
                   )}
 
@@ -1066,10 +1826,16 @@ export default function Tickets() {
                     <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Timeline & Status</h3>
                   </div>
                   
-                  <div className="bg-panel p-6 rounded-[2.5rem] border border-main">
-                    <div className="space-y-2">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest">Time Received / Logged</label>
-                      <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main font-mono" />
+                  <div className="bg-panel p-6 rounded-[2.5rem] border border-main space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest">Date Received</label>
+                        <input type="date" name="receivedDate" value={formData.receivedDate || formData.createdDate || ''} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest">Time Received / Logged</label>
+                        <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main font-mono" />
+                      </div>
                     </div>
                   </div>
 
@@ -1081,19 +1847,24 @@ export default function Tickets() {
                           key={status}
                           type="button"
                           onClick={() => {
+                            if (status === 'In Progress') {
+                              setInProgressTicket(editingId ? currentTicket : formData);
+                              setInProgressData({
+                                date: new Date().toISOString().split('T')[0],
+                                time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                                image: null
+                              });
+                              setShowInProgressModal(true);
+                              return;
+                            }
                             if (status === 'Completed') {
                               setCompletionTicket(editingId ? currentTicket : formData);
                               setCompletionData({
                                 remark: '',
                                 endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
                                 date: new Date().toISOString().split('T')[0],
-                                beforeImage: null,
-                                afterImage: null,
-                                beforeRemark: '',
-                                beforeDate: new Date().toISOString().split('T')[0],
-                                beforeTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                                image: null
                               });
-                              setCompletionStep(1);
                               setShowCompletionModal(true);
                               return;
                             }
@@ -1109,6 +1880,193 @@ export default function Tickets() {
                         </button>
                       ))}
                     </div>
+
+                    {/* Conditional workflow stage details inside edit modal */}
+                    {formData.status === 'In Progress' && (
+                      <div className="bg-panel p-4 rounded-2xl border border-main space-y-4 animate-slide-up mt-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[9px] font-bold text-secondary uppercase">In Progress Date</label>
+                            <input 
+                              type="date" 
+                              value={formData.inProgressDate} 
+                              onChange={(e) => setFormData(prev => ({ ...prev, inProgressDate: e.target.value }))}
+                              className="glass-input w-full p-2 text-xs bg-card border-main"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-secondary uppercase">In Progress Time</label>
+                            <input 
+                              type="time" 
+                              value={formData.inProgressTime} 
+                              onChange={(e) => setFormData(prev => ({ ...prev, inProgressTime: e.target.value }))}
+                              className="glass-input w-full p-2 text-xs font-mono bg-card border-main"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-secondary uppercase mb-2">Staff On Site Image</label>
+                          {formData.inProgressImage && typeof formData.inProgressImage === 'string' ? (
+                            <div className="relative group rounded-xl overflow-hidden border border-main bg-panel p-2">
+                              <img src={getImageUrl(formData.inProgressImage)} className="w-full h-24 object-cover rounded-lg" alt="On Site" />
+                              <button 
+                                type="button" 
+                                onClick={() => setFormData(prev => ({ ...prev, inProgressImage: null }))}
+                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ) : formData.inProgressImage instanceof File ? (
+                            <div className="mt-2 flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                              <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.inProgressImage.name}</span>
+                              <button type="button" onClick={() => setFormData(prev => ({ ...prev, inProgressImage: null }))} className="text-blue-400"><X size={14} /></button>
+                            </div>
+                          ) : (
+                            <div className="flex space-x-2 w-full">
+                              <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                                <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                                  <ImageIcon size={18} className="text-dim mb-1" />
+                                  <p className="text-[10px] text-dim font-bold">Gallery</p>
+                                </div>
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept="image/*"
+                                  onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (file) {
+                                      try {
+                                        const compressedFile = await compressImage(file, 50);
+                                        setFormData(prev => ({ ...prev, inProgressImage: compressedFile }));
+                                      } catch (err) {
+                                        showNotification('Failed to process image', 'error');
+                                      }
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                                <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                                  <Camera size={18} className="text-dim mb-1" />
+                                  <p className="text-[10px] text-dim font-bold">Camera</p>
+                                </div>
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept="image/*"
+                                  capture="environment"
+                                  onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (file) {
+                                      try {
+                                        const compressedFile = await compressImage(file, 50);
+                                        setFormData(prev => ({ ...prev, inProgressImage: compressedFile }));
+                                      } catch (err) {
+                                        showNotification('Failed to process image', 'error');
+                                      }
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {formData.status === 'Completed' && (
+                      <div className="bg-panel p-4 rounded-2xl border border-main space-y-4 animate-slide-up mt-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[9px] font-bold text-secondary uppercase">Completion Date</label>
+                            <input 
+                              type="date" 
+                              value={formData.completedDate} 
+                              onChange={(e) => setFormData(prev => ({ ...prev, completedDate: e.target.value }))}
+                              className="glass-input w-full p-2 text-xs bg-card border-main"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-secondary uppercase">Completion Time</label>
+                            <input 
+                              type="time" 
+                              value={formData.completedTime} 
+                              onChange={(e) => setFormData(prev => ({ ...prev, completedTime: e.target.value }))}
+                              className="glass-input w-full p-2 text-xs font-mono bg-card border-main"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-secondary uppercase mb-2">Completed Image</label>
+                          {formData.completedImage && typeof formData.completedImage === 'string' ? (
+                            <div className="relative group rounded-xl overflow-hidden border border-main bg-panel p-2">
+                              <img src={getImageUrl(formData.completedImage)} className="w-full h-24 object-cover rounded-lg" alt="Completed" />
+                              <button 
+                                type="button" 
+                                onClick={() => setFormData(prev => ({ ...prev, completedImage: null }))}
+                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ) : formData.completedImage instanceof File ? (
+                            <div className="mt-2 flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                              <span className="text-[10px] text-emerald-400 font-bold truncate max-w-[200px]">{formData.completedImage.name}</span>
+                              <button type="button" onClick={() => setFormData(prev => ({ ...prev, completedImage: null }))} className="text-emerald-400"><X size={14} /></button>
+                            </div>
+                          ) : (
+                            <div className="flex space-x-2 w-full">
+                              <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                                <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                                  <ImageIcon size={18} className="text-dim mb-1" />
+                                  <p className="text-[10px] text-dim font-bold">Gallery</p>
+                                </div>
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept="image/*"
+                                  onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (file) {
+                                      try {
+                                        const compressedFile = await compressImage(file, 50);
+                                        setFormData(prev => ({ ...prev, completedImage: compressedFile }));
+                                      } catch (err) {
+                                        showNotification('Failed to process image', 'error');
+                                      }
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <label className="flex-1 flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all animate-fade-in">
+                                <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                                  <Camera size={18} className="text-dim mb-1" />
+                                  <p className="text-[10px] text-dim font-bold">Camera</p>
+                                </div>
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept="image/*"
+                                  capture="environment"
+                                  onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (file) {
+                                      try {
+                                        const compressedFile = await compressImage(file, 50);
+                                        setFormData(prev => ({ ...prev, completedImage: compressedFile }));
+                                      } catch (err) {
+                                        showNotification('Failed to process image', 'error');
+                                      }
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1129,6 +2087,199 @@ export default function Tickets() {
       )}
 
 
+
+      {showInProgressModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
+            <div className="p-8 border-b border-main bg-panel flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <Clock className="text-orange-500" size={32} />
+                <div>
+                  <h3 className="text-2xl font-black text-main uppercase tracking-tight">Staff On Site</h3>
+                  <p className="text-[10px] text-secondary mt-1 uppercase tracking-[0.3em] font-black">Transition to In Progress</p>
+                </div>
+              </div>
+              <button onClick={() => setShowInProgressModal(false)} className="text-secondary hover:text-main p-2 hover:bg-panel rounded-xl transition-all"><X size={24} /></button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">On Site Date</label>
+                  <input 
+                    type="date" 
+                    value={inProgressData.date}
+                    onChange={(e) => setInProgressData({...inProgressData, date: e.target.value})}
+                    className="glass-input w-full p-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">On Site Time</label>
+                  <input 
+                    type="time" 
+                    value={inProgressData.time}
+                    onChange={(e) => setInProgressData({...inProgressData, time: e.target.value})}
+                    className="glass-input w-full p-3 text-sm font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Staff On Site Image (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <ImageIcon size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Gallery</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            try {
+                              const compressedFile = await compressImage(file, 50);
+                              setInProgressData({...inProgressData, image: compressedFile});
+                            } catch (err) {
+                              showNotification('Failed to process image', 'error');
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Camera size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Camera</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        capture="environment"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            try {
+                              const compressedFile = await compressImage(file, 50);
+                              setInProgressData({...inProgressData, image: compressedFile});
+                            } catch (err) {
+                              showNotification('Failed to process image', 'error');
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {inProgressData.image && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <span className="text-[10px] text-blue-400 font-bold truncate">{inProgressData.image.name}</span>
+                      <button onClick={() => setInProgressData({...inProgressData, image: null})} className="text-blue-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Staff On Site Video (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <ImageIcon size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Video Gallery</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Camera size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Record Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setInProgressData({...inProgressData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {inProgressData.video && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <span className="text-[10px] text-blue-400 font-bold truncate">{inProgressData.video.name}</span>
+                      <button onClick={() => setInProgressData({...inProgressData, video: null})} className="text-blue-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-4">
+                <button onClick={() => setShowInProgressModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+                <button 
+                  disabled={submitting}
+                  onClick={async () => {
+                    try {
+                      setSubmitting(true);
+                      const id = inProgressTicket.id || inProgressTicket._id;
+                      
+                      const formDataToSend = new FormData();
+                      formDataToSend.append('status', 'In Progress');
+                      formDataToSend.append('inProgressDate', inProgressData.date);
+                      formDataToSend.append('inProgressTime', inProgressData.time);
+                      
+                      if (inProgressData.image) {
+                        formDataToSend.append('inProgressImage', inProgressData.image);
+                      }
+                      if (inProgressData.video) {
+                        formDataToSend.append('inProgressVideo', inProgressData.video);
+                      }
+
+                      await api.patch(`/tickets/${id}/`, formDataToSend);
+
+                      showNotification('Ticket status changed to In Progress', 'success');
+                      setShowInProgressModal(false);
+                      if (showModal) setShowModal(false);
+                      fetchData();
+                    } catch (err) {
+                      console.error(err);
+                      showNotification('Failed to update ticket status', 'error');
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                >
+                  {submitting ? 'PROCESSING...' : 'START WORK'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200] animate-fade-in overflow-y-auto">
           <div className="bg-card rounded-[2.5rem] w-full max-w-xl border border-main shadow-2xl my-8 overflow-hidden">
@@ -1144,219 +2295,196 @@ export default function Tickets() {
             </div>
             
             <div className="p-8 space-y-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className={`flex-1 h-1.5 rounded-full transition-all ${completionStep >= 1 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
-                <div className={`flex-1 h-1.5 rounded-full transition-all ${completionStep >= 2 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Date</label>
+                  <input 
+                    type="date" 
+                    value={completionData.date}
+                    onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
+                    className="glass-input w-full p-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Time</label>
+                  <input 
+                    type="time" 
+                    value={completionData.endTime}
+                    onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
+                    className="glass-input w-full p-3 text-sm font-mono"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Resolution Remark</label>
+                <textarea 
+                  required
+                  value={completionData.remark}
+                  onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
+                  placeholder="Describe the final action taken..."
+                  className="glass-input w-full p-4 text-sm min-h-[120px] resize-none"
+                />
               </div>
 
-              {completionStep === 1 ? (
-                <div className="space-y-6 animate-slide-up">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work Start Date</label>
-                      <input 
-                        type="date" 
-                        value={completionData.beforeDate}
-                        onChange={(e) => setCompletionData({...completionData, beforeDate: e.target.value})}
-                        className="glass-input w-full p-3 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work Start Time</label>
-                      <input 
-                        type="time" 
-                        value={completionData.beforeTime}
-                        onChange={(e) => setCompletionData({...completionData, beforeTime: e.target.value})}
-                        className="glass-input w-full p-3 text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work In-Progress Details</label>
-                    <textarea 
-                      required
-                      value={completionData.beforeRemark}
-                      onChange={(e) => setCompletionData({...completionData, beforeRemark: e.target.value})}
-                      placeholder="Describe the initial work details or observations..."
-                      className="glass-input w-full p-4 text-sm min-h-[120px] resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Work In-Progress Image (Before Work)</label>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload size={24} className="text-dim mb-2" />
-                            <p className="mb-2 text-xs text-dim font-bold">Upload Before Image</p>
-                          </div>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file && file.size <= 2 * 1024 * 1024) {
-                                setCompletionData({...completionData, beforeImage: file});
-                              } else if (file) {
-                                showNotification('Image exceeds 2MB', 'error');
-                              }
-                            }}
-                          />
-                        </label>
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (Completed Image)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <ImageIcon size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Gallery</p>
                       </div>
-                      {completionData.beforeImage && (
-                        <div className="mt-2 flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                          <span className="text-[10px] text-blue-400 font-bold truncate">{completionData.beforeImage.name}</span>
-                          <button onClick={() => setCompletionData({...completionData, beforeImage: null})} className="text-blue-400"><X size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex space-x-4">
-                    <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
-                    <button 
-                      onClick={() => {
-                        if (!completionData.beforeRemark.trim()) {
-                          showNotification('Please provide work details', 'error');
-                          return;
-                        }
-                        setCompletionStep(2);
-                      }} 
-                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg"
-                    >
-                      NEXT: FINALIZATION
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-6 animate-slide-up">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Date</label>
                       <input 
-                        type="date" 
-                        value={completionData.date}
-                        onChange={(e) => setCompletionData({...completionData, date: e.target.value})}
-                        className="glass-input w-full p-3 text-sm"
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            try {
+                              const compressedFile = await compressImage(file, 50);
+                              setCompletionData({...completionData, image: compressedFile});
+                            } catch (err) {
+                              showNotification('Failed to process image', 'error');
+                            }
+                          }
+                        }}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Completion Time</label>
-                      <input 
-                        type="time" 
-                        value={completionData.endTime}
-                        onChange={(e) => setCompletionData({...completionData, endTime: e.target.value})}
-                        className="glass-input w-full p-3 text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Resolution Remark</label>
-                    <textarea 
-                      required
-                      value={completionData.remark}
-                      onChange={(e) => setCompletionData({...completionData, remark: e.target.value})}
-                      placeholder="Describe the final action taken..."
-                      className="glass-input w-full p-4 text-sm min-h-[120px] resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Image (After Work)</label>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload size={24} className="text-dim mb-2" />
-                            <p className="mb-2 text-xs text-dim font-bold">Upload After Image</p>
-                          </div>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file && file.size <= 2 * 1024 * 1024) {
-                                setCompletionData({...completionData, afterImage: file});
-                              } else if (file) {
-                                showNotification('Image exceeds 2MB', 'error');
-                              }
-                            }}
-                          />
-                        </label>
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Camera size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Camera</p>
                       </div>
-                      {completionData.afterImage && (
-                        <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                          <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.afterImage.name}</span>
-                          <button onClick={() => setCompletionData({...completionData, afterImage: null})} className="text-emerald-400"><X size={14} /></button>
-                        </div>
-                      )}
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        capture="environment"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            try {
+                              const compressedFile = await compressImage(file, 50);
+                              setCompletionData({...completionData, image: compressedFile});
+                            } catch (err) {
+                              showNotification('Failed to process image', 'error');
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {completionData.image && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.image.name}</span>
+                      <button onClick={() => setCompletionData({...completionData, image: null})} className="text-emerald-400"><X size={14} /></button>
                     </div>
-                  </div>
-
-                  <div className="flex space-x-4">
-                    <button onClick={() => setCompletionStep(1)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Back</button>
-                    <button 
-                      onClick={async () => {
-                        if (!completionData.remark.trim()) {
-                          showNotification('Please provide a completion remark', 'error');
-                          return;
-                        }
-                        try {
-                          setSubmitting(true);
-                          const id = completionTicket.id || completionTicket._id;
-                          const meta = parseMetadata(completionTicket.remarks);
-                          
-                          const updatedMeta = {
-                            ...meta,
-                            endTime: completionData.endTime,
-                            manualDate: completionData.date,
-                            totalTime: calculateTotalTime(completionData.beforeTime, completionData.endTime),
-                            workRemarks: completionData.beforeRemark,
-                            workStartTime: completionData.beforeTime,
-                            workStartDate: completionData.beforeDate
-                          };
-
-                        const formDataToSend = new FormData();
-                        formDataToSend.append('status', 'Completed');
-                        formDataToSend.append('remarks', JSON.stringify(updatedMeta));
-                        formDataToSend.append('remark', `Final: ${completionData.remark} | Before: ${completionData.beforeRemark}`);
-                        formDataToSend.append('workRemarks', completionData.beforeRemark);
-                        
-                        if (completionData.beforeImage) {
-                          formDataToSend.append('workImage', completionData.beforeImage);
-                        }
-                        if (completionData.afterImage) {
-                          formDataToSend.append('serviceImage', completionData.afterImage);
-                        }
-
-                        await api.patch(`/tickets/${id}/`, formDataToSend, {
-                          headers: { 'Content-Type': 'multipart/form-data' },
-                        });
-
-                          showNotification('Ticket finalized with before/after records', 'success');
-                          setShowCompletionModal(false);
-                          if (showModal) setShowModal(false);
-                          fetchData();
-                        } catch (err) {
-                          console.error(err);
-                          showNotification('Failed to finalize ticket', 'error');
-                        } finally {
-                          setSubmitting(false);
-                        }
-                      }}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
-                    >
-                      {submitting ? 'PROCESSING...' : 'COMPLETE TICKET'}
-                    </button>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Final Service Video (Optional)</label>
+                <div className="mt-2">
+                  <div className="flex space-x-2 w-full">
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <ImageIcon size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Video Gallery</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setCompletionData({...completionData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-white/5 border-white/10 transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Camera size={24} className="text-dim mb-2" />
+                        <p className="mb-2 text-xs text-dim font-bold">Record Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setCompletionData({...completionData, video: file});
+                          } else if (file) {
+                            showNotification('Video exceeds 5MB limit', 'error');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {completionData.video && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <span className="text-[10px] text-emerald-400 font-bold truncate">{completionData.video.name}</span>
+                      <button onClick={() => setCompletionData({...completionData, video: null})} className="text-emerald-400"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-4">
+                <button onClick={() => setShowCompletionModal(false)} className="flex-1 py-3 text-xs font-black text-secondary uppercase tracking-widest">Cancel</button>
+                <button 
+                  disabled={submitting}
+                  onClick={async () => {
+                    if (!completionData.remark.trim()) {
+                      showNotification('Please provide a completion remark', 'error');
+                      return;
+                    }
+                    try {
+                      setSubmitting(true);
+                      const id = completionTicket.id || completionTicket._id;
+                      
+                      const formDataToSend = new FormData();
+                      formDataToSend.append('status', 'Completed');
+                      formDataToSend.append('completedDate', completionData.date);
+                      formDataToSend.append('completedTime', completionData.endTime);
+                      formDataToSend.append('actionTaken', completionData.remark);
+                      formDataToSend.append('endTime', completionData.endTime);
+                      formDataToSend.append('totalTime', calculateTotalTime(completionTicket.receivedTime || completionTicket.createdTime || '09:00', completionData.endTime));
+                      
+                      if (completionData.image) {
+                        formDataToSend.append('completedImage', completionData.image);
+                      }
+                      if (completionData.video) {
+                        formDataToSend.append('completedVideo', completionData.video);
+                      }
+
+                      await api.patch(`/tickets/${id}/`, formDataToSend);
+
+                      showNotification('Ticket status changed to Completed', 'success');
+                      setShowCompletionModal(false);
+                      if (showModal) setShowModal(false);
+                      fetchData();
+                    } catch (err) {
+                      console.error(err);
+                      showNotification('Failed to complete ticket', 'error');
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                >
+                  {submitting ? 'PROCESSING...' : 'COMPLETE TICKET'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
