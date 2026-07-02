@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Info, MessageSquare, Clock, CheckCircle, 
-  Send, Shield, Activity, X, Upload, FileText, Hash, File, Eye, Trash2, Plus, Camera, Image as ImageIcon, Printer
+  Send, Shield, Activity, X, Upload, FileText, Hash, File, Eye, Trash2, Plus, Camera, Image as ImageIcon, Printer, MapPin, User
 } from 'lucide-react';
 import api from '../services/api';
 import { compressImage } from '../utils/imageCompression';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import pptxgen from 'pptxgenjs';
 
 const getImageUrl = (path) => {
   if (!path) return '';
@@ -337,6 +338,19 @@ export default function TicketDetail() {
   const meta = parseMetadata(ticket.remarks);
 
   const handlePrint = () => {
+    const getAbsoluteUrl = (path) => {
+      if (!path) return '';
+      const rel = getImageUrl(path);
+      if (rel.startsWith('http')) return rel;
+      return window.location.origin + rel;
+    };
+
+    const openImage = getAbsoluteUrl(ticket.createdImage);
+    const inProgressImage = getAbsoluteUrl(ticket.inProgressImage);
+    const completedImage = getAbsoluteUrl(
+      ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image)
+    );
+
     const printWindow = window.open('', '_blank');
     const htmlContent = `
       <html>
@@ -344,7 +358,6 @@ export default function TicketDetail() {
           <title>Ticket Details - #${ticket.id || ticket._id}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
-            h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 20px; text-align: center; text-transform: uppercase; }
             .section { margin-bottom: 30px; }
             .section-title { font-size: 14px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
             .grid { display: flex; flex-wrap: wrap; margin: -10px; }
@@ -355,12 +368,13 @@ export default function TicketDetail() {
             .status-completed { background-color: #d1fae5; color: #047857; }
             .status-progress { background-color: #fef3c7; color: #d97706; }
             .status-open { background-color: #fee2e2; color: #b91c1c; }
-            .footer { margin-top: 30px; font-size: 10px; color: #9ca3af; text-align: center; }
+            .image-grid { display: flex; gap: 15px; margin-top: 10px; }
+            .image-card { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; text-align: center; background-color: #f9fafb; display: flex; flex-direction: column; }
+            .evidence-img { width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-top: 8px; border: 1px solid #d1d5db; }
+            .no-img { height: 180px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 12px; font-style: italic; background-color: #f3f4f6; border-radius: 6px; margin-top: 8px; border: 1px dashed #d1d5db; }
           </style>
         </head>
         <body>
-          <h1>Ticket Details - #${ticket.id || ticket._id}</h1>
-          
           <div class="section">
             <div class="grid">
               <div class="grid-item">
@@ -393,44 +407,25 @@ export default function TicketDetail() {
                 <div class="label">Point (Location)</div>
                 <div class="value">${ticket.location || meta.location || 'N/A'}</div>
               </div>
-              <div class="grid-item">
-                <div class="label">Raised By</div>
-                <div class="value">${ticket.raisedByName || 'Authorized Staff'}</div>
-              </div>
-              <div class="grid-item">
-                <div class="label">Total Resolution Time</div>
-                <div class="value">
-                   ${calculateAdvancedTimeDiff(
-                     ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
-                     ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
-                     ticket.completedDate || meta.manualDate, 
-                     ticket.completedTime || meta.endTime
-                   )}
-                </div>
-              </div>
             </div>
           </div>
 
           <div class="section">
-            <div class="section-title">Timeline</div>
-            <div class="grid">
-              <div class="grid-item">
-                <div class="label">Created At</div>
-                <div class="value">${ticket.createdDate || (ticket.createdAt ? new Date(ticket.createdAt).toISOString().split('T')[0] : 'N/A')} ${ticket.createdTime || ''}</div>
+            <div class="section-title">Ticket Evidence Images</div>
+            <div class="image-grid">
+              <div class="image-card">
+                <div class="label">Open Image</div>
+                ${openImage ? `<img src="${openImage}" class="evidence-img" />` : '<div class="no-img">No Image Available</div>'}
               </div>
-              <div class="grid-item">
-                <div class="label">In Progress (On Site)</div>
-                <div class="value">${ticket.inProgressDate || 'N/A'} ${ticket.inProgressTime || ''}</div>
+              <div class="image-card">
+                <div class="label">In Process Image</div>
+                ${inProgressImage ? `<img src="${inProgressImage}" class="evidence-img" />` : '<div class="no-img">No Image Available</div>'}
               </div>
-              <div class="grid-item">
-                <div class="label">Completed At</div>
-                <div class="value">${ticket.completedDate || 'N/A'} ${ticket.completedTime || ''}</div>
+              <div class="image-card">
+                <div class="label">Completed Image</div>
+                ${completedImage ? `<img src="${completedImage}" class="evidence-img" />` : '<div class="no-img">No Image Available</div>'}
               </div>
             </div>
-          </div>
-          
-          <div class="footer">
-            Generated from CCTV System on ${new Date().toLocaleString()}
           </div>
         </body>
       </html>
@@ -441,687 +436,472 @@ export default function TicketDetail() {
     
     setTimeout(() => {
       printWindow.print();
-    }, 250);
+    }, 500);
+  };
+
+  const loadImage = (url) => {
+    return new Promise((resolve) => {
+      if (!url) {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  };
+
+  const generateTicketCanvas = async () => {
+    const getAbsoluteUrl = (path) => {
+      if (!path) return '';
+      const rel = getImageUrl(path);
+      if (rel.startsWith('http')) return rel;
+      return window.location.origin + rel;
+    };
+
+    const openUrl = getAbsoluteUrl(ticket.createdImage);
+    const inProgressUrl = getAbsoluteUrl(ticket.inProgressImage);
+    const completedUrl = getAbsoluteUrl(
+      ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image)
+    );
+
+    const [openImg, inProgressImg, completedImg] = await Promise.all([
+      loadImage(openUrl),
+      loadImage(inProgressUrl),
+      loadImage(completedUrl)
+    ]);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 760;
+    const ctx = canvas.getContext('2d');
+
+    const grad = ctx.createLinearGradient(0, 0, 0, 760);
+    grad.addColorStop(0, '#0f172a');
+    grad.addColorStop(1, '#1e293b');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 900, 760);
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(10, 10, 880, 740);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 24px Arial';
+    ctx.fillText(`TICKET #${ticket.id || ticket._id}`, 40, 60);
+
+    const isCompleted = ticket.status === 'Completed';
+    const badgeColor = isCompleted ? '#10b981' : (ticket.status === 'In Progress' ? '#f97316' : '#ef4444');
+    ctx.fillStyle = badgeColor;
+    ctx.fillRect(40, 85, 120, 30);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(ticket.status.toUpperCase(), 100, 105);
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText('CATEGORY', 40, 160);
+    ctx.fillText('RAISED BY', 240, 160);
+    ctx.fillText('LOGGED DATE', 40, 230);
+    ctx.fillText('LOCATION', 40, 300);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 15px Arial';
+    ctx.fillText(ticket.category || meta.category || 'N/A', 40, 185);
+    ctx.fillText(ticket.raisedByName || 'Authorized Staff', 240, 185);
+    ctx.fillText(ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A', 40, 255);
+    
+    const locText = ticket.location || meta.location || 'N/A';
+    ctx.fillText(locText, 40, 325);
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(460, 140, 400, 200);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 11px Arial';
+    ctx.fillText('ISSUE DESCRIPTION', 480, 170);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'italic 13px Arial';
+    
+    const words = (ticket.issueDescription || '').split(' ');
+    let line = '';
+    let y = 195;
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > 360 && n > 0) {
+        ctx.fillText(line, 480, y);
+        line = words[n] + ' ';
+        y += 20;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, 480, y);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('EVIDENCE GALLERY', 40, 390);
+
+    const imgWidth = 260;
+    const imgHeight = 180;
+    const imgY = 410;
+
+    // Open Image
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(40, imgY, imgWidth, imgHeight);
+    ctx.strokeStyle = '#334155';
+    ctx.strokeRect(40, imgY, imgWidth, imgHeight);
+    if (openImg) {
+      ctx.drawImage(openImg, 40, imgY, imgWidth, imgHeight);
+    } else {
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'italic 12px Arial';
+      ctx.fillText('Open Image Not Available', 80, imgY + 95);
+    }
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('OPEN IMAGE', 40, imgY + imgHeight + 20);
+
+    // In Progress Image
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(320, imgY, imgWidth, imgHeight);
+    ctx.strokeStyle = '#334155';
+    ctx.strokeRect(320, imgY, imgWidth, imgHeight);
+    if (inProgressImg) {
+      ctx.drawImage(inProgressImg, 320, imgY, imgWidth, imgHeight);
+    } else {
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'italic 12px Arial';
+      ctx.fillText('In Progress Image Not Available', 345, imgY + 95);
+    }
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('IN PROGRESS IMAGE', 320, imgY + imgHeight + 20);
+
+    // Completed Image
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(600, imgY, imgWidth, imgHeight);
+    ctx.strokeStyle = '#334155';
+    ctx.strokeRect(600, imgY, imgWidth, imgHeight);
+    if (completedImg) {
+      ctx.drawImage(completedImg, 600, imgY, imgWidth, imgHeight);
+    } else {
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'italic 12px Arial';
+      ctx.fillText('Completed Image Not Available', 635, imgY + 95);
+    }
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('COMPLETED IMAGE', 600, imgY + imgHeight + 20);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('GENERATED FROM CCTV SECURITY MANAGEMENT SYSTEM', 40, 710);
+
+    return canvas;
+  };
+
+  const handleExportPPT = async () => {
+    try {
+      const canvas = await generateTicketCanvas();
+      const imgDataUrl = canvas.toDataURL('image/png');
+
+      const pptx = new pptxgen();
+      pptx.layout = 'LAYOUT_16x9';
+
+      const slide = pptx.addSlide();
+      slide.background = { color: '0F172A' };
+      
+      slide.addImage({ 
+        data: imgDataUrl, 
+        x: 0, 
+        y: 0, 
+        w: 13.33,
+        h: 7.5
+      });
+
+      pptx.writeFile({ fileName: `ticket_${ticket.id || ticket._id}_presentation.pptx` });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleExportImage = async () => {
+    try {
+      const canvas = await generateTicketCanvas();
+      const link = document.createElement('a');
+      link.download = `ticket_${ticket.id || ticket._id}_card.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
     <div className="space-y-6 animate-fade-in pb-16 max-w-7xl mx-auto px-4 sm:px-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 border-b border-main pb-6">
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => {
-              if (ticket.category === 'Upgrade' || meta.category === 'Upgrade') {
-                navigate('/upgrades');
-              } else if (ticket.projectId || ticket.project) {
-                const pId = ticket.projectId?.id || ticket.projectId || ticket.project?.id || ticket.project;
-                navigate(`/projects/${pId}`);
-              } else {
-                navigate('/tickets');
-              }
-            }} 
-            className="p-3 bg-panel hover:bg-white/10 rounded-2xl text-secondary hover:text-main transition-all border border-main"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-3xl font-black text-main tracking-tight uppercase flex items-center">
-              {ticket.category === 'Upgrade' || meta.category === 'Upgrade' ? 'Upgrade details' : (ticket.projectId || ticket.project ? 'Log details' : 'Ticket details')}
-            </h1>
-            <div className="flex items-center space-x-3 mt-1.5">
-              <span className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] bg-panel border border-main px-2.5 py-0.5 rounded-lg">Ticket ID: #{ticket.id || ticket._id}</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-main/20"></span>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                ticket.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500' :
-                ticket.status === 'In Progress' ? 'bg-orange-500/10 text-orange-500 animate-pulse' :
-                'bg-red-500/10 text-red-500'
-              }`}>
-                {ticket.status}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div>
+      {/* Header Back Button */}
+      <div className="flex items-center space-x-4 border-b border-main pb-4">
+        <button 
+          onClick={() => {
+            if (ticket.category === 'Upgrade' || meta.category === 'Upgrade') {
+              navigate('/upgrades');
+            } else if (ticket.projectId || ticket.project) {
+              const pId = ticket.projectId?.id || ticket.projectId || ticket.project?.id || ticket.project;
+              navigate(`/projects/${pId}`);
+            } else {
+              navigate('/tickets');
+            }
+          }} 
+          className="p-3 bg-panel hover:bg-white/10 rounded-2xl text-secondary hover:text-main transition-all border border-main"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-xl font-black text-main tracking-tight uppercase">
+          Back to Tickets
+        </h1>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Export PDF Button */}
           <button 
             onClick={handlePrint}
-            className="flex items-center space-x-2 px-5 py-3 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all border border-blue-500/20 shadow-md shadow-blue-500/5"
+            className="flex items-center space-x-2 px-4 py-2.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-xl font-bold uppercase tracking-widest text-[9px] transition-all border border-blue-500/20 shadow-md shadow-blue-500/5"
+            title="Export to PDF Format"
           >
-            <Printer size={14} />
-            <span>Export / Print</span>
+            <Printer size={12} />
+            <span>PDF</span>
+          </button>
+
+          {/* Export Image Button */}
+          <button 
+            onClick={handleExportImage}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white rounded-xl font-bold uppercase tracking-widest text-[9px] transition-all border border-purple-500/20 shadow-md shadow-purple-500/5"
+            title="Export to Image (PNG) Format"
+          >
+            <ImageIcon size={12} />
+            <span>Image</span>
+          </button>
+
+          {/* Export PPT Button */}
+          <button 
+            onClick={handleExportPPT}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-orange-500/10 text-orange-400 hover:bg-orange-500 hover:text-white rounded-xl font-bold uppercase tracking-widest text-[9px] transition-all border border-orange-500/20 shadow-md shadow-orange-500/5"
+            title="Export to PowerPoint (PPTX) Format"
+          >
+            <FileText size={12} />
+            <span>PPTX</span>
           </button>
         </div>
       </div>
 
-      {/* Full-width Ticket Status Timeline Card at the Top */}
-      <div className="hud-panel p-6">
-        <div className="hud-corner-tr"></div>
-        <div className="hud-corner-bl"></div>
-        <h4 className="text-xs font-black text-main uppercase tracking-[0.25em] flex items-center mb-6">
-          <Activity size={16} className="mr-2 text-blue-500 animate-pulse" />
-          Ticket Status Timeline
-        </h4>
+      {/* Bento Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-auto">
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-          {/* Connector Line */}
-          <div className="hidden md:block absolute top-[28px] left-[15%] right-[15%] h-[2px] bg-main z-0">
-            <div 
-              className="h-full bg-gradient-to-r from-blue-500 via-orange-500 to-emerald-500 transition-all duration-700" 
-              style={{
-                width: ticket.status === 'Completed' ? '100%' : ticket.status === 'In Progress' ? '50%' : '0%'
-              }}
-            ></div>
+        {/* Cell 1: Ticket Header & Status (Spans 3 cols) */}
+        <div className="col-span-1 md:col-span-3 bg-card border border-main rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.25em] mb-1">Ticket #{ticket.id || ticket._id}</p>
+            <h2 className="text-lg md:text-xl font-black text-main tracking-tight uppercase">
+              {ticket.category === 'Upgrade' || meta.category === 'Upgrade' ? 'Upgrade details' : (ticket.projectId || ticket.project ? 'Log details' : 'Ticket details')}
+            </h2>
           </div>
+          <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider ${
+            ticket.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+            ticket.status === 'In Progress' ? 'bg-orange-500/10 text-orange-500 animate-pulse border border-orange-500/20' :
+            'bg-red-500/10 text-red-500 border border-red-500/20'
+          }`}>
+            {ticket.status}
+          </span>
+        </div>
 
-          {/* Step 1: Logged */}
-          <div className="relative z-10 flex flex-col items-center md:items-start bg-panel p-4 rounded-2xl border border-main">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 border-2 shadow-md ${
-              ticket.status === 'Open' ? 'bg-blue-500/10 text-blue-400 border-blue-500 animate-pulse' :
-              (ticket.status === 'In Progress' || ticket.status === 'Completed') ? 'bg-blue-600 text-white border-blue-500' : 'bg-panel text-dim border-main'
-            }`}>
-              <Plus size={18} />
-            </div>
-            <h5 className="text-[10px] font-black uppercase tracking-wider text-main mb-1">1. Logged / Opened</h5>
-            <span className="text-[9px] text-dim font-bold">
-              {ticket.createdDate || (ticket.createdAt ? new Date(ticket.createdAt).toISOString().split('T')[0] : 'N/A')}
-            </span>
-            <span className="text-[9px] text-dim font-mono mt-0.5">
-              {ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')}
-            </span>
-            
-            {ticket.createdImage && (
-              <div className="mt-3 group relative w-full aspect-video rounded-xl overflow-hidden border border-main bg-card">
-                <img src={getImageUrl(ticket.createdImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Created" />
-                <a href={getImageUrl(ticket.createdImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-white bg-black/60 px-2 py-1 rounded-lg flex items-center"><Eye size={10} className="mr-1"/> View</span>
-                </a>
-              </div>
+        {/* Cell 2: Reaction Metric (Spans 1 col) */}
+        <div className="col-span-1 bg-orange-500/10 border border-orange-500/20 rounded-2xl p-5 flex flex-col justify-center items-center text-center">
+          <Clock size={20} className="text-orange-400 mb-1.5" />
+          <p className="text-lg font-black text-orange-400">
+            {calculateAdvancedTimeDiff(
+              ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
+              ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
+              ticket.inProgressDate || meta.workStartDate, 
+              ticket.inProgressTime || meta.workStartTime
             )}
-            {ticket.createdVideo && (
-              <div className="mt-3 w-full aspect-video rounded-xl overflow-hidden border border-main bg-card">
-                <video src={getImageUrl(ticket.createdVideo)} className="w-full h-full object-cover" controls />
-              </div>
-            )}
+          </p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-orange-500/80">Reaction</p>
+        </div>
+
+        {/* Cell 3: Issue Description (Spans 2 cols, spans 2 rows) */}
+        <div className="col-span-1 md:col-span-2 md:row-span-2 bg-card border border-main rounded-2xl p-5 flex flex-col justify-between">
+          <div>
+            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em] mb-3">Issue description</p>
+            <p className="margin-0 text-sm leading-relaxed text-main font-bold italic opacity-95">"{ticket.issueDescription}"</p>
           </div>
-
-          {/* Step 2: In Progress */}
-          <div className="relative z-10 flex flex-col items-center md:items-start bg-panel p-4 rounded-2xl border border-main">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 border-2 shadow-md ${
-              ticket.status === 'In Progress' ? 'bg-orange-500/10 text-orange-400 border-orange-500 animate-pulse' :
-              ticket.status === 'Completed' ? 'bg-orange-600 text-white border-orange-500' : 'bg-panel text-dim border-main'
-            }`}>
-              <Clock size={18} />
+          {ticket.status === 'Completed' && ticket.actionTaken && (
+            <div className="mt-4 pt-4 border-t border-main/10">
+              <p className="margin-0 text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-1">Resolution / Action Taken</p>
+              <p className="margin-0 text-xs leading-relaxed text-emerald-400 font-bold italic">"{ticket.actionTaken}"</p>
             </div>
-            <h5 className="text-[10px] font-black uppercase tracking-wider text-main mb-1">2. In Progress</h5>
-            {ticket.status === 'Open' ? (
-              <div className="mt-2 w-full">
-                {canEdit ? (
-                  <button 
-                    onClick={() => {
-                      setInProgressData({
-                        date: new Date().toISOString().split('T')[0],
-                        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                        image: null
-                      });
-                      setShowInProgressModal(true);
-                    }}
-                    className="w-full py-1.5 bg-orange-600 hover:bg-orange-500 text-white text-[9px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md"
-                  >
-                    Start Work
-                  </button>
-                ) : (
-                  <span className="text-[8px] text-dim uppercase tracking-widest font-black block mt-2">Awaiting Crew</span>
-                )}
-              </div>
-            ) : (
-              <>
-                <span className="text-[9px] text-dim font-bold">{ticket.inProgressDate || 'Date N/A'}</span>
-                <span className="text-[9px] text-dim font-mono mt-0.5">{ticket.inProgressTime || 'Time N/A'}</span>
-                
-                {ticket.inProgressImage && (
-                  <div className="mt-3 group relative w-full aspect-video rounded-xl overflow-hidden border border-main bg-card">
-                    <img src={getImageUrl(ticket.inProgressImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="In Progress" />
-                    <a href={getImageUrl(ticket.inProgressImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white bg-black/60 px-2 py-1 rounded-lg flex items-center"><Eye size={10} className="mr-1"/> View</span>
-                    </a>
-                  </div>
-                )}
-                {ticket.inProgressVideo && (
-                  <div className="mt-3 w-full aspect-video rounded-xl overflow-hidden border border-main bg-card">
-                    <video src={getImageUrl(ticket.inProgressVideo)} className="w-full h-full object-cover" controls />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          )}
+        </div>
 
-          {/* Step 3: Completed */}
-          <div className="relative z-10 flex flex-col items-center md:items-start bg-panel p-4 rounded-2xl border border-main">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 border-2 shadow-md ${
-              ticket.status === 'Completed' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-panel text-dim border-main'
-            }`}>
-              <CheckCircle size={18} />
-            </div>
-            <h5 className="text-[10px] font-black uppercase tracking-wider text-main mb-1">3. Completed / Closed</h5>
-            {ticket.status !== 'Completed' ? (
-              <div className="mt-2 w-full">
-                {ticket.status === 'In Progress' ? (
-                  canEdit ? (
-                    <button 
-                      onClick={() => {
-                        setCompletionData({
-                          remark: '',
-                          endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                          date: new Date().toISOString().split('T')[0],
-                          images: []
-                        });
-                        setShowCompletionModal(true);
-                      }}
-                      className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md"
-                    >
-                      Complete Work
-                    </button>
-                  ) : (
-                    <span className="text-[8px] text-dim uppercase tracking-widest font-black block mt-2">Active</span>
-                  )
-                ) : (
-                  <span className="text-[8px] text-dim uppercase tracking-widest font-black block mt-2">Waiting...</span>
-                )}
-              </div>
-            ) : (
-              <>
-                <span className="text-[9px] text-dim font-bold">{ticket.completedDate || 'Date N/A'}</span>
-                <span className="text-[9px] text-dim font-mono mt-0.5">{ticket.completedTime || 'Time N/A'}</span>
-                
-                {ticket.completed_images && Array.isArray(ticket.completed_images) && ticket.completed_images.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-2 gap-2 w-full">
-                    {ticket.completed_images.slice(0, 2).map((imgObj, idx) => (
-                      <div key={idx} className="group relative w-full aspect-square rounded-xl overflow-hidden border border-main bg-card">
-                        <img src={getImageUrl(imgObj?.image)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt={`Evidence ${idx + 1}`} />
-                        <a href={getImageUrl(imgObj?.image)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-[8px] font-black uppercase tracking-widest text-white bg-black/60 px-2 py-1 rounded-lg flex items-center"><Eye size={10} className="mr-1"/> View</span>
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                ) : ticket.completedImage ? (
-                  <div className="mt-3 group relative w-full aspect-video rounded-xl overflow-hidden border border-main bg-card">
-                    <img src={getImageUrl(ticket.completedImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Completed" />
-                    <a href={getImageUrl(ticket.completedImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white bg-black/60 px-2 py-1 rounded-lg flex items-center"><Eye size={10} className="mr-1"/> View</span>
-                    </a>
-                  </div>
-                ) : null}
-
-                {ticket.completedVideo && (
-                  <div className="mt-3 w-full aspect-video rounded-xl overflow-hidden border border-main bg-card">
-                    <video src={getImageUrl(ticket.completedVideo)} className="w-full h-full object-cover" controls />
-                  </div>
-                )}
-                {canEdit && (
-                  <label className="mt-3 w-full cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest text-center border border-emerald-500/20 transition-all flex items-center justify-center">
-                    <Upload size={10} className="mr-1" /> Add Files
-                    <input
-                      type="file"
-                      multiple
-                      className="hidden"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const files = Array.from(e.target.files);
-                        if (files.length > 0) {
-                          try {
-                            setUploadingDoc(true);
-                            const compressedPromises = files.map(f => compressImage(f, 50));
-                            const compressedFiles = await Promise.all(compressedPromises);
-                            
-                            const formDataToSend = new FormData();
-                            compressedFiles.forEach(img => {
-                              formDataToSend.append('completedImages', img);
-                            });
-                            await api.patch(`/tickets/${ticket.id || ticket._id}/`, formDataToSend);
-                            showNotification('Images uploaded successfully', 'success');
-                            fetchTicketData();
-                          } catch (err) {
-                            console.error(err);
-                            showNotification('Failed to upload images', 'error');
-                          } finally {
-                            setUploadingDoc(false);
-                          }
-                        }
-                      }}
-                    />
-                  </label>
-                )}
-              </>
-            )}
+        {/* Cell 4: Horizontal Status Dots Timeline (Spans 2 cols) */}
+        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 w-full text-dim font-bold text-[10px] uppercase tracking-wider">
+            <div className={`w-2 h-2 rounded-full ${ticket.status === 'Open' || ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-blue-500 shadow shadow-blue-500' : 'bg-dim/20'}`}></div>
+            <div className="flex-1 h-[1px] bg-main opacity-20"></div>
+            <div className={`w-2 h-2 rounded-full ${ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-orange-500 shadow shadow-orange-500 animate-pulse' : 'bg-dim/20'}`}></div>
+            <div className="flex-1 h-[1px] bg-main opacity-20"></div>
+            <div className={`w-2 h-2 rounded-full ${ticket.status === 'Completed' ? 'bg-emerald-500 shadow shadow-emerald-500' : 'bg-dim/20'}`}></div>
+            <p className="ml-2 font-mono whitespace-nowrap text-secondary">Open &rarr; Active &rarr; Done</p>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column (Main conversation, updates, gallery) */}
-        <div className="lg:col-span-8 space-y-8">
-          
-          {/* Issue Description Card */}
-          <div className="hud-panel p-6 space-y-4">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <h4 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] pl-1">Issue Description</h4>
-            <div className="bg-panel p-5 rounded-2xl border border-main relative overflow-hidden group">
-              <p className="text-sm text-main leading-relaxed font-bold italic opacity-95">
-                "{ticket.issueDescription}"
+        {/* Cell 5: Location Card (Spans 2 cols) */}
+        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 space-y-1">
+          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Location</p>
+          <p className="margin-0 text-sm font-bold text-main flex items-center gap-1.5 uppercase tracking-wide">
+            <MapPin size={14} className="text-dim" />
+            {ticket.location || meta.location || 'N/A'}
+          </p>
+        </div>
+
+        {/* Cell 6: Raised By Card (Spans 2 cols) */}
+        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 space-y-1">
+          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Raised by</p>
+          <p className="margin-0 text-sm font-bold text-main flex items-center gap-1.5">
+            <User size={14} className="text-dim" />
+            <span>{ticket.raisedByName || 'Authorized Staff'} &middot; {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A'}</span>
+          </p>
+        </div>
+
+        {/* Cell 7: Evidence Gallery Card (Spans 2 cols, spans 2 rows) */}
+        <div className="col-span-1 md:col-span-2 md:row-span-2 bg-card border border-main rounded-2xl p-5 space-y-3">
+          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Evidence</p>
+          <div className="grid grid-cols-3 gap-3">
+            {/* Open Image */}
+            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
+              {ticket.createdImage ? (
+                <>
+                  <img src={getImageUrl(ticket.createdImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Open" />
+                  <a href={getImageUrl(ticket.createdImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={12} className="text-white" />
+                  </a>
+                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Open</span>
+                </>
+              ) : (
+                <ImageIcon size={16} className="text-dim opacity-30" />
+              )}
+            </div>
+            
+            {/* In Progress Image */}
+            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
+              {ticket.inProgressImage || ticket.workImage ? (
+                <>
+                  <img src={getImageUrl(ticket.inProgressImage || ticket.workImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="In Progress" />
+                  <a href={getImageUrl(ticket.inProgressImage || ticket.workImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={12} className="text-white" />
+                  </a>
+                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Active</span>
+                </>
+              ) : (
+                <ImageIcon size={16} className="text-dim opacity-30" />
+              )}
+            </div>
+
+            {/* Completed Image */}
+            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
+              {ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image) || ticket.serviceImage ? (
+                <>
+                  <img src={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Completed" />
+                  <a href={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={12} className="text-white" />
+                  </a>
+                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Done</span>
+                </>
+              ) : (
+                <ImageIcon size={16} className="text-dim opacity-30" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Cell 8: Activity List Card (Spans 4 cols) */}
+        <div className="col-span-1 md:col-span-4 bg-card border border-main rounded-2xl p-5 space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Activity</p>
+            <span className="bg-panel border border-main font-bold text-[9px] px-2 py-0.5 rounded-lg text-secondary">{(ticket.message_history || []).length} entries</span>
+          </div>
+
+          <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-main/5 pb-3">
+            {(ticket.message_history || []).slice(0, 3).map((msg, idx) => (
+              <p key={idx} className="margin-0 text-xs text-secondary leading-relaxed font-medium">
+                <span className="font-bold text-main">{msg.user_name || 'Protocol'}</span>{' '}
+                {cleanRemarkText(msg.remark)}{' '}
+                <span className="text-dim font-mono text-[9px] ml-1">&middot; {msg.time}</span>
               </p>
-            </div>
+            ))}
           </div>
 
-          {/* Service Evidence (Before / After Gallery) */}
-          {(ticket.workImage || ticket.serviceImage) && (
-            <div className="hud-panel p-6 space-y-4">
-              <div className="hud-corner-tr"></div>
-              <div className="hud-corner-bl"></div>
-              <h4 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] pl-1">Service Evidence (Before & After)</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {ticket.workImage && (
-                  <div className="group relative">
-                    <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-black/70 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">Before Work</span>
-                    <a href={getImageUrl(ticket.workImage)} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-2xl overflow-hidden border border-main bg-panel shadow-inner relative">
-                      <img src={getImageUrl(ticket.workImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Before" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl text-[9px] font-bold text-white flex items-center uppercase tracking-widest border border-white/20">
-                          <Eye size={12} className="mr-1.5" /> View
-                        </div>
-                      </div>
-                    </a>
-                  </div>
-                )}
-                {ticket.serviceImage && (
-                  <div className="group relative">
-                    <span className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-emerald-500/80 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest border border-white/10">After Work</span>
-                    <a href={getImageUrl(ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-2xl overflow-hidden border border-main bg-panel shadow-inner relative">
-                      <img src={getImageUrl(ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="After" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <div className="px-3 py-1.5 bg-emerald-600/80 backdrop-blur-md rounded-xl text-[9px] font-bold text-white flex items-center uppercase tracking-widest border border-white/20">
-                          <Eye size={12} className="mr-1.5" /> View
-                        </div>
-                      </div>
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
+          {!(ticket.status === 'Completed' && user?.role !== 'Super Admin') && (
+            <form onSubmit={addRemark} className="flex gap-2">
+              <input 
+                type="text"
+                value={newRemark}
+                onChange={(e) => setNewRemark(e.target.value)}
+                placeholder="Add an update..." 
+                className="glass-input flex-1 px-3 py-2 text-xs bg-panel border-main rounded-xl font-bold"
+              />
+              <button 
+                type="submit"
+                disabled={!newRemark.trim()}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-20 flex items-center gap-1.5"
+              >
+                Post
+              </button>
+            </form>
           )}
+        </div>
 
-          {/* Chat & Logs Section */}
-          <div className="hud-panel p-6 space-y-6">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-
-            <div className="flex justify-between items-center border-b border-main pb-4">
-              <h4 className="text-xs font-black text-main uppercase tracking-[0.25em] flex items-center">
-                <MessageSquare size={16} className="mr-2 text-teal-400" />
-                Activity History & Comments
-              </h4>
-              <div className="bg-panel border border-main text-secondary px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider">
-                {(ticket.message_history || []).length} Log Entries
-              </div>
-            </div>
-
-            {/* Remark Submission Form */}
-            {!(ticket.status === 'Completed' && user?.role !== 'Super Admin') && (
-              <div className="bg-panel p-5 rounded-2xl border border-main space-y-4">
-                <form onSubmit={addRemark} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[8px] font-black text-dim uppercase tracking-widest mb-1.5 pl-1">Record Date</label>
-                      <input 
-                        type="date" 
-                        value={newRemarkDate}
-                        onChange={(e) => setNewRemarkDate(e.target.value)}
-                        className="glass-input w-full p-2.5 text-xs bg-card"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[8px] font-black text-dim uppercase tracking-widest mb-1.5 pl-1">Record Time</label>
-                      <input 
-                        type="time" 
-                        value={newRemarkTime}
-                        onChange={(e) => setNewRemarkTime(e.target.value)}
-                        className="glass-input w-full p-2.5 text-xs bg-card font-mono"
-                      />
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <textarea
-                      value={newRemark}
-                      onChange={(e) => setNewRemark(e.target.value)}
-                      placeholder="Add technical update or operational observation..."
-                      className="glass-input w-full p-4 pr-16 text-xs min-h-[90px] resize-none focus:ring-4 focus:ring-blue-500/10 placeholder:text-dim/40 font-bold bg-card"
-                    />
-                    <div className="absolute right-3 bottom-3 flex items-center space-x-2">
-                      {newRemarkImage && (
-                        <div className="text-[8px] bg-panel/90 px-2 py-1 rounded-lg text-blue-400 truncate max-w-[100px] border border-blue-500/20 flex items-center backdrop-blur-md">
-                          <span className="truncate mr-1 font-bold">{newRemarkImage.name}</span>
-                          <button type="button" onClick={() => setNewRemarkImage(null)} className="text-blue-400 hover:text-red-400"><X size={10} /></button>
-                        </div>
-                      )}
-                      <label className="p-2 bg-panel hover:bg-white/10 text-secondary hover:text-blue-400 rounded-xl transition-all cursor-pointer border border-main">
-                        <Upload size={14} />
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              try {
-                                const compressedFile = await compressImage(file, 50);
-                                setNewRemarkImage(compressedFile);
-                              } catch (err) {
-                                showNotification('Failed to process image', 'error');
-                              }
-                            }
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="submit"
-                        disabled={!newRemark.trim()}
-                        className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 text-white rounded-xl transition-all shadow-md shadow-blue-600/10 hover:scale-105 active:scale-95 flex items-center justify-center"
-                      >
-                        <Send size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
+        {/* Cell 9: Complete Work Action Button (Spans 4 cols) */}
+        {ticket.status !== 'Completed' && (
+          <div className="col-span-1 md:col-span-4">
+            {ticket.status === 'Open' ? (
+              <button
+                onClick={() => {
+                  setInProgressData({
+                    date: new Date().toISOString().split('T')[0],
+                    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                    image: null
+                  });
+                  setShowInProgressModal(true);
+                }}
+                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-md flex items-center justify-center gap-1.5 uppercase"
+              >
+                <Clock size={14} /> Start work
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setCompletionData({
+                    remark: '',
+                    endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                    date: new Date().toISOString().split('T')[0],
+                    image: null
+                  });
+                  setShowCompletionModal(true);
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-md flex items-center justify-center gap-1.5 uppercase"
+              >
+                <CheckCircle size={14} /> Complete work
+              </button>
             )}
-
-            {/* Feed History with vertical timeline */}
-            <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-main before:opacity-10">
-              {(ticket.message_history || []).length === 0 ? (
-                <div className="text-center py-16 bg-panel/50 rounded-2xl border border-dashed border-main">
-                  <MessageSquare size={24} className="mx-auto text-dim/30 mb-3" />
-                  <p className="text-xs text-dim font-black uppercase tracking-[0.15em]">No activity logs recorded</p>
-                </div>
-              ) : (
-                ticket.message_history.map((msg, idx) => {
-                  const isSystem = msg.remark?.toLowerCase().includes('status updated') || msg.remark?.toLowerCase().includes('initial ticket');
-                  return (
-                    <div key={idx} className="relative pl-8 animate-fade-in group" style={{ animationDelay: `${idx * 40}ms` }}>
-                      {/* Timeline Node */}
-                      <div className={`absolute left-0 top-1.5 w-6 h-6 rounded-full border-2 border-main z-10 flex items-center justify-center transition-transform group-hover:scale-110 bg-panel shadow-sm ${
-                        isSystem ? 'border-slate-500' : 'border-blue-500'
-                      }`}>
-                        {isSystem ? <Activity size={10} className="text-slate-500" /> : <Shield size={10} className="text-blue-500" />}
-                      </div>
-                      
-                      {/* Message Card */}
-                      <div className={`rounded-2xl p-4 border transition-all duration-300 ${
-                        isSystem 
-                          ? 'bg-panel/30 border-main hover:bg-panel/50' 
-                          : 'bg-panel/80 border-main hover:bg-panel hover:border-blue-500/20 shadow-sm'
-                      }`}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex flex-col">
-                            <span className={`text-[10px] font-black uppercase tracking-wider ${isSystem ? 'text-secondary' : 'text-blue-500'}`}>
-                              {isSystem ? 'System Protocol' : (msg.user_name || 'Technician Agent')}
-                            </span>
-                            <span className="text-[8px] text-dim font-bold mt-0.5 uppercase tracking-wider flex items-center font-mono">
-                              <Clock size={10} className="mr-1 opacity-50" />
-                              {msg.date} | {msg.time}
-                            </span>
-                          </div>
-                          {msg.device_status && (
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
-                              msg.device_status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                              msg.device_status === 'In Progress' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
-                              'bg-red-500/10 text-red-500 border-red-500/20'
-                            }`}>
-                              {msg.device_status}
-                            </span>
-                          )}
-                        </div>
-                        <div className="h-px bg-main opacity-5 mb-2"></div>
-                        <p className={`text-xs leading-relaxed ${isSystem ? 'text-dim italic font-medium opacity-80' : 'text-main font-bold'}`}>
-                          {cleanRemarkText(msg.remark)}
-                        </p>
-                        {msg.image && (
-                          <div className="mt-3">
-                            <a href={getImageUrl(msg.image)} target="_blank" rel="noopener noreferrer" className="block w-full max-w-sm rounded-xl overflow-hidden border border-main bg-card shadow-inner relative group/img">
-                              <img src={getImageUrl(msg.image)} className="w-full object-cover group-hover/img:scale-103 transition-transform duration-300 max-h-48" alt="Attachment" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                                <div className="px-2 py-1 bg-blue-600/80 backdrop-blur-md rounded-lg text-[9px] font-bold text-white flex items-center uppercase tracking-widest border border-white/25">
-                                  <Eye size={11} className="mr-1.5" /> View
-                                </div>
-                              </div>
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
           </div>
+        )}
 
-        </div>
-
-        {/* Right Column (Sidebar containing properties, bills, documents, action buttons) */}
-        <div className="lg:col-span-4 space-y-8">
-          
-          {/* Action Buttons Panel */}
-          {ticket.status !== 'Completed' && (
-            <div className="hud-panel p-6 space-y-4">
-              <div className="hud-corner-tr"></div>
-              <div className="hud-corner-bl"></div>
-              <h4 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] pl-1">Actions</h4>
-              {ticket.status === 'Open' ? (
-                <button
-                  onClick={() => {
-                    setInProgressData({
-                      date: new Date().toISOString().split('T')[0],
-                      time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                      image: null
-                    });
-                    setShowInProgressModal(true);
-                  }}
-                  className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg hover:shadow-orange-500/20 active:scale-[0.99] uppercase"
-                >
-                  Start Work
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setCompletionData({
-                      remark: '',
-                      endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                      date: new Date().toISOString().split('T')[0],
-                      image: null
-                    });
-                    setShowCompletionModal(true);
-                  }}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg hover:shadow-emerald-500/20 active:scale-[0.99] uppercase"
-                >
-                  Mark as Completed
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Ticket Properties Card */}
-          <div className="hud-panel p-6 space-y-4">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <h4 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] pl-1">Ticket Properties</h4>
-            
-            <div className="space-y-4 text-xs">
-              <div>
-                <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Ticket Category</span>
-                <p className="text-sm text-main font-black uppercase tracking-wider">{ticket.category || meta.category || 'N/A'}</p>
-              </div>
-              <div className="h-px bg-main opacity-5"></div>
-              <div>
-                <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Point / Location</span>
-                <p className="text-sm text-main font-black uppercase tracking-wider">{ticket.location || meta.location || 'N/A'}</p>
-              </div>
-              <div className="h-px bg-main opacity-5"></div>
-              <div>
-                <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Raised By</span>
-                <p className="text-sm text-main font-bold">{ticket.raisedByName || 'Authorized Staff'}</p>
-              </div>
-              <div className="h-px bg-main opacity-5"></div>
-              <div>
-                <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Logged Date</span>
-                <p className="text-sm text-main font-bold">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A'}</p>
-              </div>
-              
-              <div className="h-px bg-main opacity-5"></div>
-              
-              {/* Resolution Metrics Panel */}
-              <div className="space-y-2 pt-2">
-                <span className="text-[9px] text-dim uppercase font-black tracking-widest block mb-1">Resolution Metrics</span>
-                <div className="flex justify-between items-center">
-                  <span className="text-secondary font-bold uppercase tracking-widest text-[9px]">Reaction Time</span>
-                  <span className="text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 text-[10px]">
-                    {calculateAdvancedTimeDiff(
-                      ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
-                      ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
-                      ticket.inProgressDate || meta.workStartDate, 
-                      ticket.inProgressTime || meta.workStartTime
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-secondary font-bold uppercase tracking-widest text-[9px]">Execution Time</span>
-                  <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[10px]">
-                    {calculateAdvancedTimeDiff(
-                      ticket.inProgressDate || meta.workStartDate, 
-                      ticket.inProgressTime || meta.workStartTime, 
-                      ticket.completedDate || meta.manualDate, 
-                      ticket.completedTime || meta.endTime
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-secondary font-bold uppercase tracking-widest text-[9px]">Total Resolution</span>
-                  <span className="text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 text-[10px]">
-                    {calculateAdvancedTimeDiff(
-                      ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
-                      ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
-                      ticket.completedDate || meta.manualDate, 
-                      ticket.completedTime || meta.endTime
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Billing & PO Card */}
-          <div className="hud-panel p-6 space-y-4">
-             <div className="hud-corner-tr"></div>
-             <div className="hud-corner-bl"></div>
-             <div className="flex justify-between items-center">
-               <h4 className="text-xs font-black text-emerald-500 uppercase tracking-[0.2em]">Billing & PO Documents</h4>
-               <button 
-                 onClick={() => {
-                   setFormData({
-                     new_bill: { number: '', amount: '', file: null },
-                     new_po: { number: '', amount: '', file: null }
-                   });
-                   setShowBillingModal(true);
-                 }}
-                 className="text-[8px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/30 px-2.5 py-1 rounded-lg transition-colors border border-emerald-500/20 flex items-center"
-               >
-                 <Upload size={10} className="mr-1" />
-                 Manage
-               </button>
-             </div>
-             {(ticket.bill_number || ticket.po_number || ticket.bill_document || ticket.po_document) ? (
-               <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20 space-y-3">
-                  {(ticket.bill_number || ticket.bill_document) && (
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-emerald-400 font-bold uppercase tracking-widest text-[9px] flex items-center"><Hash size={10} className="mr-1"/> Bill</span>
-                      <div className="flex items-center space-x-2">
-                        {ticket.bill_number && <span className="text-emerald-300 font-mono font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[10px]">{ticket.bill_number}</span>}
-                        {ticket.bill_document && (
-                          <a href={getImageUrl(ticket.bill_document)} target="_blank" rel="noopener noreferrer" className="flex items-center px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded-lg transition-colors border border-emerald-500/30" title="View Document">
-                            <File size={10} className="mr-1" />
-                            <span className="text-[8px] font-bold truncate max-w-[80px]">{getFileName(ticket.bill_document)}</span>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {(ticket.bill_number || ticket.bill_document) && (ticket.po_number || ticket.po_document) && <div className="h-px bg-emerald-500/20"></div>}
-                  {(ticket.po_number || ticket.po_document) && (
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-purple-400 font-bold uppercase tracking-widest text-[9px] flex items-center"><Hash size={10} className="mr-1"/> PO</span>
-                      <div className="flex items-center space-x-2">
-                        {ticket.po_number && <span className="text-purple-300 font-mono font-bold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 text-[10px]">{ticket.po_number}</span>}
-                        {ticket.po_document && (
-                          <a href={getImageUrl(ticket.po_document)} target="_blank" rel="noopener noreferrer" className="flex items-center px-1.5 py-0.5 bg-purple-500/20 text-purple-400 hover:bg-purple-500/40 rounded-lg transition-colors border border-purple-500/30" title="View Document">
-                            <File size={10} className="mr-1" />
-                            <span className="text-[8px] font-bold truncate max-w-[80px]">{getFileName(ticket.po_document)}</span>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-               </div>
-             ) : (
-               <div className="bg-panel p-4 rounded-2xl border border-main flex items-center justify-center text-center">
-                 <p className="text-[10px] font-black text-dim/60 uppercase tracking-[0.2em]">No financial docs</p>
-               </div>
-             )}
-          </div>
-
-          {/* Document Vault Card */}
-          <div className="hud-panel p-6 space-y-4">
-             <div className="hud-corner-tr"></div>
-             <div className="hud-corner-bl"></div>
-             <div className="flex justify-between items-center">
-               <h4 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em]">General Documents</h4>
-               <button 
-                 onClick={() => {
-                   setDocFormData({ name: '', file: null });
-                   setShowDocModal(true);
-                 }}
-                 className="text-[8px] font-black uppercase tracking-widest text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-2.5 py-1 rounded-lg transition-colors border border-blue-500/20 flex items-center"
-               >
-                 <Upload size={10} className="mr-1" />
-                 Manage
-               </button>
-             </div>
-             {ticket.documents && ticket.documents.length > 0 ? (
-               <div className="bg-blue-500/5 p-4 rounded-2xl border border-blue-500/20 space-y-3">
-                 {ticket.documents.map((doc, idx) => (
-                    <div key={doc.id || idx} className="flex justify-between items-center p-2.5 bg-panel border border-blue-500/10 rounded-xl hover:border-blue-500/30 transition-all">
-                      <div className="flex items-center space-x-2 truncate">
-                        <FileText size={12} className="text-blue-400 flex-shrink-0" />
-                        <div className="truncate">
-                          <p className="text-xs font-bold text-main truncate max-w-[120px]">{doc.name}</p>
-                        </div>
-                      </div>
-                      <div className="flex space-x-1 flex-shrink-0">
-                        <a href={getImageUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="p-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors" title="View Document">
-                          <Eye size={10} />
-                        </a>
-                        <button type="button" onClick={() => handleDeleteGeneralDocument(doc.id)} className="p-1 bg-red-500/10 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors">
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    </div>
-                 ))}
-               </div>
-             ) : (
-               <div className="bg-panel p-4 rounded-2xl border border-main flex items-center justify-center text-center">
-                 <p className="text-[10px] font-black text-dim/60 uppercase tracking-[0.2em]">No files attached</p>
-               </div>
-             )}
-          </div>
-
-        </div>
       </div>
 
       {/* Modals & Dialogs */}

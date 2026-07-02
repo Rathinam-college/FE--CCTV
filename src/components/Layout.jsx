@@ -61,6 +61,7 @@ export default function Layout() {
       permission: 'Maintenance',
       items: [
         { name: 'Ticket', path: '/tickets', icon: FileBarChart, permission: 'Tickets' },
+        { name: 'Ticket Dashboard', path: '/tickets-dashboard', icon: LayoutDashboard, permission: 'Tickets' },
         { name: 'Upgrades', path: '/upgrades', icon: Shield, permission: 'Upgrades' },
         { name: 'Projects', path: '/projects', icon: Home, permission: 'Projects' },
         { name: 'Billing & PO', path: '/billing', icon: FileText, permission: 'Billing & PO' },
