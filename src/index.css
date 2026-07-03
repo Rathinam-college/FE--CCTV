@@ -49,13 +49,13 @@
     background-color: var(--bg-primary);
     color: var(--text-primary);
     @apply antialiased overflow-x-hidden min-h-screen selection:bg-teal-500/20;
-    font-family: 'Times New Roman', Times, serif !important;
+    font-family: 'Outfit', 'Space Grotesk', 'Inter', sans-serif !important;
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply tracking-tight font-black;
     color: var(--text-primary);
-    font-family: 'Times New Roman', Times, serif !important;
+    font-family: 'Outfit', 'Space Grotesk', 'Inter', sans-serif !important;
   }
 }
 

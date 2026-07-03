@@ -1,542 +1,607 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { 
-  Cctv, HardDrive, Fingerprint, Network, 
-  Activity, CheckCircle, AlertCircle, Clock,
-  ArrowUpRight, ArrowDownRight, TrendingUp, Shield,
-  Database, User, Zap, LayoutGrid, Briefcase
-} from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { useAuthStore } from '../store/authStore';
+import {
+  Cctv, HardDrive, Fingerprint, Network, AlertTriangle, Activity,
+  CheckCircle2, Clock, Briefcase, Radio, ChevronRight, WifiOff, Shield,
+  Wrench, FileText, SlidersHorizontal, ArrowUpRight, Layers, UserCheck, Calendar
+} from 'lucide-react';
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, CartesianGrid
+} from 'recharts';
+
+/* ---------------------------------------------------------------
+   TOKENS
+   Cyber-HUD palette: each device class gets its own accent so the
+   ring colors alone tell you what system you're looking at, the
+   way a NOC wall does.
+--------------------------------------------------------------- */
+const C = {
+  bg: 'transparent',
+  bgGrid: 'var(--glass-border)',
+  panel: 'var(--glass-bg)',
+  panelBorder: 'var(--glass-border)',
+  text: 'var(--text-primary)',
+  textMute: 'var(--text-secondary)',
+  textFaint: 'var(--text-dim)',
+  cameras: 'var(--accent-primary)',
+  nvrs: 'var(--accent-violet)',
+  biometrics: '#10b981',
+  switches: '#f59e0b',
+  critical: '#ef4444',
+  ok: '#10b981',
+};
+
+const mono = "'JetBrains Mono', 'Roboto Mono', monospace";
+const disp = "'Space Grotesk', 'Inter', sans-serif";
+
+const GoogleFonts = () => (
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes scanline { 0% { top: -10%; } 100% { top: 110%; } }
+    @keyframes pulseDot { 0%,100% { opacity:1; } 50% { opacity:0.25; } }
+    @keyframes tickerScroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+    @keyframes blink { 0%,49% { opacity:1; } 50%,100% { opacity:0.15; } }
+    .hud-scroll::-webkit-scrollbar { width: 4px; }
+    .hud-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 4px; }
+  `}</style>
+);
+
+const MOCK_UPTIME = [
+  { day: 'Mon', uptime: 97.2 }, { day: 'Tue', uptime: 98.1 }, { day: 'Wed', uptime: 95.4 },
+  { day: 'Thu', uptime: 99.0 }, { day: 'Fri', uptime: 96.8 }, { day: 'Sat', uptime: 98.6 },
+  { day: 'Sun', uptime: 97.9 },
+];
+
+const MOCK_ALERTS = [
+  { level: 'CRITICAL', msg: 'Camera CAM-114 in Engineering Block went offline', time: '2m ago' },
+  { level: 'WARNING', msg: 'NVR-03 storage at 88% capacity', time: '11m ago' },
+  { level: 'INFO', msg: 'Biometric device sync completed — Hostel Block', time: '24m ago' },
+  { level: 'WARNING', msg: 'Switch SW-07 packet loss above threshold', time: '38m ago' },
+  { level: 'CRITICAL', msg: 'CAM-089 tamper alert — Arts College gate', time: '52m ago' },
+  { level: 'INFO', msg: 'Ticket #4521 marked completed by Ops team', time: '1h ago' },
+];
+
+function RadarRing({ pct, color, size = 92 }) {
+  const r = size / 2 - 8;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+  const center = size / 2;
+  const ticks = Array.from({ length: 24 });
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} style={{ position: 'absolute', inset: 0 }}>
+        {ticks.map((_, i) => {
+          const angle = (i / ticks.length) * 360;
+          const rad = (angle * Math.PI) / 180;
+          const x1 = center + (r + 4) * Math.cos(rad);
+          const y1 = center + (r + 4) * Math.sin(rad);
+          const x2 = center + (r + 7) * Math.cos(rad);
+          const y2 = center + (r + 7) * Math.sin(rad);
+          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.textFaint} strokeWidth="1" />;
+        })}
+        <circle cx={center} cy={center} r={r} fill="none" stroke="rgba(148,163,184,0.1)" strokeWidth="5" />
+        <circle
+          cx={center} cy={center} r={r} fill="none" stroke={color} strokeWidth="5"
+          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+          transform={`rotate(-90 ${center} ${center})`}
+          style={{ filter: `drop-shadow(0 0 5px ${color})`, transition: 'stroke-dashoffset 1s ease' }}
+        />
+      </svg>
+      <div
+        style={{
+          position: 'absolute', inset: 0, animation: 'sweep 3.2s linear infinite',
+          transformOrigin: `${center}px ${center}px`,
+        }}
+      >
+        <div style={{
+          position: 'absolute', left: center - 1, top: 8, width: 2, height: r - 6,
+          background: `linear-gradient(to bottom, ${color}, transparent)`,
+          boxShadow: `0 0 6px ${color}`,
+        }} />
+      </div>
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{ fontFamily: mono, fontSize: 18, fontWeight: 700, color: C.text }}>{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ icon: Icon, label, data, color }) {
+  const pct = Math.round((data.online / (data.total || 1)) * 100);
+  return (
+    <div style={{
+      background: C.panel, border: `1px solid ${C.panelBorder}`, borderRadius: 16,
+      backdropFilter: 'blur(10px)', position: 'relative', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Top accent line */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${color}, transparent)`, opacity: 0.8 }} />
+
+      {/* Top row: ring + info */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '18px 20px 14px' }}>
+        <RadarRing pct={pct} color={color} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <Icon size={14} color={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+            <span style={{ fontFamily: disp, fontSize: 12, color: C.textMute, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</span>
+          </div>
+          {/* Online / Total big number */}
+          <div style={{ fontFamily: mono, fontSize: 26, fontWeight: 700, color: C.text, lineHeight: 1 }}>
+            {data.online}<span style={{ color: C.textFaint, fontSize: 16, fontWeight: 400 }}> / {data.total}</span>
+          </div>
+          {/* Offline count — shown only if > 0 */}
+          {data.offline > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
+              <WifiOff size={11} color={C.critical} />
+              <span style={{ fontFamily: mono, fontSize: 11, color: C.critical, fontWeight: 600 }}>{data.offline} offline</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom 4-box row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderTop: `1px solid ${C.panelBorder}` }}>
+        {/* Online */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '12px 6px', gap: 4, borderRight: `1px solid ${C.panelBorder}`,
+        }}>
+          <CheckCircle2 size={15} color={C.ok} style={{ filter: `drop-shadow(0 0 4px ${C.ok})` }} />
+          <span style={{ fontFamily: mono, fontSize: 17, fontWeight: 700, color: C.text }}>{data.online}</span>
+          <span style={{ fontFamily: disp, fontSize: 9, color: C.textMute, letterSpacing: 0.8, textTransform: 'uppercase' }}>Online</span>
+        </div>
+        {/* Offline */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '12px 6px', gap: 4, borderRight: `1px solid ${C.panelBorder}`,
+        }}>
+          <WifiOff size={15} color={C.critical} style={{ filter: `drop-shadow(0 0 4px ${C.critical})` }} />
+          <span style={{ fontFamily: mono, fontSize: 17, fontWeight: 700, color: C.text }}>{data.offline}</span>
+          <span style={{ fontFamily: disp, fontSize: 9, color: C.textMute, letterSpacing: 0.8, textTransform: 'uppercase' }}>Offline</span>
+        </div>
+        {/* Maintenance */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '12px 6px', gap: 4, borderRight: `1px solid ${C.panelBorder}`,
+        }}>
+          <AlertTriangle size={15} color={C.switches} style={{ filter: `drop-shadow(0 0 4px ${C.switches})` }} />
+          <span style={{ fontFamily: mono, fontSize: 17, fontWeight: 700, color: C.text }}>{data.maintenance}</span>
+          <span style={{ fontFamily: disp, fontSize: 9, color: C.textMute, letterSpacing: 0.8, textTransform: 'uppercase' }}>Maint.</span>
+        </div>
+        {/* Scrap */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '12px 6px', gap: 4,
+        }}>
+          <HardDrive size={15} color={C.textFaint} />
+          <span style={{ fontFamily: mono, fontSize: 17, fontWeight: 700, color: C.text }}>{data.scrap}</span>
+          <span style={{ fontFamily: disp, fontSize: 9, color: C.textMute, letterSpacing: 0.8, textTransform: 'uppercase' }}>Scrap</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TicketRing({ tickets }) {
+  const segs = [
+    { label: 'Open', val: tickets.open, color: C.critical },
+    { label: 'In Progress', val: tickets.inProgress, color: C.switches },
+    { label: 'Completed', val: tickets.completed, color: C.ok },
+    { label: 'Upgrade', val: tickets.upgrade, color: C.nvrs },
+  ];
+  const total = tickets.total || 1;
+  const size = 140, stroke = 14, r = size / 2 - stroke, c = 2 * Math.PI * r, center = size / 2;
+  let acc = 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      <svg width={size} height={size}>
+        <circle cx={center} cy={center} r={r} fill="none" stroke="rgba(148,163,184,0.08)" strokeWidth={stroke} />
+        {segs.map((s, i) => {
+          const frac = s.val / total;
+          const len = frac * c;
+          const dash = `${len} ${c - len}`;
+          const dashOffset = -acc * c;
+          acc += frac;
+          return (
+            <circle
+              key={i} cx={center} cy={center} r={r} fill="none" stroke={s.color} strokeWidth={stroke}
+              strokeDasharray={dash} strokeDashoffset={dashOffset}
+              transform={`rotate(-90 ${center} ${center})`}
+              style={{ filter: `drop-shadow(0 0 3px ${s.color})` }}
+            />
+          );
+        })}
+        <text x={center} y={center - 4} textAnchor="middle" fontFamily={mono} fontSize="24" fontWeight="700" fill={C.text}>{tickets.total}</text>
+        <text x={center} y={center + 16} textAnchor="middle" fontFamily={disp} fontSize="10" fill={C.textMute} letterSpacing="1">TICKETS</text>
+      </svg>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {segs.map((s, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, boxShadow: `0 0 5px ${s.color}` }} />
+            <span style={{ fontFamily: disp, fontSize: 12.5, color: C.textMute, minWidth: 82 }}>{s.label}</span>
+            <span style={{ fontFamily: mono, fontSize: 13, color: C.text, fontWeight: 600 }}>{s.val}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LiveFeedTile({ n, area }) {
+  return (
+    <div style={{
+      position: 'relative', aspectRatio: '4/3', borderRadius: 10, overflow: 'hidden',
+      background: 'linear-gradient(135deg, #0d1424 0%, #131c30 100%)',
+      border: `1px solid ${C.panelBorder}`,
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: 'repeating-linear-gradient(0deg, rgba(45,212,238,0.04) 0px, rgba(45,212,238,0.04) 1px, transparent 1px, transparent 3px)',
+      }} />
+      <div style={{
+        position: 'absolute', left: 0, right: 0, height: '35%',
+        background: 'linear-gradient(to bottom, transparent, rgba(45,212,238,0.12), transparent)',
+        animation: `scanline 4s linear infinite`, animationDelay: `${n * 0.6}s`,
+      }} />
+      <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.critical, animation: 'pulseDot 1.4s ease-in-out infinite' }} />
+        <span style={{ fontFamily: mono, fontSize: 9.5, color: C.critical, fontWeight: 700, letterSpacing: 1 }}>LIVE</span>
+      </div>
+      <span style={{ position: 'absolute', bottom: 8, left: 8, fontFamily: mono, fontSize: 10, color: C.textMute }}>CAM-{100 + n}</span>
+      <span style={{ position: 'absolute', bottom: 8, right: 8, fontFamily: disp, fontSize: 9.5, color: C.textFaint }}>{area}</span>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Cctv size={20} color="rgba(148,163,184,0.18)" />
+      </div>
+    </div>
+  );
+}
+
+function AlertRow({ a }) {
+  const colorMap = { CRITICAL: C.critical, WARNING: C.switches, INFO: C.cameras };
+  const color = colorMap[a.level] || C.textMute;
+  return (
+    <div style={{ display: 'flex', gap: 10, padding: '9px 4px', borderBottom: `1px solid ${C.panelBorder}` }}>
+      <div style={{ marginTop: 3, width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 5px ${color}` }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+          <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, color, letterSpacing: 0.5 }}>{a.level}</span>
+          <span style={{ fontFamily: mono, fontSize: 10, color: C.textFaint }}>{a.time}</span>
+        </div>
+        <div style={{ fontFamily: disp, fontSize: 12.5, color: C.text, marginTop: 2 }}>{a.msg}</div>
+      </div>
+    </div>
+  );
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: '#0d1424', border: `1px solid ${C.panelBorder}`, borderRadius: 8, padding: '8px 12px' }}>
+      <div style={{ fontFamily: mono, fontSize: 11, color: C.textMute }}>{label}</div>
+      <div style={{ fontFamily: mono, fontSize: 13, color: C.cameras, fontWeight: 700 }}>{payload[0].value}{payload[0].unit || ''}</div>
+    </div>
+  );
+};
 
 export default function Dashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  
+  const [now, setNow] = useState(new Date());
+
+  const [stats, setStats] = useState({
+    cameras: { total: 0, online: 0, offline: 0, maintenance: 0, scrap: 0, official: 0 },
+    nvrs: { total: 0, online: 0, offline: 0, maintenance: 0, scrap: 0, official: 0 },
+    biometrics: { total: 0, online: 0, offline: 0, maintenance: 0, scrap: 0, official: 0 },
+    switches: { total: 0, online: 0, offline: 0, maintenance: 0, scrap: 0, official: 0 },
+    tickets: { total: 0, open: 0, inProgress: 0, completed: 0, upgrade: 0 },
+    distribution: []
+  });
+  const [projects, setProjects] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [ticketList, setTicketList] = useState([]);
+  const [ticketFilter, setTicketFilter] = useState('All');
+  const [loading, setLoading] = useState(true);
+
   // Permission Guard
   const isAdmin = user?.role === 'Super Admin' || user?.role === 'Admin';
   const hasAnyPermission = isAdmin || (user?.permissions && user.permissions.length > 0);
 
-  const [stats, setStats] = useState({
-    cameras: { total: 0, online: 0, offline: 0 },
-    nvrs: { total: 0, online: 0, offline: 0 },
-    biometrics: { total: 0, online: 0, offline: 0 },
-    switches: { total: 0, online: 0, offline: 0 },
-    tickets: { total: 0, open: 0, inProgress: 0, completed: 0, upgrade: 0, project: 0 },
-    projects: { total: 0, active: 0, completed: 0, onHold: 0 }
-  });
-  const [collegeDistribution, setCollegeDistribution] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState('charts'); // 'charts' or 'tables'
-  const [activeTableTab, setActiveTableTab] = useState('cameras'); // 'cameras', 'nvrs', 'biometrics', 'switches', 'tickets'
-  const [tableData, setTableData] = useState({
-    cameras: [],
-    nvrs: [],
-    biometrics: [],
-    switches: [],
-    tickets: []
-  });
-  const [loadingTable, setLoadingTable] = useState(false);
-
-  const fetchTableData = async (tab) => {
-    try {
-      setLoadingTable(true);
-      let endpoint = '';
-      if (tab === 'cameras') endpoint = '/cameras/';
-      else if (tab === 'nvrs') endpoint = '/cameras/nvrs/';
-      else if (tab === 'biometrics') endpoint = '/cameras/biometrics/';
-      else if (tab === 'switches') endpoint = '/cameras/switches/';
-      else if (tab === 'tickets') endpoint = '/tickets/';
-
-      const res = await api.get(endpoint);
-      setTableData(prev => ({
-        ...prev,
-        [tab]: Array.isArray(res.data) ? res.data : (res.data?.results || [])
-      }));
-    } catch (err) {
-      console.error(`Error fetching ${tab} data:`, err);
-    } finally {
-      setLoadingTable(false);
-    }
-  };
-
-  useEffect(() => {
-    if (hasAnyPermission) {
-      fetchData();
-    }
-  }, [hasAnyPermission]);
-
-  if (!hasAnyPermission) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[70vh] animate-fade-in text-center px-6">
-        <div className="w-20 h-20 bg-rose-500/10 rounded-3xl flex items-center justify-center mb-8 border border-rose-500/20">
-          <Shield size={40} className="text-rose-500" />
-        </div>
-        <h2 className="text-4xl font-black text-text-main tracking-tight mb-3">Access Restricted</h2>
-        <p className="text-secondary font-medium max-w-md leading-relaxed">
-          Your account has been verified, but no access rights have been assigned to your profile yet.
-        </p>
-        <div className="mt-8 p-6 bg-panel border border-main rounded-2xl flex flex-col items-center">
-           <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-2">Access Required</span>
-           <p className="text-teal-500 font-black uppercase tracking-widest text-sm">Please contact the CCTV Admin for access.</p>
-        </div>
-      </div>
-    );
-  }
-
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [statsRes, projectsRes] = await Promise.all([
-        api.get('/cameras/global-site-config/dashboard_stats/'),
-        api.get('/tickets/projects/')
+      const [statsRes, projectsRes, logsRes, ticketsRes] = await Promise.all([
+        api.get('/cameras/global-site-config/dashboard_stats/').catch(() => ({ data: {} })),
+        api.get('/tickets/projects/').catch(() => ({ data: [] })),
+        api.get('/cameras/logs/').catch(() => ({ data: [] })),
+        api.get('/tickets/?page_size=100').catch(() => ({ data: [] }))
       ]);
-      
-      const data = statsRes.data;
-      const projects = Array.isArray(projectsRes.data) ? projectsRes.data : [];
-      
+
+      const statsData = statsRes.data;
       setStats({
-        cameras: data.cameras,
-        nvrs: data.nvrs,
-        biometrics: data.biometrics,
-        switches: data.switches,
-        tickets: data.tickets,
-        projects: {
-          total: projects.length,
-          active: projects.filter(p => p.status === 'Active').length,
-          completed: projects.filter(p => p.status === 'Completed').length,
-          onHold: projects.filter(p => p.status === 'On Hold').length
-        }
+        cameras: {
+          total: statsData.cameras?.total || 0,
+          online: statsData.cameras?.online || 0,
+          offline: statsData.cameras?.offline || 0,
+          maintenance: statsData.cameras?.maintenance || 0,
+          scrap: statsData.cameras?.scrap || 0,
+          official: statsData.cameras?.official || 0,
+        },
+        nvrs: {
+          total: statsData.nvrs?.total || 0,
+          online: statsData.nvrs?.online || 0,
+          offline: statsData.nvrs?.offline || 0,
+          maintenance: statsData.nvrs?.maintenance || 0,
+          scrap: statsData.nvrs?.scrap || 0,
+          official: statsData.nvrs?.official || 0,
+        },
+        biometrics: {
+          total: statsData.biometrics?.total || 0,
+          online: statsData.biometrics?.online || 0,
+          offline: statsData.biometrics?.offline || 0,
+          maintenance: statsData.biometrics?.maintenance || 0,
+          scrap: statsData.biometrics?.scrap || 0,
+          official: statsData.biometrics?.official || 0,
+        },
+        switches: {
+          total: statsData.switches?.total || 0,
+          online: statsData.switches?.online || 0,
+          offline: statsData.switches?.offline || 0,
+          maintenance: statsData.switches?.maintenance || 0,
+          scrap: statsData.switches?.scrap || 0,
+          official: statsData.switches?.official || 0,
+        },
+        tickets: statsData.tickets || { total: 0, open: 0, inProgress: 0, completed: 0, upgrade: 0 },
+        distribution: statsData.distribution || []
       });
 
-      setCollegeDistribution(data.distribution || []);
+      setProjects(Array.isArray(projectsRes.data) ? projectsRes.data : []);
+
+      // Ticket list
+      const ticketsRaw = ticketsRes.data;
+      const ticketArr = Array.isArray(ticketsRaw) ? ticketsRaw : (ticketsRaw?.results || []);
+      setTicketList(ticketArr);
+
+      const logs = Array.isArray(logsRes.data) ? logsRes.data : (logsRes.data?.results || []);
+      const formatted = logs.slice(0, 15).map(log => {
+        let level = 'INFO';
+        const act = String(log.action).toUpperCase();
+        if (act.includes('DELETE') || act.includes('REMOVE') || act.includes('CRITICAL')) {
+          level = 'CRITICAL';
+        } else if (act.includes('EDIT') || act.includes('UPDATE') || act.includes('WARNING')) {
+          level = 'WARNING';
+        }
+
+        let timeStr = 'Just now';
+        if (log.timestamp) {
+          const diffMs = new Date() - new Date(log.timestamp);
+          const diffMins = Math.floor(diffMs / 60000);
+          if (diffMins < 1) timeStr = 'Just now';
+          else if (diffMins < 60) timeStr = `${diffMins}m ago`;
+          else {
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) timeStr = `${diffHours}h ago`;
+            else timeStr = new Date(log.timestamp).toLocaleDateString();
+          }
+        }
+
+        return {
+          level,
+          msg: log.details || `${log.action} on ${log.page}`,
+          time: timeStr
+        };
+      });
+      setAlerts(formatted.length > 0 ? formatted : MOCK_ALERTS);
     } catch (err) {
-      console.error('Error fetching dashboard metrics:', err);
+      console.error('Error fetching dashboard data:', err);
+      setAlerts(MOCK_ALERTS);
     } finally {
       setLoading(false);
     }
   };
 
-  const ticketStatusData = useMemo(() => [
-    { name: 'Open', value: stats.tickets.open, color: '#f43f5e' },
-    { name: 'In Progress', value: stats.tickets.inProgress, color: '#f59e0b' },
-    { name: 'Completed', value: stats.tickets.completed, color: '#10b981' },
-  ], [stats.tickets]);
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    if (hasAnyPermission) {
+      fetchData();
+    }
+    return () => clearInterval(t);
+  }, [hasAnyPermission]);
 
-  const projectStatusData = useMemo(() => [
-    { name: 'Active', value: stats.projects.active, color: '#0ea5e9' },
-    { name: 'Completed', value: stats.projects.completed, color: '#10b981' },
-    { name: 'On Hold', value: stats.projects.onHold, color: '#f59e0b' },
-  ], [stats.projects]);
+  const totalOnline = stats.cameras.online + stats.nvrs.online + stats.biometrics.online + stats.switches.online;
+  const totalDevices = stats.cameras.total + stats.nvrs.total + stats.biometrics.total + stats.switches.total;
+
+  if (!hasAnyPermission) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] animate-fade-in text-center px-6">
+        <GoogleFonts />
+        <div className="w-20 h-20 bg-rose-500/10 rounded-3xl flex items-center justify-center mb-8 border border-rose-500/20">
+          <Shield size={40} className="text-rose-500" />
+        </div>
+        <h2 className="text-4xl font-black text-[var(--text-primary)] tracking-tight mb-3">Access Restricted</h2>
+        <p className="text-[var(--text-secondary)] font-medium max-w-md leading-relaxed">
+          Your account has been verified, but no access rights have been assigned to your profile yet.
+        </p>
+        <div className="mt-8 p-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl flex flex-col items-center shadow-lg">
+          <span className="text-[10px] font-black text-[var(--text-dim)] uppercase tracking-[0.3em] mb-2">Access Required</span>
+          <p className="text-teal-500 font-black uppercase tracking-widest text-sm">Please contact the CCTV Admin for access.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', color: C.text, gap: 16
+      }}>
+        <GoogleFonts />
+        <div style={{
+          width: 48, height: 48, border: `3px solid rgba(45,212,238,0.1)`,
+          borderTop: `3px solid ${C.cameras}`, borderRadius: '50%',
+          animation: 'sweep 1s linear infinite'
+        }} />
+        <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 700, color: C.textMute, letterSpacing: 1.5 }}>LOADING SENSORS...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-[1600px] mx-auto animate-fade-in pb-20 pt-10 px-4 lg:px-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-8 mb-10">
+    <div style={{
+      minHeight: '100vh', background: C.bg, color: C.text, fontFamily: disp,
+      padding: 24,
+    }}>
+      <GoogleFonts />
+
+      {/* HEADER */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22, flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <h1 className="text-4xl font-bold text-text-main">
-            CCTV <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-secondary to-accent-primary">DASHBOARD</span>
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Radio size={20} color={C.cameras} style={{ filter: `drop-shadow(0 0 4px ${C.cameras})` }} />
+            <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: 0.5, margin: 0, textTransform: 'uppercase' }}>CAMPUS CCTV DASHBOARD</h1>
+          </div>
+          <p style={{ fontFamily: mono, fontSize: 11.5, color: C.textMute, marginTop: 4 }}>
+            Rathinam College · {now.toLocaleTimeString()}
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: C.panel, border: `1px solid ${C.panelBorder}`, borderRadius: 20, padding: '7px 14px' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.ok, animation: 'pulseDot 1.6s ease-in-out infinite' }} />
+            <span style={{ fontFamily: mono, fontSize: 11.5, color: C.ok, fontWeight: 600 }}>
+              {totalOnline}/{totalDevices} SYSTEMS ONLINE
+            </span>
+          </div>
+          <button
+            onClick={() => navigate('/reports')}
+            style={{
+              background: 'transparent', border: `1px solid ${C.cameras}`, color: C.cameras,
+              borderRadius: 8, padding: '8px 14px', fontFamily: disp, fontSize: 12.5, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+            }}
+          >
+            Reports <ChevronRight size={13} />
+          </button>
+          <button
+            onClick={() => navigate('/billing')}
+            style={{
+              background: C.cameras, border: 'none', color: '#08111f',
+              borderRadius: 8, padding: '8px 14px', fontFamily: disp, fontSize: 12.5, fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+            }}
+          >
+            Billing & PO <ChevronRight size={13} />
+          </button>
         </div>
       </div>
 
-      {/* View Toggle */}
-      <div className="flex space-x-1 bg-panel border border-main p-1.5 rounded-2xl w-fit mb-8 relative z-10">
-        <button
-          onClick={() => setActiveView('charts')}
-          className={`px-6 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase transition-all duration-300 ${activeView === 'charts' ? 'bg-accent-secondary text-white shadow-md shadow-accent-secondary/20' : 'text-secondary hover:text-main'}`}
-        >
-          Charts & Analytics
-        </button>
-        <button
-          onClick={() => {
-            setActiveView('tables');
-            fetchTableData(activeTableTab);
-          }}
-          className={`px-6 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase transition-all duration-300 ${activeView === 'tables' ? 'bg-accent-secondary text-white shadow-md shadow-accent-secondary/20' : 'text-secondary hover:text-main'}`}
-        >
-          System Tables
-        </button>
+      {/* TOP METRICS */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 18 }}>
+        <MetricCard icon={Cctv} label="Cameras" data={stats.cameras} color={C.cameras} />
+        <MetricCard icon={HardDrive} label="NVRs" data={stats.nvrs} color={C.nvrs} />
+        <MetricCard icon={Fingerprint} label="Biometrics" data={stats.biometrics} color={C.biometrics} />
+        <MetricCard icon={Network} label="Switches" data={stats.switches} color={C.switches} />
       </div>
 
-      {activeView === 'charts' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
-          
-          {/* ROW 1: Separate Device Cards */}
-          <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-             {[ 
-               { label: "Cameras", path: '/cameras', value: stats.cameras.online, total: stats.cameras.total, perc: Math.round((stats.cameras.online/(stats.cameras.total||1))*100), color: 'var(--accent-secondary)' },
-               { label: "NVR", path: '/nvr', value: stats.nvrs.online, total: stats.nvrs.total, perc: Math.round((stats.nvrs.online/(stats.nvrs.total||1))*100), color: 'var(--accent-primary)' },
-               { label: "Biometrics", path: '/biometrics', value: stats.biometrics.online, total: stats.biometrics.total, perc: Math.round((stats.biometrics.online/(stats.biometrics.total||1))*100), color: 'var(--accent-violet)' },
-               { label: "Switches", path: '/network', value: stats.switches.online, total: stats.switches.total, perc: Math.round((stats.switches.online/(stats.switches.total||1))*100), color: 'var(--accent-secondary)' }
-             ].map((stat, i) => (
-                <div key={i} onClick={() => navigate(stat.path)} className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 cursor-pointer hover:shadow-lg hover:border-black/10 transition-all">
-                   <div className="hud-corner-tr"></div>
-                   <div className="hud-corner-bl"></div>
-                   
-                   <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: stat.color, opacity: 0.1, filter: 'blur(20px)' }}></div>
-                   
-                   <div className="flex justify-between items-start">
-                      <h3 className="text-xs font-bold text-text-secondary tracking-widest uppercase" style={{ color: stat.color }}>[{stat.label}]</h3>
-                   </div>
-                   
-                   <div className="flex flex-col space-y-3">
-                      <div className="flex items-end space-x-2 font-mono">
-                         <span className="text-4xl font-bold text-text-main" style={{ textShadow: `0 0 10px ${stat.color}60` }}>{stat.value}</span>
-                         <span className="text-sm font-semibold text-text-secondary mb-1">/ {stat.total}</span>
-                      </div>
-                      
-                      <div className="w-full h-1 bg-text-main/10 overflow-visible relative">
-                         <div className="h-full relative" style={{ width: `${stat.perc}%`, background: `linear-gradient(90deg, transparent, ${stat.color})` }}>
-                            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-4 bg-[var(--text-main)]" style={{ boxShadow: `0 0 10px ${stat.color}, 0 0 20px ${stat.color}` }}></div>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-             ))}
+
+      {/* ── TICKET ANALYTICS DASHBOARD ── */}
+      <div style={{ marginTop: 28 }}>
+
+        {/* Section header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+          <Wrench size={16} color={C.switches} style={{ filter: `drop-shadow(0 0 4px ${C.switches})` }} />
+          <span style={{ fontFamily: disp, fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>Service Operations</span>
+        </div>
+
+        {/* Stats summary row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 20 }}>
+          {[
+            { label: 'Total', val: stats.tickets.total, icon: FileText, color: C.textMute },
+            { label: 'Open', val: stats.tickets.open, icon: Wrench, color: C.switches },
+            { label: 'In Progress', val: stats.tickets.inProgress, icon: Clock, color: C.nvrs },
+            { label: 'Completed', val: stats.tickets.completed, icon: CheckCircle2, color: C.ok },
+            { label: 'Upgrades', val: stats.tickets.upgrade, icon: ArrowUpRight, color: C.cameras },
+            { label: 'Projects', val: stats.tickets.project, icon: Layers, color: C.biometrics },
+          ].map(({ label, val, icon: Icon, color }) => (
+            <div key={label} style={{
+              background: C.panel, border: `1px solid ${C.panelBorder}`, borderRadius: 12,
+              padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 5,
+              position: 'relative', overflow: 'hidden',
+            }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.6 }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: disp, fontSize: 10, color: C.textMute, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>
+                <Icon size={12} color={color} />
+              </div>
+              <span style={{ fontFamily: mono, fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1 }}>{val}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts Row: Division + Category */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+          {/* Tickets by Division */}
+          <div style={{ background: C.panel, border: `1px solid ${C.panelBorder}`, borderRadius: 14, padding: '18px 20px' }}>
+            <div style={{ fontFamily: disp, fontSize: 12, fontWeight: 700, color: C.textMute, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 }}>Tickets by Division</div>
+            {(() => {
+              const divMap = {};
+              ticketList.forEach(t => { const k = t.divisionName || 'Unassigned'; divMap[k] = (divMap[k] || 0) + 1; });
+              const data = Object.entries(divMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+              const max = Math.max(...data.map(d => d[1]), 1);
+              return data.length === 0
+                ? <div style={{ textAlign: 'center', color: C.textFaint, fontFamily: mono, fontSize: 12, padding: 24 }}>No data</div>
+                : data.map(([name, count]) => (
+                  <div key={name} style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontFamily: disp, fontSize: 11, color: C.text }}>{name}</span>
+                      <span style={{ fontFamily: mono, fontSize: 11, color: C.textMute }}>{count}</span>
+                    </div>
+                    <div style={{ height: 10, background: 'rgba(148,163,184,0.08)', borderRadius: 5, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(count / max) * 100}%`, background: C.nvrs, borderRadius: 5, transition: 'width 0.5s ease' }} />
+                    </div>
+                  </div>
+                ));
+            })()}
           </div>
 
-          {/* ROW 2: Radial Rings & Tickets */}
-          <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-8 mt-4">
-             {/* Ring 1 */}
-             <div className="hud-panel p-8 flex flex-col items-center justify-center relative">
-                <div className="hud-corner-tr"></div>
-                <div className="hud-corner-bl"></div>
-                <div className="absolute top-0 right-0 w-32 h-32 rounded-full" style={{ background: 'var(--accent-primary)', opacity: 0.1, filter: 'blur(30px)' }}></div>
-                <h3 className="text-[10px] font-bold text-accent-primary uppercase tracking-[0.2em] absolute top-6 left-6">TOTAL TICKETS</h3>
-                
-                <div className="relative w-48 h-48 flex items-center justify-center mt-6">
-                   {/* HUD Radar Rings Behind */}
-                   <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.4 }}>
-                      <circle cx="50%" cy="50%" r="46%" fill="none" stroke="var(--accent-primary)" strokeWidth="1" strokeDasharray="4 4" />
-                      <circle cx="50%" cy="50%" r="38%" fill="none" stroke="var(--accent-secondary)" strokeWidth="1" strokeDasharray="2 6" />
-                      {/* Crosshairs */}
-                      <line x1="5%" y1="50%" x2="95%" y2="50%" stroke="var(--accent-primary)" strokeWidth="1" strokeOpacity="0.3" />
-                      <line x1="50%" y1="5%" x2="50%" y2="95%" stroke="var(--accent-primary)" strokeWidth="1" strokeOpacity="0.3" />
-                   </svg>
-                   <ResponsiveContainer width="100%" height="100%" className="absolute inset-0">
-                      <PieChart>
-                         <Pie 
-                           data={
-                              (stats.tickets.open + stats.tickets.completed + stats.tickets.upgrade + stats.projects.total) > 0 
-                              ? [
-                                  { value: stats.tickets.open, fill: 'var(--text-secondary)' },
-                                  { value: stats.tickets.completed, fill: 'var(--accent-secondary)' },
-                                  { value: stats.tickets.upgrade, fill: 'var(--accent-primary)' },
-                                  { value: stats.projects.total, fill: 'var(--accent-violet)' }
-                                ]
-                              : [{ value: 1, fill: 'rgba(0,0,0,0.05)' }]
-                           } 
-                           dataKey="value" cx="50%" cy="50%" innerRadius={70} outerRadius={85} stroke="none" cornerRadius={10} paddingAngle={4}
-                         />
-                      </PieChart>
-                   </ResponsiveContainer>
-                   <div className="text-center z-10 flex flex-col items-center justify-center">
-                      <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px var(--accent-secondary)' }}>{stats.tickets.total}</span>
-                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-y-4 gap-x-8 w-full mt-6 px-4">
-                   <div className="text-center font-mono">
-                       <div className="text-[9px] uppercase tracking-widest text-text-secondary mb-1">Open</div>
-                      <div className="text-lg font-bold text-text-main">{stats.tickets.open}</div>
-                   </div>
-                   <div className="text-center font-mono">
-                      <div className="text-[9px] uppercase tracking-widest text-text-secondary mb-1">Closed</div>
-                      <div className="text-lg font-bold text-accent-secondary">{stats.tickets.completed}</div>
-                   </div>
-                   <div className="text-center font-mono">
-                       <div className="text-[9px] uppercase tracking-widest text-text-secondary mb-1">Upgrades</div>
-                      <div className="text-lg font-bold text-text-main">{stats.tickets.upgrade}</div>
-                   </div>
-                   <div className="text-center font-mono">
-                      <div className="text-[9px] uppercase tracking-widest text-text-secondary mb-1">Projects</div>
-                      <div className="text-lg font-bold text-accent-violet">{stats.projects.total}</div>
-                   </div>
-                </div>
-             </div>
-
-             {/* Projects Ring */}
-             <div className="hud-panel p-8 flex flex-col items-center justify-center relative">
-                <div className="hud-corner-tr"></div>
-                <div className="hud-corner-bl"></div>
-                <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full" style={{ background: 'var(--accent-secondary)', opacity: 0.1, filter: 'blur(30px)' }}></div>
-                <h3 className="text-[10px] font-bold text-accent-secondary uppercase tracking-[0.2em] absolute top-6 left-6">PROJECTS</h3>
-                
-                <div className="relative w-48 h-48 flex items-center justify-center mt-6">
-                   {/* HUD Radar Rings Behind */}
-                   <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.4 }}>
-                      <circle cx="50%" cy="50%" r="46%" fill="none" stroke="var(--accent-secondary)" strokeWidth="1" strokeDasharray="2 8" />
-                      <circle cx="50%" cy="50%" r="38%" fill="none" stroke="var(--accent-violet)" strokeWidth="1" strokeDasharray="5 5" />
-                      {/* Crosshairs */}
-                      <line x1="5%" y1="50%" x2="95%" y2="50%" stroke="var(--accent-secondary)" strokeWidth="1" strokeOpacity="0.3" />
-                      <line x1="50%" y1="5%" x2="50%" y2="95%" stroke="var(--accent-secondary)" strokeWidth="1" strokeOpacity="0.3" />
-                   </svg>
-                   <ResponsiveContainer width="100%" height="100%" className="absolute inset-0">
-                      <PieChart>
-                         <defs>
-                            <linearGradient id="ringGrad2" x1="0" y1="0" x2="1" y2="1">
-                               <stop offset="0%" stopColor="var(--accent-violet)" />
-                               <stop offset="100%" stopColor="var(--accent-primary)" />
-                            </linearGradient>
-                         </defs>
-                         <Pie data={projectStatusData} cx="50%" cy="50%" innerRadius={65} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none" cornerRadius={8}>
-                            {projectStatusData.map((entry, index) => (
-                               <Cell key={`cell-${index}`} fill={index === 0 ? 'url(#ringGrad2)' : 'rgba(0,0,0,0.05)'} />
-                            ))}
-                         </Pie>
-                      </PieChart>
-                   </ResponsiveContainer>
-                   <div className="text-center z-10 flex flex-col items-center justify-center">
-                      <span className="text-3xl font-bold text-text-main">{stats.projects.active}</span>
-                      <span className="text-xs text-text-secondary mt-1">Active</span>
-                   </div>
-                </div>
-                <div className="flex justify-between w-full mt-8 px-4 cursor-pointer" onClick={() => navigate('/projects')}>
-                   <div className="text-center w-full bg-accent-secondary/10 py-2 rounded border border-accent-secondary/30 hover:bg-accent-secondary/20 transition-colors">
-                      <span className="text-[10px] font-bold text-accent-secondary tracking-widest uppercase">View PROJECTS</span>
-                   </div>
-                </div>
-             </div>
-
-             {/* Secondary Chart / Matrix */}
-             <div className="hud-panel p-8 flex flex-col relative">
-                <div className="hud-corner-tr"></div>
-                <div className="hud-corner-bl"></div>
-                <h3 className="text-[10px] font-bold text-accent-primary uppercase tracking-[0.2em] absolute top-6 left-6">DIVISION</h3>
-                <div className="flex-1 min-h-[200px] mt-8">
-                   <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={collegeDistribution} layout="vertical" margin={{ left: 0 }}>
-                         <defs>
-                            <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
-                               <stop offset="0%" stopColor="var(--accent-secondary)" stopOpacity={0.3}/>
-                               <stop offset="100%" stopColor="var(--accent-primary)" stopOpacity={1}/>
-                            </linearGradient>
-                         </defs>
-                         <XAxis type="number" hide />
-                         <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: 'none', borderRadius: '8px' }} itemStyle={{ color: 'var(--text-primary)' }} />
-                         <Bar dataKey="count" fill="url(#barGrad)" radius={[0, 4, 4, 0]} barSize={12} />
-                      </BarChart>
-                   </ResponsiveContainer>
-                </div>
-             </div>
-          </div>
-
-          {/* ROW 3: Quick Action Links */}
-          <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
-              <button 
-                  onClick={() => navigate('/reports')}
-                  className="hud-panel p-6 flex items-center justify-center space-x-3 cursor-pointer hover:bg-accent-primary/10 hover:border-accent-primary transition-all group"
-              >
-                 <div className="hud-corner-tr"></div>
-                 <div className="hud-corner-bl"></div>
-                 <Database size={20} className="text-accent-primary group-hover:scale-110 transition-transform" />
-                 <span className="text-[12px] font-bold tracking-widest uppercase text-text-main">Reports</span>
-              </button>
-              <button 
-                  onClick={() => navigate('/billing')}
-                  className="hud-panel p-6 flex items-center justify-center space-x-3 cursor-pointer hover:bg-accent-secondary/10 hover:border-accent-secondary transition-all group"
-              >
-                 <div className="hud-corner-tr"></div>
-                 <div className="hud-corner-bl"></div>
-                 <Briefcase size={20} className="text-accent-secondary group-hover:scale-110 transition-transform" />
-                 <span className="text-[12px] font-bold tracking-widest uppercase text-text-main">Billing & PO Tracking</span>
-              </button>
+          {/* Category Breakdown */}
+          <div style={{ background: C.panel, border: `1px solid ${C.panelBorder}`, borderRadius: 14, padding: '18px 20px' }}>
+            <div style={{ fontFamily: disp, fontSize: 12, fontWeight: 700, color: C.textMute, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 }}>Category Breakdown</div>
+            {(() => {
+              const catMap = {};
+              ticketList.forEach(t => { const k = t.category || 'Uncategorized'; catMap[k] = (catMap[k] || 0) + 1; });
+              const catColors = { Repair: C.critical, Upgrade: C.cameras, Installation: C.ok, Project: C.nvrs };
+              const data = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+              const max = Math.max(...data.map(d => d[1]), 1);
+              return data.length === 0
+                ? <div style={{ textAlign: 'center', color: C.textFaint, fontFamily: mono, fontSize: 12, padding: 24 }}>No data</div>
+                : data.map(([name, count]) => (
+                  <div key={name} style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontFamily: disp, fontSize: 11, color: C.text }}>{name}</span>
+                      <span style={{ fontFamily: mono, fontSize: 11, color: C.textMute }}>{count}</span>
+                    </div>
+                    <div style={{ height: 10, background: 'rgba(148,163,184,0.08)', borderRadius: 5, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(count / max) * 100}%`, background: catColors[name] || C.biometrics, borderRadius: 5, transition: 'width 0.5s ease' }} />
+                    </div>
+                  </div>
+                ));
+            })()}
           </div>
         </div>
-      ) : (
-        /* System Tables View */
-        <div className="space-y-6 relative z-10">
-          <div className="flex space-x-2 border-b border-main pb-4 overflow-x-auto scrollbar-none">
-            {[
-              { id: 'cameras', label: 'Cameras', color: 'var(--accent-secondary)' },
-              { id: 'nvrs', label: 'NVRs', color: 'var(--accent-primary)' },
-              { id: 'biometrics', label: 'Biometrics', color: 'var(--accent-violet)' },
-              { id: 'switches', label: 'Network Switches', color: 'var(--accent-secondary)' },
-              { id: 'tickets', label: 'Tickets', color: 'var(--accent-primary)' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTableTab(tab.id);
-                  fetchTableData(tab.id);
-                }}
-                className={`px-5 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase transition-all duration-300 border ${activeTableTab === tab.id ? 'bg-white/5 text-main border-teal-500/30 font-extrabold' : 'text-secondary border-transparent hover:text-main'}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
 
-          <div className="hud-panel p-8 relative min-h-[400px]">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
 
-            {loadingTable ? (
-              <div className="flex flex-col items-center justify-center h-64 space-y-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500"></div>
-                <span className="text-xs font-bold text-secondary uppercase tracking-widest">Loading Records...</span>
-              </div>
-            ) : (
-              <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-main/60 text-[10px] font-black uppercase tracking-wider text-text-secondary">
-                      <th className="pb-3 pl-2">S.No</th>
-                      {activeTableTab === 'cameras' && (
-                        <>
-                          <th className="pb-3">Camera ID</th>
-                          <th className="pb-3">Name</th>
-                          <th className="pb-3">IP Address</th>
-                          <th className="pb-3">Brand/Model</th>
-                          <th className="pb-3">Location</th>
-                          <th className="pb-3">Status</th>
-                        </>
-                      )}
-                      {activeTableTab === 'nvrs' && (
-                        <>
-                          <th className="pb-3">NVR Name</th>
-                          <th className="pb-3">IP Address</th>
-                          <th className="pb-3">Brand/Model</th>
-                          <th className="pb-3">Location</th>
-                          <th className="pb-3">Channels</th>
-                          <th className="pb-3">Status</th>
-                        </>
-                      )}
-                      {activeTableTab === 'biometrics' && (
-                        <>
-                          <th className="pb-3">Device Name</th>
-                          <th className="pb-3">IP Address</th>
-                          <th className="pb-3">Brand/Model</th>
-                          <th className="pb-3">Location</th>
-                          <th className="pb-3">Type</th>
-                          <th className="pb-3">Status</th>
-                        </>
-                      )}
-                      {activeTableTab === 'switches' && (
-                        <>
-                          <th className="pb-3">Switch Name</th>
-                          <th className="pb-3">IP Address</th>
-                          <th className="pb-3">Brand/Model</th>
-                          <th className="pb-3">Location</th>
-                          <th className="pb-3">Ports</th>
-                          <th className="pb-3">Status</th>
-                        </>
-                      )}
-                      {activeTableTab === 'tickets' && (
-                        <>
-                          <th className="pb-3">Ticket ID</th>
-                          <th className="pb-3">Issue Description</th>
-                          <th className="pb-3">Category</th>
-                          <th className="pb-3">Location</th>
-                          <th className="pb-3">Created At</th>
-                          <th className="pb-3">Status</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-main/40 text-sm">
-                    {tableData[activeTableTab]?.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="py-12 text-center text-secondary font-medium">
-                          No records found in this table.
-                        </td>
-                      </tr>
-                    ) : (
-                      tableData[activeTableTab]?.map((row, idx) => (
-                        <tr 
-                          key={row.id || row._id || idx} 
-                          className="hover:bg-white/5 transition-colors group cursor-pointer"
-                          onClick={() => {
-                            if (activeTableTab === 'cameras') navigate(`/devices/camera/${row.id || row._id}`);
-                            else if (activeTableTab === 'nvrs') navigate(`/devices/nvr/${row.id || row._id}`);
-                            else if (activeTableTab === 'biometrics') navigate(`/devices/biometrics/${row.id || row._id}`);
-                            else if (activeTableTab === 'switches') navigate(`/devices/switch/${row.id || row._id}`);
-                            else if (activeTableTab === 'tickets') navigate(`/tickets/${row.id || row._id}`);
-                          }}
-                        >
-                          <td className="py-4 pl-2 font-mono text-xs text-text-secondary">{idx + 1}</td>
-                          {activeTableTab === 'cameras' && (
-                            <>
-                              <td className="py-4 font-mono text-xs font-bold text-teal-500">{row.cameraId || 'N/A'}</td>
-                              <td className="py-4 font-bold text-text-main group-hover:text-teal-500 transition-colors">{row.name}</td>
-                              <td className="py-4 font-mono text-xs text-text-secondary">{row.ipAddress || 'N/A'}</td>
-                              <td className="py-4 text-xs font-semibold text-text-secondary">{row.brand || 'N/A'} {row.model ? `/ ${row.model}` : ''}</td>
-                              <td className="py-4 text-xs text-text-secondary max-w-[200px] truncate">{row.divisionName || ''} {row.block ? `| ${row.block}` : ''} {row.room ? `| ${row.room}` : ''}</td>
-                              <td className="py-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${row.status === 'Online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                  {row.status || 'Offline'}
-                                </span>
-                              </td>
-                            </>
-                          )}
-                          {activeTableTab === 'nvrs' && (
-                            <>
-                              <td className="py-4 font-bold text-text-main group-hover:text-teal-500 transition-colors">{row.nvrName}</td>
-                              <td className="py-4 font-mono text-xs text-text-secondary">{row.ipAddress || 'N/A'}</td>
-                              <td className="py-4 text-xs font-semibold text-text-secondary">{row.brand || 'N/A'} {row.model ? `/ ${row.model}` : ''}</td>
-                              <td className="py-4 text-xs text-text-secondary max-w-[200px] truncate">{row.location}</td>
-                              <td className="py-4 font-mono text-xs text-text-secondary">{row.channel || 'N/A'}</td>
-                              <td className="py-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${row.status === 'Online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                  {row.status || 'Offline'}
-                                </span>
-                              </td>
-                            </>
-                          )}
-                          {activeTableTab === 'biometrics' && (
-                            <>
-                              <td className="py-4 font-bold text-text-main group-hover:text-teal-500 transition-colors">{row.name}</td>
-                              <td className="py-4 font-mono text-xs text-text-secondary">{row.ipAddress || 'N/A'}</td>
-                              <td className="py-4 text-xs font-semibold text-text-secondary">{row.brand || 'N/A'} {row.model ? `/ ${row.model}` : ''}</td>
-                              <td className="py-4 text-xs text-text-secondary max-w-[200px] truncate">{row.location}</td>
-                              <td className="py-4 text-xs font-semibold text-text-secondary">{row.type || 'N/A'}</td>
-                              <td className="py-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${row.status === 'Online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                  {row.status || 'Offline'}
-                                </span>
-                              </td>
-                            </>
-                          )}
-                          {activeTableTab === 'switches' && (
-                            <>
-                              <td className="py-4 font-bold text-text-main group-hover:text-teal-500 transition-colors">{row.name}</td>
-                              <td className="py-4 font-mono text-xs text-text-secondary">{row.ipAddress || 'N/A'}</td>
-                              <td className="py-4 text-xs font-semibold text-text-secondary">{row.brand || 'N/A'} {row.model ? `/ ${row.model}` : ''}</td>
-                              <td className="py-4 text-xs text-text-secondary max-w-[200px] truncate">{row.location}</td>
-                              <td className="py-4 font-mono text-xs text-text-secondary">{row.portCount || 'N/A'}</td>
-                              <td className="py-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${row.status === 'Online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                  {row.status || 'Offline'}
-                                </span>
-                              </td>
-                            </>
-                          )}
-                          {activeTableTab === 'tickets' && (
-                            <>
-                              <td className="py-4 font-mono text-xs font-bold text-teal-500">#{row.id || 'N/A'}</td>
-                              <td className="py-4 font-bold text-text-main group-hover:text-teal-500 transition-colors max-w-[300px] truncate">{row.issueDescription}</td>
-                              <td className="py-4 text-xs font-semibold text-text-secondary">{row.category || 'N/A'}</td>
-                              <td className="py-4 text-xs text-text-secondary max-w-[200px] truncate">{row.divisionName || ''} {row.block ? `| ${row.block}` : ''}</td>
-                              <td className="py-4 font-mono text-xs text-text-secondary">{row.createdAt ? new Date(row.createdAt).toLocaleDateString() : 'N/A'}</td>
-                              <td className="py-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${row.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500' : row.status === 'In Progress' ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}>
-                                  {row.status || 'Open'}
-                                </span>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
+      </div>
+
     </div>
   );
 }

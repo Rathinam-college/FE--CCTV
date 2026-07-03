@@ -41,9 +41,29 @@ const getFileName = (path) => {
 export default function Tickets() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+
+  const parseMetadata = (remarks) => {
+    try {
+      const parsed = JSON.parse(remarks);
+      if (parsed && typeof parsed === 'object') return parsed;
+      throw new Error("Not an object");
+    } catch (e) {
+      return {
+        location: '',
+        category: 'CCTV',
+        actionTaken: '',
+        instructionBy: '',
+        receivedTime: '',
+        endTime: '',
+        totalTime: ''
+      };
+    }
+  };
+
   const { showNotification } = useNotificationStore();
   const { showConfirm } = useConfirmStore();
   const [tickets, setTickets] = useState([]);
+  const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -71,6 +91,23 @@ export default function Tickets() {
   const [newRemark, setNewRemark] = useState('');
   const [showVisualAnalytics, setShowVisualAnalytics] = useState(false);
 
+  const availableMonths = useMemo(() => {
+    if (!Array.isArray(tickets)) return [];
+    const months = tickets.map(ticket => {
+      const meta = parseMetadata(ticket.remarks);
+      const ticketDate = meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+      return ticketDate ? ticketDate.substring(0, 7) : null;
+    }).filter(Boolean);
+    return Array.from(new Set(months)).sort().reverse();
+  }, [tickets]);
+
+  const formatMonthLabel = (ym) => {
+    if (!ym) return '';
+    const [year, month] = ym.split('-');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[parseInt(month, 10) - 1]} ${year}`;
+  };
+
   // Simplified Completion Modal States
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionTicket, setCompletionTicket] = useState(null);
@@ -94,24 +131,6 @@ export default function Tickets() {
 
   const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Maintenance:EDIT');
-
-  const parseMetadata = (remarks) => {
-    try {
-      const parsed = JSON.parse(remarks);
-      if (parsed && typeof parsed === 'object') return parsed;
-      throw new Error("Not an object");
-    } catch (e) {
-      return {
-        location: '',
-        category: 'CCTV',
-        actionTaken: '',
-        instructionBy: '',
-        receivedTime: '',
-        endTime: '',
-        totalTime: ''
-      };
-    }
-  };
 
   const baseFilteredTickets = useMemo(() => {
     return Array.isArray(tickets) ? tickets.filter(ticket => {
@@ -812,6 +831,178 @@ export default function Tickets() {
     showNotification('Export successful');
   };
 
+  const exportExcelReport = () => {
+    const categories = ['Camera', 'Maintenance', 'Service', 'Installation', 'Issue', 'Upgrade', 'Project', 'Other'];
+    
+    const dateRangeLabel = startMonth || endMonth 
+      ? `(${startMonth ? formatMonthLabel(startMonth) : ''} to ${endMonth ? formatMonthLabel(endMonth) : ''})`
+      : '';
+
+    const breakdown = categories.map(cat => {
+      const catTickets = filteredTickets.filter(t => {
+        const meta = parseMetadata(t.remarks);
+        const tCat = t.category || meta.category || 'CCTV';
+        return tCat.toLowerCase() === cat.toLowerCase();
+      });
+      const open = catTickets.filter(t => t.status === 'Open').length;
+      const inProgress = catTickets.filter(t => t.status === 'In Progress').length;
+      const completed = catTickets.filter(t => t.status === 'Completed').length;
+      const total = catTickets.length;
+      return { category: cat, open, inProgress, completed, total };
+    });
+
+    let xml = `<?xml version="1.0" encoding="utf-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Author>CCTV System</Author>
+  <Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Header">
+   <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#0F172A" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="Title">
+   <Font ss:Bold="1" ss:Size="12" ss:Color="#0F172A"/>
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="BoldText">
+   <Font ss:Bold="1"/>
+  </Style>
+ </Styles>
+`;
+
+    xml += ` <Worksheet ss:Name="Category Summary">
+  <Table>
+   <Row ss:Height="25">
+    <Cell ss:MergeAcross="4" ss:StyleID="Title"><Data ss:Type="String">Category Breakdown Report ${dateRangeLabel}</Data></Cell>
+   </Row>
+   <Row ss:Height="20">
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Category</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Open</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">In Progress</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Completed</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Total</Data></Cell>
+   </Row>
+`;
+    breakdown.forEach(row => {
+      xml += `   <Row>
+    <Cell><Data ss:Type="String">${row.category}</Data></Cell>
+    <Cell><Data ss:Type="Number">${row.open}</Data></Cell>
+    <Cell><Data ss:Type="Number">${row.inProgress}</Data></Cell>
+    <Cell><Data ss:Type="Number">${row.completed}</Data></Cell>
+    <Cell><Data ss:Type="Number">${row.total}</Data></Cell>
+   </Row>
+`;
+    });
+    
+    const grandOpen = breakdown.reduce((sum, r) => sum + r.open, 0);
+    const grandInProgress = breakdown.reduce((sum, r) => sum + r.inProgress, 0);
+    const grandCompleted = breakdown.reduce((sum, r) => sum + r.completed, 0);
+    const grandTotal = breakdown.reduce((sum, r) => sum + r.total, 0);
+    
+    xml += `   <Row>
+    <Cell ss:StyleID="BoldText"><Data ss:Type="String">Grand Total</Data></Cell>
+    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandOpen}</Data></Cell>
+    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandInProgress}</Data></Cell>
+    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandCompleted}</Data></Cell>
+    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandTotal}</Data></Cell>
+   </Row>
+  </Table>
+ </Worksheet>
+`;
+
+    const renderCategorySheet = (catName) => {
+      const list = filteredTickets.filter(t => {
+        const meta = parseMetadata(t.remarks);
+        const tCat = t.category || meta.category || 'CCTV';
+        return tCat.toLowerCase() === catName.toLowerCase();
+      });
+
+      let sheetXml = ` <Worksheet ss:Name="${catName}">
+  <Table ss:DefaultColumnWidth="120">
+   <Row ss:Height="20">
+    <Cell ss:StyleID="Header"><Data ss:Type="String">S.No</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Date</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Division</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Status</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Instruction By</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Nature of Problem</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Assigned To</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Remarks</Data></Cell>
+   </Row>
+`;
+      if (list.length === 0) {
+        sheetXml += `   <Row>
+    <Cell ss:MergeAcross="7"><Data ss:Type="String">No tickets for category ${catName}.</Data></Cell>
+   </Row>
+`;
+      } else {
+        list.forEach((t, idx) => {
+          const meta = parseMetadata(t.remarks);
+          const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
+          const tDiv = t.divisionName || 'N/A';
+          const tStatus = t.status || 'Open';
+          const tInst = t.instructionBy || meta.instructionBy || 'N/A';
+          const tDesc = t.issueDescription || '';
+          const tAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+          const tRemarks = t.actionTaken || meta.actionTaken || '';
+          
+          sheetXml += `   <Row>
+    <Cell><Data ss:Type="Number">${idx + 1}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDate)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDiv)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tStatus)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tInst)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDesc)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tAssign)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tRemarks)}</Data></Cell>
+   </Row>
+`;
+        });
+      }
+      sheetXml += `  </Table>
+ </Worksheet>
+`;
+      return sheetXml;
+    };
+
+    const escapeXml = (unsafe) => {
+      return String(unsafe)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    };
+
+    categories.forEach(cat => {
+      xml += renderCategorySheet(cat);
+    });
+
+    xml += `</Workbook>`;
+
+    const fileDateLabel = startMonth || endMonth
+      ? `${startMonth || ''}_to_${endMonth || ''}`
+      : new Date().toISOString().split('T')[0];
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Category_Breakdown_Report_${fileDateLabel}.xls`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification('Excel Export successful');
+  };
+
   const printToPDF = () => {
     const printWindow = window.open('', '_blank');
     const htmlContent = `
@@ -880,31 +1071,61 @@ export default function Tickets() {
     <div className="space-y-6 animate-fade-in pb-10">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-white/10 pb-6">
-        <div>
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <Tag className="mr-3 text-blue-400" size={28} />
             Ticket Management
           </h1>
+          <div className="flex bg-panel border border-white/10 rounded-xl p-0.5 sm:ml-4 self-start">
+            <button
+              onClick={() => setViewMode('registry')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'registry'
+                  ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20'
+                  : 'text-dim hover:text-white'
+              }`}
+            >
+              Ticket List
+            </button>
+            <button
+              onClick={() => setViewMode('report')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'report'
+                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
+                  : 'text-dim hover:text-white'
+              }`}
+            >
+              Report View
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
 
-          <div className="flex items-center space-x-2 shrink-0">
-            <Calendar size={16} className="text-dim" />
-            <input 
-              type="month" 
+          <div className="flex items-center space-x-2 shrink-0 text-main">
+            <Calendar size={14} className="text-dim mr-1" />
+            <select
               value={startMonth}
               onChange={(e) => setStartMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
+              className="glass-input px-3 py-1.5 text-xs w-36 cursor-pointer bg-panel border-main outline-none focus:border-teal-500 transition-colors uppercase font-bold text-secondary"
               title="From Month"
-            />
-            <span className="text-secondary text-xs">to</span>
-            <input 
-              type="month" 
+            >
+              <option value="">From Month</option>
+              {availableMonths.map(m => (
+                <option key={m} value={m}>{formatMonthLabel(m)}</option>
+              ))}
+            </select>
+            <span className="text-secondary text-xs px-1">to</span>
+            <select
               value={endMonth}
               onChange={(e) => setEndMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
+              className="glass-input px-3 py-1.5 text-xs w-36 cursor-pointer bg-panel border-main outline-none focus:border-teal-500 transition-colors uppercase font-bold text-secondary"
               title="To Month"
-            />
+            >
+              <option value="">To Month</option>
+              {availableMonths.map(m => (
+                <option key={m} value={m}>{formatMonthLabel(m)}</option>
+              ))}
+            </select>
           </div>
           <div className="relative flex-1 min-w-[200px] md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
@@ -917,13 +1138,6 @@ export default function Tickets() {
             />
           </div>
           <div className="flex space-x-3 shrink-0">
-            <button 
-              onClick={() => navigate('/tickets-dashboard')} 
-              className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium border border-white/10 text-dim hover:text-indigo-400 hover:bg-white/10 transition-all shrink-0 whitespace-nowrap"
-            >
-              <Activity size={18} className="mr-2" />
-              Ticket Dashboard
-            </button>
             <button onClick={handleDownload} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-teal-500/10 border-teal-500/30 text-teal-600 hover:bg-teal-500/20 transition-all shrink-0 whitespace-nowrap">
               <Download size={18} className="mr-2" />
               Export CSV
@@ -940,8 +1154,10 @@ export default function Tickets() {
 
 
 
-      {/* Summary Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+      {viewMode === 'registry' ? (
+        <>
+          {/* Summary Dashboard */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
         <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
             <div className="hud-corner-tr"></div>
@@ -1043,31 +1259,37 @@ export default function Tickets() {
       </div>
 
       {/* Filter Toolbar */}
-      <div className="flex flex-wrap items-center gap-4 bg-panel p-4 rounded-2xl border border-main">
-        <div className="flex p-1 bg-card rounded-xl border border-main">
-          {['ALL', 'Open', 'In Progress', 'Completed'].map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
-                statusFilter === status 
-                  ? 'bg-teal-500 text-white shadow-lg' 
-                  : 'text-secondary hover:text-main hover:bg-panel'
-              }`}
-            >
-              {status}
-            </button>
-          ))}
+      <div className="bg-panel p-4 rounded-2xl border border-main space-y-4">
+        {/* Row 1: Status & Stats */}
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex p-0.5 bg-card rounded-xl border border-main self-start">
+            {['ALL', 'Open', 'In Progress', 'Completed'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  statusFilter === status 
+                    ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' 
+                    : 'text-secondary hover:text-main hover:bg-panel'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center space-x-2 bg-card px-4 py-2 rounded-xl border border-main text-[10px] font-black uppercase tracking-widest self-end sm:self-center">
+            <span className="text-dim">Displaying:</span>
+            <span className="text-teal-400 font-mono text-xs font-bold">{filteredTickets.length} Records</span>
+          </div>
         </div>
 
-        <div className="h-4 w-[1px] bg-main mx-2"></div>
-
-        <div className="flex items-center space-x-6 ml-auto">
-          <div className="flex items-center space-x-2">
+        {/* Row 2: Advanced Dropdowns & Export Buttons */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-3 border-t border-white/5">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <select 
               value={filterDivision} 
               onChange={(e) => setFilterDivision(e.target.value)} 
-              className="glass-input px-3 py-1.5 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-transparent hover:border-main focus:border-teal-500 transition-colors"
+              className="glass-input px-3 py-2 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-main focus:border-teal-500 transition-colors w-full sm:w-auto min-w-[180px]"
             >
               <option value="">All Divisions ({Array.isArray(tickets) ? tickets.length : 0})</option>
               {Array.isArray(divisions) && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(d => (
@@ -1077,7 +1299,7 @@ export default function Tickets() {
             <select 
               value={filterCategory} 
               onChange={(e) => setFilterCategory(e.target.value)} 
-              className="glass-input px-3 py-1.5 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-transparent hover:border-main focus:border-teal-500 transition-colors"
+              className="glass-input px-3 py-2 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-main focus:border-teal-500 transition-colors w-full sm:w-auto min-w-[180px]"
             >
               <option value="">All Categories ({Array.isArray(tickets) ? tickets.length : 0})</option>
               <option value="Issue">Issue ({filterCounts.category['Issue'] || 0})</option>
@@ -1087,26 +1309,23 @@ export default function Tickets() {
               <option value="Other">Other ({filterCounts.category['Other'] || 0})</option>
             </select>
           </div>
-          <div className="h-4 w-[1px] bg-main mx-2"></div>
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">Displaying:</span>
-            <span className="text-[10px] font-bold text-teal-600 uppercase tracking-widest">{filteredTickets.length} Records</span>
+
+          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+            <button 
+              onClick={handleDownload}
+              className="glass-panel flex items-center justify-center px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all w-full sm:w-auto"
+            >
+              <Download size={12} className="mr-2" />
+              Download CSV
+            </button>
+            <button 
+              onClick={printToPDF}
+              className="glass-panel flex items-center justify-center px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-purple-500/10 border-purple-500/20 text-purple-400 hover:bg-purple-500/20 transition-all w-full sm:w-auto"
+            >
+              <Printer size={12} className="mr-2" />
+              Print PDF
+            </button>
           </div>
-          <div className="h-4 w-[1px] bg-main mx-2"></div>
-          <button 
-            onClick={handleDownload}
-            className="glass-panel flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20 transition-all"
-          >
-            <Download size={12} className="mr-1.5" />
-            Download CSV
-          </button>
-          <button 
-            onClick={printToPDF}
-            className="glass-panel flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest bg-purple-500/10 border-purple-500/30 text-purple-500 hover:bg-purple-500/20 transition-all ml-2"
-          >
-            <Printer size={12} className="mr-1.5" />
-            Print PDF
-          </button>
         </div>
       </div>
 
@@ -1312,6 +1531,289 @@ export default function Tickets() {
           </table>
         </div>
       </div>
+    </>
+  ) : (
+    <div className="space-y-8 animate-fade-in">
+      {/* Detailed Ticket Report View */}
+      <div className="hud-panel p-8 bg-card border-main relative overflow-hidden rounded-[2rem]">
+        <div className="hud-corner-tr"></div>
+        <div className="hud-corner-bl"></div>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div>
+            <h2 className="text-xl font-bold text-main tracking-wider uppercase mb-1">Ticket Operations & Performance Report</h2>
+            <p className="text-xs text-dim">
+              Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-[9px] font-bold uppercase tracking-widest text-dim">
+                Period: {startMonth || 'ALL'} to {endMonth || 'ALL'}
+              </span>
+              <span className="px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-bold uppercase tracking-widest text-blue-400">
+                Division: {filterDivision || 'ALL DIVISIONS'}
+              </span>
+              <span className="px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-[9px] font-bold uppercase tracking-widest text-purple-400">
+                Category: {filterCategory || 'ALL CATEGORIES'}
+              </span>
+              <span className="px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold uppercase tracking-widest text-amber-400">
+                Project: {filterProject ? (projects.find(p => String(p.id || p._id) === String(filterProject))?.name || 'SPECIFIC') : 'ALL PROJECTS'}
+              </span>
+              <span className="px-2.5 py-1 rounded bg-teal-500/10 border border-teal-500/20 text-[9px] font-bold uppercase tracking-widest text-teal-400">
+                Status Filter: {statusFilter}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 self-end md:self-center shrink-0">
+            <button
+              onClick={exportExcelReport}
+              className="glass-panel flex items-center px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-teal-500/10 border-teal-500/30 text-teal-400 hover:bg-teal-500/20 transition-all shadow-lg shadow-teal-500/5"
+            >
+              <Download size={14} className="mr-2" />
+              Export Excel Report
+            </button>
+            <button
+              onClick={printToPDF}
+              className="glass-panel flex items-center px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-all shadow-lg shadow-purple-500/5"
+            >
+              <Printer size={14} className="mr-2" />
+              Print PDF Report
+            </button>
+            <button
+              onClick={handleDownload}
+              className="glass-panel flex items-center px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-lg shadow-emerald-500/5"
+            >
+              <Download size={14} className="mr-2" />
+              Export CSV Data
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+          <span className="text-[9px] font-bold text-dim uppercase tracking-widest">Total Tickets</span>
+          <span className="text-3xl font-bold font-mono text-white mt-2">{filteredTickets.length}</span>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
+        </div>
+        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+          <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest">Open Queue</span>
+          <span className="text-3xl font-bold font-mono text-rose-400 mt-2">{filteredTickets.filter(t => t.status === 'Open').length}</span>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-rose-500 shadow-lg shadow-rose-500/50"></div>
+        </div>
+        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+          <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">In Progress</span>
+          <span className="text-3xl font-bold font-mono text-amber-400 mt-2">{filteredTickets.filter(t => t.status === 'In Progress').length}</span>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-amber-500 shadow-lg shadow-amber-500/50"></div>
+        </div>
+        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+          <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Completed</span>
+          <span className="text-3xl font-bold font-mono text-emerald-400 mt-2">{filteredTickets.filter(t => t.status === 'Completed').length}</span>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div>
+        </div>
+        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+          <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest">Resolution Rate</span>
+          <span className="text-3xl font-bold font-mono text-teal-400 mt-2">
+            {((filteredTickets.filter(t => t.status === 'Completed').length / (filteredTickets.length || 1)) * 100).toFixed(0)}%
+          </span>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-teal-400 shadow-lg shadow-teal-400/50"></div>
+        </div>
+        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+          <span className="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Billing Records</span>
+          <span className="text-3xl font-bold font-mono text-purple-400 mt-2">
+            {filteredTickets.filter(t => t.billing_records?.length > 0).length}
+          </span>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-purple-400 shadow-lg shadow-purple-400/50"></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass-panel p-6 bg-card border-main rounded-[1.5rem] flex flex-col">
+          <h3 className="text-xs font-bold text-main uppercase tracking-widest mb-6">Category Breakdown</h3>
+          <div className="h-64 flex items-center justify-center">
+            {categoryStats.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryStats} layout="vertical" margin={{ left: 10, right: 10, top: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis type="number" stroke="#94a3b8" fontSize={9} />
+                  <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={9} width={60} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: '8px',
+                      fontSize: '10px'
+                    }}
+                  />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                    {categoryStats.map((entry, idx) => (
+                      <Cell key={`cell-${idx}`} fill={getCategoryColor(entry.name)} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-dim font-bold uppercase tracking-widest">No Category Data</p>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-panel p-6 bg-card border-main rounded-[1.5rem] flex flex-col lg:col-span-2">
+          <h3 className="text-xs font-bold text-main uppercase tracking-widest mb-6">Tickets by Division</h3>
+          <div className="h-64 flex items-center justify-center">
+            {(() => {
+              const divDataMap = {};
+              filteredTickets.forEach(t => {
+                const name = t.divisionName || 'Unassigned';
+                divDataMap[name] = (divDataMap[name] || 0) + 1;
+              });
+              const data = Object.entries(divDataMap).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count).slice(0, 10);
+              if (data.length === 0) return <p className="text-xs text-dim font-bold uppercase tracking-widest">No Division Data</p>;
+              return (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data} margin={{ left: 0, right: 10, top: 10, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={8} interval={0} angle={-30} textAnchor="end" height={40} />
+                    <YAxis stroke="#94a3b8" fontSize={9} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--glass-border)',
+                        borderRadius: '8px',
+                        fontSize: '10px'
+                      }}
+                    />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-panel p-6 bg-card border-main rounded-[1.5rem]">
+        <h3 className="text-xs font-bold text-main uppercase tracking-widest mb-6">Technician Load & Productivity Matrix</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-panel border-b border-main">
+                <th className="p-4 text-[10px] font-bold text-main uppercase tracking-widest">Technician</th>
+                <th className="p-4 text-[10px] font-bold text-rose-500 uppercase tracking-widest text-center">Open</th>
+                <th className="p-4 text-[10px] font-bold text-amber-500 uppercase tracking-widest text-center">In Progress</th>
+                <th className="p-4 text-[10px] font-bold text-emerald-500 uppercase tracking-widest text-center">Completed</th>
+                <th className="p-4 text-[10px] font-bold text-main uppercase tracking-widest text-center">Total Assigned</th>
+                <th className="p-4 text-[10px] font-bold text-teal-400 uppercase tracking-widest text-center">Completion Rate</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 text-dim">
+              {(() => {
+                const techReportMap = {};
+                filteredTickets.forEach(t => {
+                  const name = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+                  if (!techReportMap[name]) techReportMap[name] = { Open: 0, 'In Progress': 0, Completed: 0 };
+                  if (techReportMap[name][t.status] !== undefined) {
+                    techReportMap[name][t.status]++;
+                  }
+                });
+                const data = Object.entries(techReportMap).sort((a,b) => {
+                  const sumA = a[1].Open + a[1]['In Progress'] + a[1].Completed;
+                  const sumB = b[1].Open + b[1]['In Progress'] + b[1].Completed;
+                  return sumB - sumA;
+                });
+                if (data.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-xs">No technician load data found.</td>
+                    </tr>
+                  );
+                }
+                return data.map(([name, counts]) => {
+                  const total = counts.Open + counts['In Progress'] + counts.Completed;
+                  const rate = total > 0 ? ((counts.Completed / total) * 100).toFixed(0) : 0;
+                  return (
+                    <tr key={name} className="hover:bg-white/5 transition-colors">
+                      <td className="p-4 text-xs font-bold text-white flex items-center space-x-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
+                          {name.charAt(0).toUpperCase()}
+                        </div>
+                        <span>{name}</span>
+                      </td>
+                      <td className="p-4 font-mono text-center text-rose-400 font-bold">{counts.Open}</td>
+                      <td className="p-4 font-mono text-center text-amber-400 font-bold">{counts['In Progress']}</td>
+                      <td className="p-4 font-mono text-center text-emerald-400 font-bold">{counts.Completed}</td>
+                      <td className="p-4 font-mono text-center text-white font-bold">{total}</td>
+                      <td className="p-4 text-center">
+                        <span className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] font-bold text-teal-400 font-mono">
+                          {rate}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="glass-panel overflow-hidden border border-main shadow-sm rounded-[1.5rem]">
+        <div className="p-4 bg-panel border-b border-main flex justify-between items-center">
+          <span className="text-[10px] font-black text-main uppercase tracking-widest">Report Registry ({filteredTickets.length} Records)</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-panel border-b border-main text-dim">
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest text-center w-12">S.No</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Date</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Division</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Category</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Instruction By</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest w-1/3">Nature of Problem</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 text-main">
+              {filteredTickets.map((ticket, idx) => {
+                const meta = parseMetadata(ticket.remarks);
+                return (
+                  <tr key={ticket.id || ticket._id} className="hover:bg-white/5 transition-colors">
+                    <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                    <td className="p-4 font-mono text-[10px] text-dim">
+                      {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                    </td>
+                    <td className="p-4 text-xs font-bold text-blue-400">
+                      {ticket.divisionName || 'N/A'}
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-bold uppercase tracking-wider">
+                        {ticket.category || meta.category || 'CCTV'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-xs text-dim">
+                      {ticket.instructionBy || meta.instructionBy || 'N/A'}
+                    </td>
+                    <td className="p-4 text-xs text-dim italic line-clamp-2">
+                      {ticket.issueDescription}
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${
+                        ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' :
+                        ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20 bg-orange-500/5' :
+                        'text-red-400 border-red-500/20 bg-red-500/5'
+                      }`}>
+                        {ticket.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
