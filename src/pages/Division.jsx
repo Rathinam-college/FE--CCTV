@@ -168,7 +168,7 @@ export default function Division() {
       return;
     }
     
-    const headers = ['Device', 'Type', 'Block', 'Floor', 'Room', 'IP', 'Serial', 'Status'];
+    const headers = ['Device', 'Type', 'Block', 'Floor', 'Room', 'IP', 'Serial', 'Status', 'Date Added'];
     const csvContent = [
       headers.join(','),
       ...filteredDevices.map(d => {
@@ -182,7 +182,8 @@ export default function Division() {
           `"${loc.room}"`,
           `"${d.ipAddress || ''}"`,
           `"${d.serialNumber || d.serialNo || d.sno || ''}"`,
-          `"${d.status || 'Active'}"`
+          `"${d.status || 'Active'}"`,
+          `"${d.createdAt?.split('T')[0] || ''}"`
         ].join(',');
       })
     ].join('\n');

@@ -284,60 +284,67 @@ export default function DeviceManagement() {
 
       {/* Top Navigation Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-slide-up">
-        <button onClick={() => setActiveTab('CAMERAS')} className={`glass-panel p-5 flex flex-col items-center justify-center text-center transition-all ${activeTab === 'CAMERAS' ? 'ring-2 ring-blue-500 bg-blue-500/10' : 'hover:bg-white/5'}`}>
-          <CameraIcon size={28} className={`${activeTab === 'CAMERAS' ? 'text-blue-400' : 'text-dim'}`} strokeWidth={1.5} />
-          <span className={`mt-3 font-bold text-[13px] ${activeTab === 'CAMERAS' ? 'text-blue-400' : 'text-dim'}`}>Assets</span>
-          <div className="mt-2 flex space-x-3 text-[10px] font-bold uppercase tracking-widest">
-            <span className="text-dim">TOTAL: {cameras.length}</span>
-            <span className="text-emerald-500">LIVE: {cameras.filter(c => c.status === 'Online').length}</span>
+        <button onClick={() => setActiveTab('CAMERAS')} className={`bg-panel rounded-md p-5 flex flex-col items-center justify-center text-center relative transition-all group ${activeTab === 'CAMERAS' ? 'ring-1 ring-cyan-500/50' : 'hover:ring-1 hover:ring-cyan-500/30'}`}>
+          <CameraIcon size={24} className={`${activeTab === 'CAMERAS' ? 'text-cyan-400' : 'text-slate-500'}`} />
+          <span className={`mt-3 font-bold text-[11px] tracking-widest uppercase ${activeTab === 'CAMERAS' ? 'text-cyan-400' : 'text-slate-400'}`}>[Assets]</span>
+          <div className="mt-3 flex space-x-4 text-[9px] font-bold uppercase tracking-widest">
+            <span className="text-slate-300">TOTAL: {cameras.length}</span>
+            <span className="text-green-500">LIVE: {cameras.filter(c => c.status === 'Online').length}</span>
             <span className="text-red-500">DOWN: {cameras.filter(c => c.status !== 'Online').length}</span>
           </div>
+          {activeTab === 'CAMERAS' && <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>}
         </button>
 
-        <button onClick={() => setActiveTab('STORAGE')} className={`glass-panel p-5 flex flex-col items-center justify-center text-center transition-all ${activeTab === 'STORAGE' ? 'ring-2 ring-indigo-500 bg-indigo-500/10' : 'hover:bg-white/5'}`}>
-          <Server size={28} className={`${activeTab === 'STORAGE' ? 'text-indigo-400' : 'text-dim'}`} strokeWidth={1.5} />
-          <span className={`mt-3 font-bold text-[13px] ${activeTab === 'STORAGE' ? 'text-indigo-400' : 'text-dim'}`}>Storage Units</span>
-          <div className="mt-2 flex space-x-3 text-[10px] font-bold uppercase tracking-widest">
-            <span className="text-dim">TOTAL: {nvrs.length}</span>
-            <span className="text-emerald-500">LIVE: {nvrs.filter(n => n.status === 'Online').length}</span>
+        <button onClick={() => setActiveTab('STORAGE')} className={`bg-panel rounded-md p-5 flex flex-col items-center justify-center text-center relative transition-all group ${activeTab === 'STORAGE' ? 'ring-1 ring-yellow-500/50' : 'hover:ring-1 hover:ring-yellow-500/30'}`}>
+          <Server size={24} className={`${activeTab === 'STORAGE' ? 'text-yellow-500' : 'text-slate-500'}`} />
+          <span className={`mt-3 font-bold text-[11px] tracking-widest uppercase ${activeTab === 'STORAGE' ? 'text-yellow-500' : 'text-slate-400'}`}>[Storage Units]</span>
+          <div className="mt-3 flex space-x-4 text-[9px] font-bold uppercase tracking-widest">
+            <span className="text-slate-300">TOTAL: {nvrs.length}</span>
+            <span className="text-green-500">LIVE: {nvrs.filter(n => n.status === 'Online').length}</span>
             <span className="text-red-500">DOWN: {nvrs.filter(n => n.status !== 'Online').length}</span>
           </div>
+          {activeTab === 'STORAGE' && <div className="absolute bottom-0 left-0 h-1 bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]" style={{ width: '30%' }}></div>}
         </button>
 
-        <button onClick={() => setActiveTab('IDENTITY')} className={`glass-panel p-5 flex flex-col items-center justify-center text-center transition-all ${activeTab === 'IDENTITY' ? 'ring-2 ring-purple-500 bg-purple-500/10' : 'hover:bg-white/5'}`}>
-          <Fingerprint size={28} className={`${activeTab === 'IDENTITY' ? 'text-purple-400' : 'text-dim'}`} strokeWidth={1.5} />
-          <span className={`mt-3 font-bold text-[13px] ${activeTab === 'IDENTITY' ? 'text-purple-400' : 'text-dim'}`}>Identity Access</span>
-          <div className="mt-2 flex space-x-3 text-[10px] font-bold uppercase tracking-widest">
-            <span className="text-dim">TOTAL: {biometrics.length}</span>
-            <span className="text-emerald-500">LIVE: {biometrics.filter(b => b.status === 'Online').length}</span>
+        <button onClick={() => setActiveTab('IDENTITY')} className={`bg-panel rounded-md p-5 flex flex-col items-center justify-center text-center relative transition-all group ${activeTab === 'IDENTITY' ? 'ring-1 ring-orange-500/50' : 'hover:ring-1 hover:ring-orange-500/30'}`}>
+          <Fingerprint size={24} className={`${activeTab === 'IDENTITY' ? 'text-orange-500' : 'text-slate-500'}`} />
+          <span className={`mt-3 font-bold text-[11px] tracking-widest uppercase ${activeTab === 'IDENTITY' ? 'text-orange-500' : 'text-slate-400'}`}>[Identity Access]</span>
+          <div className="mt-3 flex space-x-4 text-[9px] font-bold uppercase tracking-widest">
+            <span className="text-slate-300">TOTAL: {biometrics.length}</span>
+            <span className="text-green-500">LIVE: {biometrics.filter(b => b.status === 'Online').length}</span>
             <span className="text-red-500">DOWN: {biometrics.filter(b => b.status !== 'Online').length}</span>
           </div>
+          {activeTab === 'IDENTITY' && <div className="absolute bottom-0 left-0 h-1 bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]" style={{ width: '30%' }}></div>}
         </button>
 
-        <button onClick={() => setActiveTab('NETWORK')} className={`glass-panel p-5 flex flex-col items-center justify-center text-center transition-all ${activeTab === 'NETWORK' ? 'ring-2 ring-emerald-500 bg-emerald-500/10' : 'hover:bg-white/5'}`}>
-          <Lock size={28} className={`${activeTab === 'NETWORK' ? 'text-emerald-400' : 'text-dim'}`} strokeWidth={1.5} />
-          <span className={`mt-3 font-bold text-[13px] ${activeTab === 'NETWORK' ? 'text-emerald-400' : 'text-dim'}`}>Network Assets</span>
-          <div className="mt-2 flex space-x-3 text-[10px] font-bold uppercase tracking-widest">
-            <span className="text-dim">TOTAL: {barriers.length}</span>
-            <span className="text-emerald-500">LIVE: {barriers.filter(b => b.status === 'Online').length}</span>
+        <button onClick={() => setActiveTab('NETWORK')} className={`bg-panel rounded-md p-5 flex flex-col items-center justify-center text-center relative transition-all group ${activeTab === 'NETWORK' ? 'ring-1 ring-green-500/50' : 'hover:ring-1 hover:ring-green-500/30'}`}>
+          <Lock size={24} className={`${activeTab === 'NETWORK' ? 'text-green-500' : 'text-slate-500'}`} />
+          <span className={`mt-3 font-bold text-[11px] tracking-widest uppercase ${activeTab === 'NETWORK' ? 'text-green-500' : 'text-slate-400'}`}>[Network Assets]</span>
+          <div className="mt-3 flex space-x-4 text-[9px] font-bold uppercase tracking-widest">
+            <span className="text-slate-300">TOTAL: {barriers.length}</span>
+            <span className="text-green-500">LIVE: {barriers.filter(b => b.status === 'Online').length}</span>
             <span className="text-red-500">DOWN: {barriers.filter(b => b.status !== 'Online').length}</span>
           </div>
+          {activeTab === 'NETWORK' && <div className="absolute bottom-0 left-0 h-1 bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" style={{ width: '30%' }}></div>}
         </button>
       </div>
 
       {/* Search Bar & Action */}
-      <div className="glass-panel p-4 flex flex-col sm:flex-row gap-4 items-center animate-slide-up delay-100 mt-6">
-        <div className="relative flex-1 w-full flex items-center bg-black/20 rounded-xl border border-white/5">
-          <Search className="absolute left-4 text-dim" size={18} />
-          <input 
-            type="text" 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
-            placeholder={`Search ${activeTab.toLowerCase()} devices...`} 
-            className="w-full !pl-14 pr-4 py-3 bg-transparent text-[13px] text-main placeholder-dim focus:outline-none" 
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-100 mt-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={`Deep search ${activeTab.toLowerCase()} devices...`}
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
           />
         </div>
-        <button onClick={openNewModal} className="glass-button flex items-center px-6 py-3 text-[13px] shrink-0">
+        <button
+          onClick={openNewModal}
+          className="flex items-center px-6 py-3 rounded-md bg-cyan-400 hover:bg-cyan-500 text-slate-900 text-[13px] font-bold transition-colors shrink-0"
+        >
           <Plus size={16} className="mr-2" /> Add Device
         </button>
       </div>
@@ -347,36 +354,39 @@ export default function DeviceManagement() {
         {activeTab === 'CAMERAS' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredData.map((item) => (
-              <div key={item.id} onClick={() => navigate(`/devices/cameras/${item.id}`)} className="glass-panel p-5 hover:border-blue-500/50 cursor-pointer relative group transition-all flex flex-col hover:bg-white/5">
+              <div key={item.id} onClick={() => navigate(`/devices/cameras/${item.id}`)} className="bg-panel border border-main rounded-md p-5 hover:border-cyan-500/50 cursor-pointer relative group transition-all flex flex-col">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-blue-500/20 rounded-xl text-blue-400 border border-blue-500/30">
+                    <div className="p-3 bg-cyan-400/10 rounded-md text-cyan-400 border border-cyan-400/20">
                       <CameraIcon size={20} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h4 className="text-[15px] font-bold text-main tracking-wide">{item.name}</h4>
-                      <p className="text-[11px] text-dim mt-0.5">{item.location}</p>
+                      <h4 className="text-[13px] font-bold text-white tracking-wide uppercase">{item.name}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">{item.location}</p>
                     </div>
                   </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-bold tracking-wider border ${item.status === 'Online' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                    item.status === 'Online' ? 'text-green-500 border-green-500/50' : 
+                    item.status === 'Offline' ? 'text-red-500 border-red-500/50' :
+                    'text-amber-500 border-amber-500/50'}`}>
                     {item.status}
                   </span>
                 </div>
                 
                 <div className="mt-6 grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-[9px] text-dim uppercase font-bold tracking-widest">IP Address</span>
-                    <p className="text-[12px] font-mono text-blue-400 mt-1">{item.ipAddress}</p>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">IP Address</span>
+                    <p className="text-[11px] font-bold text-cyan-400 mt-1">{item.ipAddress}</p>
                   </div>
                   <div>
-                    <span className="text-[9px] text-dim uppercase font-bold tracking-widest">Recording</span>
-                    <p className="text-[12px] text-dim mt-1">{item.recordingStatus}</p>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Recording</span>
+                    <p className="text-[11px] text-white font-bold uppercase tracking-wider mt-1">{item.recordingStatus}</p>
                   </div>
                 </div>
 
-                <div className="absolute top-4 right-20 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="p-1.5 text-dim hover:text-blue-600 transition-colors"><Edit2 size={14} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="p-1.5 text-dim hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
+                <div className="absolute top-4 right-20 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors"><Edit2 size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}
@@ -384,47 +394,50 @@ export default function DeviceManagement() {
         )}
 
         {activeTab === 'STORAGE' && (
-          <div className="glass-panel overflow-hidden">
+          <div className="bg-panel border border-main rounded-md overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-white/5 text-[10px] font-bold text-dim uppercase tracking-widest bg-black/20">
-                    <th className="p-4 pl-6">Storage Identification</th>
-                    <th className="p-4">Location</th>
-                    <th className="p-4">IP Address</th>
-                    <th className="p-4">Channels</th>
-                    <th className="p-4">Capacity</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 pr-6 text-right">Controls</th>
+                <thead className="bg-panel border-b border-main">
+                  <tr className="text-slate-400">
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Storage Identification</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">IP Address</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Channels</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Capacity</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Status</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-right">Controls</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 text-[13px] text-gray-300">
+                <tbody className="divide-y divide-main">
                   {filteredData.map((item) => (
-                    <tr key={item.id} onClick={() => navigate(`/devices/nvr/${item.id}`)} className="hover:bg-white/5 cursor-pointer transition-colors group">
-                      <td className="p-4 pl-6 font-bold text-main flex items-center space-x-3">
-                        <div className="p-2 bg-indigo-500/20 border border-indigo-500/30 rounded-lg">
-                          <Server size={14} className="text-indigo-400" />
+                    <tr key={item.id} onClick={() => navigate(`/devices/nvr/${item.id}`)} className="hover:bg-slate-700/30 cursor-pointer transition-colors group">
+                      <td className="p-4 px-5 flex items-center space-x-3">
+                        <div className="p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                          <Server size={14} className="text-yellow-500" />
                         </div>
-                        <span>{item.name}</span>
+                        <span className="text-[11px] font-bold text-white tracking-wider uppercase">{item.name}</span>
                       </td>
-                      <td className="p-4 text-dim text-[12px]">{item.location}</td>
-                      <td className="p-4 font-mono text-blue-400 text-[12px]">{item.ipAddress}</td>
-                      <td className="p-4 text-dim text-[12px]">{item.channels}</td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-semibold text-[12px] text-main">{item.hardDisk}</span>
-                          <span className="text-[9px] font-bold tracking-wider px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full">{item.storageStatus}</span>
+                      <td className="p-4 px-5 text-slate-400 text-[9px] font-bold tracking-wider uppercase">{item.location}</td>
+                      <td className="p-4 px-5 text-yellow-500 text-[11px] font-bold">{item.ipAddress}</td>
+                      <td className="p-4 px-5 text-slate-300 text-[11px] font-bold">{item.channels}</td>
+                      <td className="p-4 px-5">
+                        <div className="flex flex-col space-y-1">
+                          <span className="text-[11px] font-bold text-white uppercase tracking-wider">{item.hardDisk}</span>
+                          <span className="text-[8px] font-bold tracking-wider uppercase text-slate-400">{item.storageStatus}</span>
                         </div>
                       </td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider border ${item.status === 'Online' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-red-400 border-red-500/20 bg-red-500/10'}`}>
+                      <td className="p-4 px-5">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                          item.status === 'Online' ? 'text-green-500 border-green-500/50' : 
+                          item.status === 'Offline' ? 'text-red-500 border-red-500/50' :
+                          'text-amber-500 border-amber-500/50'}`}>
                           {item.status}
                         </span>
                       </td>
-                      <td className="p-4 pr-6 text-right">
-                        <div className="flex justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="text-dim hover:text-indigo-400"><Edit2 size={14} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-dim hover:text-red-400"><Trash2 size={14} /></button>
+                      <td className="p-4 px-5 text-right">
+                        <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="text-slate-400 hover:text-yellow-500"><Edit2 size={14} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -438,36 +451,39 @@ export default function DeviceManagement() {
         {activeTab === 'IDENTITY' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredData.map((item) => (
-              <div key={item.id} onClick={() => navigate(`/devices/biometrics/${item.id}`)} className="glass-panel p-5 hover:border-purple-500/50 cursor-pointer relative group transition-all flex flex-col hover:bg-white/5">
+              <div key={item.id} onClick={() => navigate(`/devices/biometrics/${item.id}`)} className="bg-panel border border-main rounded-md p-5 hover:border-orange-500/50 cursor-pointer relative group transition-all flex flex-col">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-purple-500/20 rounded-xl text-purple-400 border border-purple-500/30">
+                    <div className="p-3 bg-orange-500/10 rounded-md text-orange-500 border border-orange-500/20">
                       <Fingerprint size={20} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h4 className="text-[15px] font-bold text-main tracking-wide">{item.name}</h4>
-                      <p className="text-[11px] text-dim mt-0.5">{item.location}</p>
+                      <h4 className="text-[13px] font-bold text-white tracking-wide uppercase">{item.name}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">{item.location}</p>
                     </div>
                   </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-bold tracking-wider border ${item.status === 'Online' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                    item.status === 'Online' ? 'text-green-500 border-green-500/50' : 
+                    item.status === 'Offline' ? 'text-red-500 border-red-500/50' :
+                    'text-amber-500 border-amber-500/50'}`}>
                     {item.status}
                   </span>
                 </div>
                 
                 <div className="mt-6 grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-[9px] text-dim uppercase font-bold tracking-widest">Type / IP Address</span>
-                    <p className="text-[12px] font-mono text-blue-400 mt-1">{item.type} <span className="text-dim">•</span> {item.ipAddress}</p>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Type / IP Address</span>
+                    <p className="text-[11px] font-bold text-orange-500 mt-1">{item.type} <span className="text-slate-400">•</span> {item.ipAddress}</p>
                   </div>
                   <div>
-                    <span className="text-[9px] text-dim uppercase font-bold tracking-widest">Sync Status</span>
-                    <p className="text-[12px] text-dim mt-1">{item.syncStatus}</p>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Sync Status</span>
+                    <p className="text-[11px] text-white font-bold uppercase tracking-wider mt-1">{item.syncStatus}</p>
                   </div>
                 </div>
 
-                <div className="absolute top-4 right-20 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="p-1.5 text-dim hover:text-purple-400 transition-colors"><Edit2 size={14} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="p-1.5 text-dim hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                <div className="absolute top-4 right-20 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="p-1.5 text-slate-400 hover:text-orange-500 transition-colors"><Edit2 size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}
@@ -477,36 +493,37 @@ export default function DeviceManagement() {
         {activeTab === 'NETWORK' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredData.map((item) => (
-              <div key={item.id} onClick={() => navigate(`/devices/switches/${item.id}`)} className="glass-panel p-5 hover:border-emerald-500/50 cursor-pointer relative group transition-all flex flex-col hover:bg-white/5">
+              <div key={item.id} onClick={() => navigate(`/devices/switches/${item.id}`)} className="bg-panel border border-main rounded-md p-5 hover:border-green-500/50 cursor-pointer relative group transition-all flex flex-col">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-400 border border-emerald-500/30">
+                    <div className="p-3 bg-green-500/10 rounded-md text-green-500 border border-green-500/20">
                       <Lock size={20} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h4 className="text-[15px] font-bold text-main tracking-wide">{item.name}</h4>
-                      <p className="text-[11px] text-dim mt-0.5">{item.location}</p>
+                      <h4 className="text-[13px] font-bold text-white tracking-wide uppercase">{item.name}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">{item.location}</p>
                     </div>
                   </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-bold tracking-wider border ${item.gateStatus === 'Open' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'}`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                    item.gateStatus === 'Open' ? 'text-green-500 border-green-500/50' : 'text-blue-500 border-blue-500/50'}`}>
                     {item.gateStatus}
                   </span>
                 </div>
                 
                 <div className="mt-6 grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-[9px] text-dim uppercase font-bold tracking-widest">Controller ID</span>
-                    <p className="text-[12px] font-mono text-dim mt-1">{item.controller}</p>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Controller ID</span>
+                    <p className="text-[11px] font-bold text-slate-300 mt-1">{item.controller}</p>
                   </div>
                   <div>
-                    <span className="text-[9px] text-dim uppercase font-bold tracking-widest">Last Used</span>
-                    <p className="text-[12px] text-dim mt-1">{item.lastUsed}</p>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Last Used</span>
+                    <p className="text-[11px] text-white font-bold uppercase tracking-wider mt-1">{item.lastUsed}</p>
                   </div>
                 </div>
 
-                <div className="absolute top-4 right-20 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="p-1.5 text-dim hover:text-emerald-400 transition-colors"><Edit2 size={14} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="p-1.5 text-dim hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                <div className="absolute top-4 right-20 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={(e) => { e.stopPropagation(); editItem(item); }} className="p-1.5 text-slate-400 hover:text-green-500 transition-colors"><Edit2 size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}

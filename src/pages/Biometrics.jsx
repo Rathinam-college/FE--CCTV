@@ -434,7 +434,7 @@ export default function Biometrics() {
   ];
 
   const exportToExcel = () => {
-    const headers = ['S.No', 'Asset Number', 'Usage', 'Brand', 'Model', 'College', 'Block', 'Floor', 'Room', 'IP Address', 'MAC Address', 'Type', 'Status'];
+    const headers = ['S.No', 'Asset Number', 'Serial Number', 'Usage', 'Brand', 'Model', 'College', 'Block', 'Floor', 'Room', 'IP Address', 'MAC Address', 'Type', 'Status', 'Date Added'];
 
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
@@ -448,6 +448,7 @@ export default function Biometrics() {
     const dataRows = filteredDevices.map((d, i) => [
       i + 1,
       escapeCSV(d.serialNumber || 'N/A'),
+      escapeCSV(d.hardwareSerial || 'N/A'),
       escapeCSV(d.name || 'N/A'),
       escapeCSV(d.brand || 'N/A'),
       escapeCSV(d.model || 'N/A'),
@@ -458,7 +459,8 @@ export default function Biometrics() {
       escapeCSV(d.ipAddress || 'N/A'),
       escapeCSV(d.macAddress || 'N/A'),
       escapeCSV(d.type || 'N/A'),
-      escapeCSV(d.status || 'N/A')
+      escapeCSV(d.status || 'N/A'),
+      escapeCSV(d.createdAt?.split('T')[0] || '')
     ]);
 
     const csvContent = "\uFEFF" + [
@@ -541,31 +543,30 @@ export default function Biometrics() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <Fingerprint className="mr-3 text-purple-500" size={28} />
+            <Fingerprint className="mr-3 text-orange-500" size={28} />
             Biometric
           </h1>
         </div>
-        <div className="flex space-x-3">
-          <button onClick={exportToExcel} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all shadow-lg">
-            <Download size={18} className="mr-2" />
-            Export CSV
+        <div className="flex space-x-4 items-center">
+          <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={printToPDF} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-all shadow-lg">
-            <Printer size={18} className="mr-2" />
-            Print PDF
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Printer size={14} className="mr-2" /> Print PDF
           </button>
           {canEdit && (
             <>
-              <label className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-lg cursor-pointer">
-                <Upload size={18} className="mr-2" /> Upload CSV
+              <label className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors cursor-pointer">
+                <Upload size={14} className="mr-2" />
+                Bulk Import
                 <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
               </label>
-              <button onClick={openNewModal} className="glass-button flex items-center px-5 py-2.5 text-sm font-medium">
-                <Plus size={18} className="mr-2" />
-                Add Device
+              <button onClick={openNewModal} className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2">
+                <Plus size={16} className="mr-2" />
+                Register Asset
               </button>
             </>
           )}
@@ -573,225 +574,227 @@ export default function Biometrics() {
       </div>
 
       {/* Stats Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 animate-slide-up delay-100">
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#0d9488', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-teal-500 tracking-widest uppercase">[Total]</h3>
-            <Fingerprint size={18} className="text-teal-500 opacity-50 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="flex flex-col space-y-3">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(13, 148, 136, 0.6)' }}>{stats.total}</span>
+      {/* Stats Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
+        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50">
+            <div className="flex justify-between items-start w-full">
+              <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL ASSETS]</h3>
+              <Fingerprint size={18} className="text-slate-500" />
             </div>
-          </div>
+            <div className="flex items-end mt-4">
+              <span className="text-4xl font-bold text-cyan-400">{stats.total}</span>
+            </div>
+            <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
+          </button>
+ 
+          <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30">
+            <div className="flex justify-between items-start w-full">
+              <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[ONLINE UNITS]</h3>
+              <Building size={18} className="text-slate-500" />
+            </div>
+            <div className="flex items-end mt-4">
+              <span className="text-4xl font-bold text-white">{stats.online}</span>
+            </div>
+          </button>
+ 
+          <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-orange-500/30">
+            <div className="flex justify-between items-start w-full">
+              <h3 className="text-[11px] font-bold text-orange-500 tracking-widest uppercase">[OFFLINE UNITS]</h3>
+              <Users size={18} className="text-slate-500" />
+            </div>
+            <div className="flex items-end mt-4">
+              <span className="text-4xl font-bold text-white">{stats.offline}</span>
+            </div>
+            <div className="absolute bottom-0 left-0 h-1 bg-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]" style={{ width: '30%' }}></div>
+          </button>
+
+          <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-purple-500/30">
+            <div className="flex justify-between items-start w-full">
+              <h3 className="text-[11px] font-bold text-purple-500 tracking-widest uppercase">[TYPES]</h3>
+              <Fingerprint size={18} className="text-slate-500" />
+            </div>
+            <div className="flex items-end mt-4">
+              <span className="text-4xl font-bold text-white">{stats.types}</span>
+            </div>
+          </button>
         </div>
 
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#059669', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-emerald-500 tracking-widest uppercase">[Active]</h3>
-            <Building size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="flex flex-col space-y-3">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(5, 150, 105, 0.6)' }}>{stats.online}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#ea580c', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-orange-500 tracking-widest uppercase">[Offline]</h3>
-            <Users size={18} className="text-orange-500 opacity-50 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="flex flex-col space-y-3">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(234, 88, 12, 0.6)' }}>{stats.offline}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#8b5cf6', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-purple-500 tracking-widest uppercase">[Types]</h3>
-            <Fingerprint size={18} className="text-purple-500 opacity-50 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="flex flex-col space-y-3">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(139, 92, 246, 0.6)' }}>{stats.types}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-card border border-main rounded-2xl p-4 flex items-center justify-center min-h-[120px] shadow-sm">
-          <div className="w-full h-full min-w-[150px] relative">
-            <ResponsiveContainer width="100%" height={80}>
+        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
+          <div className="w-24 h-24 relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={chartData}
-                  innerRadius={25}
-                  outerRadius={35}
-                  paddingAngle={5}
-                  dataKey="value"
-                  stroke="none"
-                >
+                <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col space-y-1">
-              {chartData.map(d => (
-                <div key={d.name} className="flex items-center text-[8px] font-black text-secondary uppercase tracking-widest">
-                  <span className="w-1.5 h-1.5 rounded-full mr-1.5" style={{ backgroundColor: d.color }}></span>
-                  {d.name}
-                </div>
-              ))}
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
             </div>
+          </div>
+          <div className="absolute right-2 flex flex-col space-y-2">
+            {chartData.map(d => (
+              <div key={d.name} className="flex items-center space-x-2">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
+                <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="animate-slide-up delay-200">
-        {/* Search & Actions Area */}
-        <div className="bg-card border border-main rounded-2xl flex flex-col justify-center p-8 space-y-6 shadow-sm">
-            <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row gap-4 bg-white/5 rounded-t-2xl">
-              <div className="flex items-center space-x-4 w-full">
-                <div className="relative flex-1 group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-teal-500 transition-colors" size={18} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Deep search by Biometric Name, Asset Number, Location, IP..."
-                    className="glass-input w-full !pl-12 pr-4 py-2.5 text-sm placeholder:text-slate-400"
-                  />
-                </div>
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Deep search by Biometric Name, Asset Number, Location, IP..."
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
+        </div>
+        <button
+          onClick={() => setShowFilterPanel(!showFilterPanel)}
+          className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-wide shrink-0"
+        >
+          <Filter size={16} className="mr-2" />
+          {showFilterPanel ? 'HIDE FILTERS' : 'SHOW ADVANCED FILTERS'}
+        </button>
+      </div>
+
+      {showFilterPanel && (
+        <div className="bg-panel border border-main rounded-md p-6 mb-6 flex flex-wrap gap-8 animate-slide-up">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Occupation</label>
+            <select
+              value={collegeFilter}
+              onChange={(e) => setCollegeFilter(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+            >
+              <option value="ALL">ALL Occupation ({devices.length})</option>
+              {uniqueColleges.map(college => {
+                const count = filterCounts.college[college] || 0;
+                return <option key={college} value={college}>{college?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Block</label>
+            <select
+              value={blockFilter}
+              onChange={(e) => setBlockFilter(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+            >
+              <option value="ALL">ALL BLOCKS ({devices.length})</option>
+              {uniqueBlocks.map(block => {
+                const count = filterCounts.block[block] || 0;
+                return <option key={block} value={block}>{block?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Floor</label>
+            <select
+              value={floorFilter}
+              onChange={(e) => setFloorFilter(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[150px]"
+            >
+              <option value="ALL">ALL FLOORS ({devices.length})</option>
+              {uniqueFloors.map(floor => {
+                const count = filterCounts.floor[floor] || 0;
+                return <option key={floor} value={floor}>{floor?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Room</label>
+            <select
+              value={roomFilter}
+              onChange={(e) => setRoomFilter(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+            >
+              <option value="ALL">ALL ROOMS ({devices.length})</option>
+              {uniqueRooms.map(room => {
+                const count = filterCounts.room[room] || 0;
+                return <option key={room} value={room}>{room?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Device Status</label>
+            <div className="flex gap-2">
+              {['ALL', 'Online', 'Offline', 'Maintenance'].map((s) => (
                 <button
-                  onClick={() => setShowFilterPanel(!showFilterPanel)}
-                  className={`flex items-center px-5 py-2.5 rounded-xl border transition-all text-sm font-black uppercase tracking-widest ${showFilterPanel ? 'bg-teal-500/10 border-teal-500/30 text-teal-600' : 'border-white/10 text-dim hover:text-teal-600 hover:bg-white/10'}`}
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${statusFilter === s ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                 >
-                  <Filter size={18} className="mr-2" />
-                  {showFilterPanel ? 'Hide Filters' : 'Show Advanced Filters'}
+                  {s}
                 </button>
-              </div>
+              ))}
             </div>
-            
-            {showFilterPanel && (
-              <div className="pt-4 border-t border-main flex flex-wrap gap-4 animate-slide-up">
-                <div className="space-y-2 flex-1 min-w-[150px]">
-                  <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Occupation</label>
-                  <select value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)} className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 w-full">
-                    <option value="ALL">ALL ({devices.length})</option>
-                    {uniqueColleges.map(college => <option key={college} value={college}>{college?.toUpperCase() || 'UNKNOWN'} ({filterCounts.college[college] || 0})</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2 flex-1 min-w-[150px]">
-                  <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Block</label>
-                  <select value={blockFilter} onChange={(e) => setBlockFilter(e.target.value)} className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 w-full">
-                    <option value="ALL">ALL ({devices.length})</option>
-                    {uniqueBlocks.map(block => <option key={block} value={block}>{block?.toUpperCase() || 'UNKNOWN'} ({filterCounts.block[block] || 0})</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2 flex-1 min-w-[120px]">
-                  <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Floor</label>
-                  <select value={floorFilter} onChange={(e) => setFloorFilter(e.target.value)} className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 w-full">
-                    <option value="ALL">ALL ({devices.length})</option>
-                    {uniqueFloors.map(floor => <option key={floor} value={floor}>{floor?.toUpperCase() || 'UNKNOWN'} ({filterCounts.floor[floor] || 0})</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2 flex-1 min-w-[150px]">
-                  <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Room</label>
-                  <select value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 w-full">
-                    <option value="ALL">ALL ({devices.length})</option>
-                    {uniqueRooms.map(room => <option key={room} value={room}>{room?.toUpperCase() || 'UNKNOWN'} ({filterCounts.room[room] || 0})</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2 flex-1 min-w-[150px]">
-                  <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Status</label>
-                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 w-full">
-                    <option value="ALL">ALL</option>
-                    <option value="Online">Online</option>
-                    <option value="Offline">Offline</option>
-                    <option value="Maintenance">Maintenance</option>
-                  </select>
-                </div>
-                <div className="space-y-2 flex-1 min-w-[150px]">
-                  <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Biometric Type</label>
-                  <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 w-full">
-                    <option value="ALL">ALL ({devices.length})</option>
-                    {uniqueTypes.map(t => <option key={t} value={t}>{t} ({filterCounts.type[t] || 0})</option>)}
-                  </select>
-                </div>
-                
-                <div className="w-full flex justify-end items-center mt-2">
-                  <button onClick={() => { setStatusFilter('ALL'); setTypeFilter('ALL'); setFilterType('ALL'); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); }} className="text-xs font-black text-secondary hover:text-teal-600 transition-colors uppercase tracking-widest underline underline-offset-4 decoration-main">
-                    Reset All Filters
-                  </button>
-                </div>
-              </div>
-            )}
+          </div>
 
-            {!showFilterPanel && (
-              <div className="flex items-center justify-between text-[10px] text-secondary px-2 font-black uppercase tracking-[0.15em]">
-                <div className="flex items-center">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
-                  System Status: <span className="text-emerald-600 ml-1">Active</span>
-                </div>
-                <span>Last Synchronized: Just now</span>
-              </div>
-            )}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Biometric Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+            >
+              <option value="ALL">ALL TYPES ({devices.length})</option>
+              {uniqueTypes.map(t => {
+                const count = filterCounts.type[t] || 0;
+                return <option key={t} value={t}>{t} ({count})</option>
+              })}
+            </select>
+          </div>
+
+          <div className="flex-1 flex justify-end items-end space-x-4">
+            <button onClick={exportToExcel} className="flex items-center px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all text-xs font-bold uppercase tracking-widest">
+              <Download size={14} className="mr-2" />
+              Export
+            </button>
+            <button onClick={() => { setStatusFilter('ALL'); setTypeFilter('ALL'); setFilterType('ALL'); setSearchQuery(''); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); }} className="text-xs font-bold text-slate-400 hover:text-cyan-400 transition-colors uppercase tracking-widest underline underline-offset-4">
+              Reset Filters
+            </button>
           </div>
         </div>
+      )}
 
-      {/* Main Data Table */}
-      <div className="bg-card border border-main rounded-2xl overflow-hidden shadow-sm animate-slide-up delay-300">
-        <div className="p-6 border-b border-main bg-panel flex items-center justify-between">
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
+        <div className="p-4 border-b border-main flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rows per page</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[11px] font-bold text-slate-300 outline-none focus:border-cyan-500 transition-colors"
+            >
+              <option value={10}>10</option>
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
           <div className="flex items-center space-x-3">
-            <Fingerprint className="text-teal-500" size={20} />
-            <h2 className="text-sm font-black text-main uppercase tracking-widest">Asset Registry</h2>
-          </div>
-          <div className="text-[10px] font-black text-secondary uppercase tracking-widest">
-            {filteredDevices.length} Assets Found
-          </div>
-        </div>
-
-        <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 mr-2">
-              <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
-              >
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tighter">
+              {filteredDevices.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredDevices.length)}-${Math.min(currentPage * itemsPerPage, filteredDevices.length)} of ${filteredDevices.length}`}
+            </span>
+            <div className="flex space-x-1">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
                 <ChevronLeft size={14} />
               </button>
-              <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
-                {filteredDevices.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredDevices.length)}-${Math.min(currentPage * itemsPerPage, filteredDevices.length)} of ${filteredDevices.length}`}
-              </span>
-              <button disabled={currentPage >= Math.ceil(filteredDevices.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <button disabled={currentPage >= Math.ceil(filteredDevices.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -799,96 +802,76 @@ export default function Biometrics() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-panel border-b border-main text-main">
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-center w-12">S.No</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest">Asset Number</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest">Device Identity</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest">Hardware Vendor</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest">Geographic Asset</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest">Network Endpoint</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-center">Status</th>
-                {canEdit && <th className="p-5 text-[10px] font-black uppercase tracking-widest text-right">Protocol</th>}
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-panel border-b border-main">
+              <tr className="text-slate-400">
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center w-12">S.No</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Device Details</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Network</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">Status</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y border-main">
+            <tbody className="divide-y divide-main">
               {filteredDevices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((device, index) => (
                 <tr
                   key={device.id || device._id}
-                  className="hover:bg-panel group transition-all cursor-pointer"
-                  onClick={(e) => {
-                    if (!e.target.closest('button')) {
-                      navigate(`/devices/biometrics/${device.id || device._id}`);
-                    }
-                  }}
+                  className="hover:bg-slate-700/30 transition-colors group cursor-pointer"
+                  onClick={() => navigate(`/devices/biometrics/${device.id || device._id}`)}
                 >
-                  <td className="p-5 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                  <td className="p-5">
-                    <div className="flex flex-col space-y-0.5">
-                      <span className="text-xs font-mono text-secondary tracking-tighter">{device.serialNumber || '—'}</span>
-                      {device.hardwareSerial && (
-                        <span className="text-[9px] font-mono text-dim/60 font-semibold tracking-tighter">S/N: {device.hardwareSerial}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-5">
-                    <div className="flex items-center">
-                      <div className="p-3 bg-panel border border-main rounded-xl mr-4 text-secondary group-hover:text-teal-500 transition-colors">
-                        <Fingerprint size={18} />
+                  <td className="px-5 py-4 text-[11px] font-bold text-slate-400 text-center">{((currentPage - 1) * itemsPerPage) + index + 1}</td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-yellow-500/10 rounded-md border border-yellow-500/20">
+                        <Fingerprint size={16} className="text-yellow-500" />
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-main">{device.name}</span>
-                        <div className="flex items-center space-x-2 mt-1">
-                          <span className="text-[10px] font-black text-secondary uppercase tracking-widest">{device.type || 'Fingerprint'}</span>
-                          {device.usage && (
-                            <span className="px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-600 text-[8px] font-black uppercase tracking-tighter">
-                              {device.usage}
-                            </span>
-                          )}
-                        </div>
+                      <div className="flex flex-col space-y-0.5">
+                        <div className="text-[12px] font-bold text-slate-200">{device.name}</div>
+                        <div className="text-[10px] font-mono text-slate-400">{device.serialNumber || '—'}</div>
+                        <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{device.type || 'FINGERPRINT'}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-5">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-secondary uppercase tracking-widest">{device.brand}</span>
-                      {device.model && <span className="text-[9px] font-mono text-dim/60 font-semibold mt-0.5">{device.model}</span>}
-                    </div>
-                  </td>
-                  <td className="p-5">
+                  <td className="px-5 py-4">
                     <div className="flex flex-col space-y-1">
-                      <div className="flex items-center text-xs font-black text-main uppercase tracking-tight">
-                        <Building size={14} className="mr-2 text-teal-600" />
-                        {device.block || '—'}
+                      <div className="flex items-center space-x-2 text-[11px] text-slate-200 font-bold">
+                        <Building size={12} className="text-cyan-500" />
+                        <span>{device.block || '—'}</span>
                       </div>
-                      <div className="text-[9px] text-secondary font-black uppercase tracking-[0.15em] pl-6">
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider pl-5">
                         {device.divisionName || '—'}
                       </div>
+                      <div className="text-[9px] text-slate-500 font-bold pl-5">
+                        {device.brand || '—'} {device.model ? `(${device.model})` : ''}
+                      </div>
                     </div>
                   </td>
-                  <td className="p-5 flex flex-col space-y-1">
-                    <span className="text-xs font-mono text-teal-600 font-bold">{device.ipAddress || '—'}</span>
-                    <span className="text-[9px] text-secondary font-mono tracking-widest uppercase">{device.macAddress || 'NO MAC'}</span>
+                  <td className="px-5 py-4">
+                    <div className="flex flex-col space-y-1">
+                      <span className="text-[11px] font-mono text-cyan-400 font-bold">{device.ipAddress || '—'}</span>
+                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{device.macAddress || 'NO MAC'}</span>
+                    </div>
                   </td>
-                  <td className="p-5">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${device.status === 'Online' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
-                        'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                      }`}>
+                  <td className="px-5 py-4 text-center">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                      device.status === 'Online' ? 'text-green-500 border-green-500/50' : 
+                      device.status === 'Offline' ? 'text-red-500 border-red-500/50' :
+                      'text-amber-500 border-amber-500/50'}`}>
                       {device.status}
                     </span>
                   </td>
                   {canEdit && (
-                    <td className="p-5 text-right">
-                      <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
-                        <button onClick={() => navigate(`/devices/biometrics/${device.id || device._id}`)} className="p-2.5 text-secondary hover:text-teal-600 bg-panel border border-main rounded-xl transition-all">
-                          <Info size={16} />
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/biometrics/${device.id || device._id}`) }} className="text-slate-400 hover:text-cyan-400 transition-colors">
+                          <Info size={14} />
                         </button>
-                        <button onClick={() => editDevice(device)} className="p-2.5 text-secondary hover:text-blue-600 bg-panel border border-main rounded-xl transition-all">
-                          <Edit2 size={16} />
+                        <button onClick={(e) => { e.stopPropagation(); editDevice(device) }} className="text-slate-400 hover:text-cyan-400 transition-colors">
+                          <Edit2 size={14} />
                         </button>
-                        <button onClick={() => deleteDevice(device.id || device._id)} className="p-2.5 text-secondary hover:text-rose-600 bg-panel border border-main rounded-xl transition-all">
-                          <Trash2 size={16} />
+                        <button onClick={(e) => { e.stopPropagation(); deleteDevice(device.id || device._id) }} className="text-slate-400 hover:text-red-500 transition-colors">
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </td>
@@ -897,8 +880,9 @@ export default function Biometrics() {
               ))}
               {filteredDevices.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="p-12 text-center text-dim">
-                    <p>No biometric assets found.</p>
+                  <td colSpan="6" className="px-5 py-8 text-center text-slate-500">
+                    <Fingerprint size={32} className="mx-auto mb-3 opacity-50" />
+                    <p className="text-[12px] font-bold">No biometrics found matching this filter.</p>
                   </td>
                 </tr>
               )}

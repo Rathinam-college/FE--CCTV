@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
-import { Search, Filter, Plus, Cctv as CctvIcon, Map, Building, Shield, X, Edit2, Trash2, Download, Upload, ChevronLeft, ChevronRight, Server, Save, RefreshCw, Printer } from 'lucide-react';
+import { Search, Filter, Plus, Cctv as CctvIcon, Map, Building, Shield, X, Edit2, Trash2, Download, Upload, ChevronLeft, ChevronRight, Server, Save, RefreshCw, Printer, Video } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -712,7 +712,7 @@ export default function Cameras() {
     const headers = [
       'S.No', 'Division Name', 'Block', 'Floor', 'Room', 'Campus Zone',
       'Device Type', 'Model', 'IP Address', 'IPv4 Gateway', 'Port Number',
-      'Device ID', 'Hardware Serial', 'Subnet Mask', 'MAC Address', 'Status'
+      'Device ID', 'Hardware Serial', 'Subnet Mask', 'MAC Address', 'Status', 'Date Added'
     ];
 
     const escapeCSV = (val) => {
@@ -745,7 +745,8 @@ export default function Cameras() {
         escapeCSV(camera.serialNumber || ''),
         escapeCSV(subnetMask || ''),
         escapeCSV(macAddress || ''),
-        escapeCSV(camera.status || '')
+        escapeCSV(camera.status || ''),
+        escapeCSV(camera.createdAt?.split('T')[0] || '')
       ];
     });
 
@@ -906,25 +907,25 @@ export default function Cameras() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <CctvIcon className="mr-3 text-blue-500" size={28} />
+            <Video className="mr-3 text-blue-500" size={28} />
             Cameras
           </h1>
         </div>
-        <div className="flex space-x-3">
-          <button onClick={exportToExcel} className="glass-panel flex items-center px-6 py-2 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-            <Download size={16} className="mr-2" /> Export CSV
+        <div className="flex space-x-4 items-center">
+          <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={printToPDF} className="glass-panel flex items-center px-6 py-2 text-[10px] font-black uppercase tracking-widest bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-all">
-            <Printer size={16} className="mr-2" /> Print PDF
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Printer size={14} className="mr-2" /> Print PDF
           </button>
           {canEdit && (
             <>
-              <label className="glass-panel flex items-center px-6 py-2 text-[10px] font-black uppercase tracking-widest bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all cursor-pointer">
-                <Upload size={16} className="mr-2" />
+              <label className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors cursor-pointer">
+                <Upload size={14} className="mr-2" />
                 Bulk Import
                 <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
               </label>
-              <button onClick={openNewModal} className="neon-button px-8 py-2">
+              <button onClick={openNewModal} className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2">
                 <Plus size={16} className="mr-2" />
                 Register Asset
               </button>
@@ -939,85 +940,62 @@ export default function Cameras() {
 
       {/* Top Stats & Chart Row (Visible for all views) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-slide-up delay-100">
-        <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <button onClick={() => { setActiveView('LIST'); setFilterType('ALL'); }} className={`hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative transition-all group ${activeView === 'LIST' && filterType === 'ALL' ? 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.2)] bg-blue-500/10' : 'hover:border-blue-500/30'}`}>
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#3b82f6', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-blue-500 tracking-widest uppercase">[Total Assets]</h3>
-              <CctvIcon size={18} className="text-blue-500 opacity-50 group-hover:scale-110 transition-transform" />
+        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button onClick={() => { setActiveView('LIST'); setFilterType('ALL'); }} className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ${activeView === 'LIST' && filterType === 'ALL' ? 'ring-1 ring-cyan-500/50' : 'hover:ring-1 hover:ring-cyan-500/30'}`}>
+            <div className="flex justify-between items-start w-full">
+              <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL ASSETS]</h3>
+              <Video size={18} className="text-slate-500" />
             </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>{stats.total}</span>
-              </div>
+            <div className="flex items-end mt-4">
+              <span className="text-4xl font-bold text-cyan-400">{stats.total}</span>
+            </div>
+            <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
+          </button>
+ 
+          <button onClick={() => setFilterType('INSIDE')} className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ${filterType === 'INSIDE' ? 'ring-1 ring-yellow-500/50' : 'hover:ring-1 hover:ring-yellow-500/30'}`}>
+            <div className="flex justify-between items-start w-full">
+              <h3 className="text-[11px] font-bold text-yellow-500 tracking-widest uppercase">[INSIDE CAMPUS]</h3>
+              <Building size={18} className="text-slate-500" />
+            </div>
+            <div className="flex items-end mt-4">
+              <span className="text-4xl font-bold text-white">{stats.inside}</span>
             </div>
           </button>
-
-          <button onClick={() => setFilterType('INSIDE')} className={`hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative transition-all group ${filterType === 'INSIDE' ? 'border-blue-400/50 shadow-[0_0_20px_rgba(96,165,250,0.2)] bg-blue-400/10' : 'hover:border-blue-400/30'}`}>
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#60a5fa', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-blue-400 tracking-widest uppercase">[Inside Campus]</h3>
-              <Building size={18} className="text-blue-400 opacity-50 group-hover:scale-110 transition-transform" />
+ 
+          <button onClick={() => setFilterType('OUTSIDE')} className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ${filterType === 'OUTSIDE' ? 'ring-1 ring-orange-500/50' : 'hover:ring-1 hover:ring-orange-500/30'}`}>
+            <div className="flex justify-between items-start w-full">
+              <h3 className="text-[11px] font-bold text-orange-500 tracking-widest uppercase">[OUTSIDE CAMPUS]</h3>
+              <Map size={18} className="text-slate-500" />
             </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(96, 165, 250, 0.6)' }}>{stats.inside}</span>
-              </div>
+            <div className="flex items-end mt-4">
+              <span className="text-4xl font-bold text-white">{stats.outside}</span>
             </div>
-          </button>
-
-          <button onClick={() => setFilterType('OUTSIDE')} className={`hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative transition-all group ${filterType === 'OUTSIDE' ? 'border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.2)] bg-amber-500/10' : 'hover:border-amber-500/30'}`}>
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f59e0b', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-amber-500 tracking-widest uppercase">[Outside Campus]</h3>
-              <Map size={18} className="text-amber-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.6)' }}>{stats.outside}</span>
-              </div>
-            </div>
+            <div className="absolute bottom-0 left-0 h-1 bg-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]" style={{ width: '30%' }}></div>
           </button>
         </div>
 
-        <div className="glass-panel p-5 flex items-center justify-center relative">
-          <div className="w-full h-32">
+        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
+          <div className="w-24 h-24 relative flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} paddingAngle={5} dataKey="value" stroke="none">
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} style={{ filter: `drop-shadow(0px 0px 6px ${COLORS[index % COLORS.length]}80)` }} />
-                  ))}
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                  <Cell key="cell-0" fill="#475569" />
+                  <Cell key="cell-1" fill="#22d3ee" />
                 </Pie>
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--glass-border)',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    color: 'var(--text-primary)',
-                    boxShadow: 'var(--panel-shadow)',
-                    padding: '12px'
-                  }}
-                  itemStyle={{ fontWeight: 'black', textTransform: 'uppercase', fontSize: '10px' }}
-                />
               </PieChart>
             </ResponsiveContainer>
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+            </div>
           </div>
-          <div className="absolute right-4 flex flex-col space-y-2">
+          <div className="absolute right-6 flex flex-col space-y-2">
             <div className="flex items-center space-x-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.8)]"></div>
-              <span className="text-[10px] text-dim font-medium uppercase tracking-wider">Inside</span>
+              <div className="w-2 h-2 rounded-full bg-slate-600"></div>
+              <span className="text-[10px] text-slate-300 font-bold uppercase">Inside</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.8)]"></div>
-              <span className="text-[10px] text-dim font-medium uppercase tracking-wider">Outside</span>
+              <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
+              <span className="text-[10px] text-slate-300 font-bold uppercase">Outside</span>
             </div>
           </div>
         </div>
@@ -1026,28 +1004,25 @@ export default function Cameras() {
       {activeView === 'LIST' && (
         <div className="space-y-6">
 
-          <div className="glass-panel overflow-hidden animate-slide-up delay-200">
-            <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row gap-4 bg-white/5">
-              <div className="flex items-center space-x-4 w-full">
-                <div className="relative flex-1 group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-teal-500 transition-colors" size={18} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Deep search by Camera Name, Asset Number, Location, IP..."
-                    className="glass-input w-full !pl-12 pr-4 py-2.5 text-sm placeholder:text-slate-400"
-                  />
-                </div>
-                <button
-                  onClick={() => setShowFilterPanel(!showFilterPanel)}
-                  className={`flex items-center px-5 py-2.5 rounded-xl border transition-all text-sm font-black uppercase tracking-widest ${showFilterPanel ? 'bg-teal-500/10 border-teal-500/30 text-teal-600' : 'border-white/10 text-dim hover:text-teal-600 hover:bg-white/10'}`}
-                >
-                  <Filter size={18} className="mr-2" />
-                  {showFilterPanel ? 'Hide Filters' : 'Show Advanced Filters'}
-                </button>
-              </div>
+          <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200">
+            <div className="relative flex-1 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Deep search by camera name, asset number, location, IP..."
+                className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+              />
             </div>
+            <button
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-wide"
+            >
+              <Filter size={16} className="mr-2" />
+              {showFilterPanel ? 'HIDE FILTERS' : 'SHOW ADVANCED FILTERS'}
+            </button>
+          </div>
 
             {showFilterPanel && (
               <div className="px-5 py-6 border-b border-main bg-panel flex flex-wrap gap-8 animate-slide-up">
@@ -1114,7 +1089,7 @@ export default function Cameras() {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Device Status</label>
                   <div className="flex gap-2">
-                    {['ALL', 'Online', 'Offline', 'Maintenance'].map((s) => (
+                    {['ALL', 'Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
                       <button
                         key={s}
                         onClick={() => setStatusFilter(s)}
@@ -1153,20 +1128,20 @@ export default function Cameras() {
               </div>
             )}
 
-            <div className="p-5 border-b border-main flex justify-between items-center bg-card/40">
-              <div className="flex items-center space-x-2 text-xs font-black text-secondary uppercase tracking-widest">
-                <CctvIcon size={14} className="text-teal-500" />
-                <span>Device Inventory</span>
-                <span className="ml-2 text-dim font-bold text-[10px]">({filteredCameras.length} Assets)</span>
+          <div className="bg-panel rounded-md overflow-hidden border border-main mt-4">
+            <div className="p-4 flex justify-between items-center border-b border-main">
+              <div className="flex items-center space-x-2">
+                <Video size={16} className="text-cyan-400" />
+                <span className="text-[12px] font-bold text-white uppercase tracking-wider">Device Inventory <span className="text-slate-400 font-normal">({filteredCameras.length} Assets)</span></span>
               </div>
 
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2 mr-2">
-                  <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Show</span>
                   <select
                     value={itemsPerPage}
                     onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                    className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
+                    className="bg-[#0f172a] border-none text-white text-[10px] font-bold rounded px-2 py-0.5 outline-none"
                   >
                     <option value={10}>10</option>
                     <option value={15}>15</option>
@@ -1175,24 +1150,12 @@ export default function Cameras() {
                     <option value={100}>100</option>
                   </select>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
-                    {Math.min((currentPage - 1) * itemsPerPage + 1, filteredCameras.length)}-{Math.min(currentPage * itemsPerPage, filteredCameras.length)} of {filteredCameras.length}
-                  </span>
-                  <button
-                    disabled={currentPage >= Math.ceil(filteredCameras.length / itemsPerPage)}
-                    onClick={() => setCurrentPage(prev => prev + 1)}
-                    className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
+                <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                  <span>{Math.min((currentPage - 1) * itemsPerPage + 1, filteredCameras.length)}-{Math.min(currentPage * itemsPerPage, filteredCameras.length)} OF {filteredCameras.length}</span>
+                  <div className="flex items-center ml-2 space-x-1">
+                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 hover:text-white disabled:opacity-30"><ChevronLeft size={14}/></button>
+                    <button disabled={currentPage >= Math.ceil(filteredCameras.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 hover:text-white disabled:opacity-30"><ChevronRight size={14}/></button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1200,61 +1163,58 @@ export default function Cameras() {
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 z-10 bg-panel border-b border-main">
-                  <tr className="text-main">
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest">S.No</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest">Device Identity</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest">Location & Brand</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest">Specifications</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest">Network Logic</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-center">Status</th>
-                    {canEdit && <th className="p-4 text-[10px] font-black uppercase tracking-widest text-right">Actions</th>}
+                  <tr className="text-slate-400">
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider w-16">S.No</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Device Identity</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location & Brand</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Specifications</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Network Logic</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">Status</th>
+                    {canEdit && <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-right">Actions</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-main">
                   {filteredCameras.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((camera, index) => {
                     const loc = parseLocation(camera);
                     const isExt = isOutside(camera.siteName, camera.campusZone);
                     const serialNumber = (currentPage - 1) * itemsPerPage + index + 1;
                     return (
-                      <tr key={camera._id || camera.id} onClick={() => navigate(`/devices/cameras/${camera._id || camera.id}`)} className="hover:bg-white/5 cursor-pointer transition-colors group">
-                        <td className="p-4 text-[10px] font-black text-dim uppercase tracking-widest">
+                      <tr key={camera._id || camera.id} onClick={() => navigate(`/devices/cameras/${camera._id || camera.id}`)} className="hover:bg-slate-700/30 cursor-pointer transition-colors group text-white">
+                        <td className="p-4 text-[10px] font-bold text-slate-300">
                           {serialNumber}
                         </td>
                         <td className="p-4">
-                          <div className="flex flex-col space-y-1">
-                            <span className="text-sm font-mono text-teal-500 font-black">{camera.cameraId || '—'}</span>
-                            <span className="text-[9px] text-dim font-black uppercase tracking-widest">Asset ID</span>
+                          <div className="flex flex-col space-y-0.5">
+                            <span className="text-[11px] font-bold text-cyan-400 tracking-wider">{camera.cameraId || '—'}</span>
+                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Asset ID</span>
                           </div>
                         </td>
                         <td className="p-4">
-                          <div className="flex flex-col space-y-1.5">
-                            <div className="flex items-center space-x-2 text-sm text-main font-bold">
-                              <Building size={14} className="text-blue-400" />
+                          <div className="flex flex-col space-y-1">
+                            <div className="flex items-center space-x-1.5 text-[11px] font-bold text-white uppercase tracking-wider">
+                              <Building size={12} className="text-cyan-400" />
                               <span>{loc.block || '—'}</span>
                             </div>
-                            <div className="text-[10px] text-dim font-black uppercase tracking-widest pl-5">
+                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider pl-4">
                               {loc.college || '—'} {loc.floor && loc.floor !== '—' ? `| Floor ${loc.floor}` : ''} {loc.room && loc.room !== '—' ? `| ${loc.room}` : ''}
                             </div>
-                            <div className="text-[10px] text-indigo-400 font-bold pl-5">
-                              {camera.brand || '—'} {camera.model ? `(${camera.model})` : ''}
-                            </div>
-                            <div className={`text-[9px] font-black uppercase tracking-widest pl-5 mt-1 ${isExt ? 'text-amber-400' : 'text-emerald-400'}`}>
+                            <div className={`text-[8px] font-bold uppercase tracking-wider pl-4 ${isExt ? 'text-cyan-400' : 'text-slate-400'}`}>
                               [{camera.campusZone || (isExt ? 'OUTSIDE' : 'INSIDE')}]
                             </div>
                           </div>
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col space-y-1">
-                            <span className="text-xs font-black text-main uppercase tracking-tight">{camera.name || '—'}</span>
+                            <span className="text-[11px] font-bold text-white uppercase tracking-wider">{camera.name || '—'}</span>
                             {camera.dvrNvrDetails && (
                               <div className="flex flex-wrap gap-1 mt-1 max-w-[150px]">
                                 {String(camera.dvrNvrDetails).split(',').filter(Boolean).map((nvr, idx) => {
                                   const nvrRaw = nvr.trim();
                                   const actualNvr = nvrs.find(n => n.nvrName === nvrRaw || String(n.sNo) === nvrRaw || String(n._id) === nvrRaw || String(n.id) === nvrRaw || String(n.serialNumber) === nvrRaw);
                                   const nvrName = actualNvr ? actualNvr.nvrName : nvrRaw;
-                                  const displayText = nvrName.toUpperCase().startsWith('NVR') ? nvrName : `NVR: ${nvrName}`;
+                                  const displayText = nvrName.toUpperCase().startsWith('NVR') ? nvrName : `NVR - ${nvrName}`;
                                   return (
-                                    <span key={idx} className="inline-flex items-center px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded-md text-[8px] font-black text-purple-400 uppercase tracking-widest w-fit">
+                                    <span key={idx} className="inline-flex items-center px-2 py-0.5 bg-[#2d333b] border border-[#444c56] rounded text-[8px] font-bold text-slate-300 uppercase tracking-wider w-fit">
                                       {displayText}
                                     </span>
                                   );
@@ -1264,19 +1224,22 @@ export default function Cameras() {
                           </div>
                         </td>
                         <td className="p-4">
-                          <div className="flex flex-col space-y-1">
-                            <span className="text-xs font-mono text-secondary font-bold">{camera.ipAddress || '—'}</span>
-                            <div className="flex items-center space-x-1.5">
-                              <span className="text-[8px] font-black text-blue-500 uppercase tracking-tighter bg-blue-500/10 px-1 rounded">MFR SN</span>
-                              <span className="text-[10px] font-mono text-main font-bold tracking-tight">{camera.serialNumber || '—'}</span>
+                          <div className="flex flex-col space-y-0.5">
+                            <span className="text-[11px] font-bold text-white">{camera.ipAddress || '—'}</span>
+                            <div className="flex flex-col space-y-0.5 mt-1">
+                              <span className="text-[8px] font-bold text-cyan-400 uppercase tracking-widest">MFR SN:</span>
+                              <span className="text-[9px] text-slate-300 tracking-wider">{camera.serialNumber || '—'}</span>
                             </div>
                           </div>
                         </td>
-                        <td className="p-3 text-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${camera.status === 'Online' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' :
-                              camera.status === 'Offline' ? 'bg-red-500/10 text-red-500 border-red-500/30' :
-                                'bg-orange-500/10 text-orange-400 border-orange-500/30'
-                            }`}>
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            camera.status === 'Online' ? 'text-green-500 border-green-500/50' :
+                            camera.status === 'Offline' ? 'text-red-500 border-red-500/50' :
+                            camera.status === 'Maintenance' ? 'text-amber-500 border-amber-500/50' :
+                            camera.status === 'Scrap' ? 'text-red-500 border-red-500/50' :
+                            'text-amber-500 border-amber-500/50'
+                          }`}>
                             {camera.status}
                           </span>
                         </td>

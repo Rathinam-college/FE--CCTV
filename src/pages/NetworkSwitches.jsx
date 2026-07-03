@@ -447,7 +447,7 @@ export default function NetworkSwitches() {
   const exportToExcel = () => {
     const headers = [
       'S.No', 'Switch Name', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Brand',
-      'Model', 'Ports', 'ETH Uplink', 'SFP Uplink', 'Assets numer', 'Status'
+      'Model/Serial number', 'Ports', 'ETH Uplink', 'SFP Uplink', 'Assets numer', 'Status', 'Date Added'
     ];
 
     const escapeCSV = (val) => {
@@ -468,12 +468,13 @@ export default function NetworkSwitches() {
       escapeCSV(sw.floor || 'N/A'),
       escapeCSV(sw.room || 'N/A'),
       escapeCSV(sw.brand || 'N/A'),
-      escapeCSV(sw.model || 'N/A'),
+      escapeCSV(`${sw.model || 'N/A'} / ${sw.serialNumber || 'N/A'}`),
       escapeCSV(sw.portCount || 'N/A'),
       escapeCSV(sw.ethUplink || 'N/A'),
       escapeCSV(sw.sfpUplink || 'N/A'),
       escapeCSV(sw.serialNumber || 'N/A'),
-      escapeCSV(sw.status || 'N/A')
+      escapeCSV(sw.status || 'N/A'),
+      escapeCSV(sw.createdAt?.split('T')[0] || '')
     ]);
 
     const csvContent = "\uFEFF" + [
@@ -561,290 +562,207 @@ export default function NetworkSwitches() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
-          <h1 className="text-4xl font-black font-['Space_Grotesk'] tracking-tighter text-main flex items-center uppercase">
-            <Network className="mr-3 text-blue-400" size={32} />
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
+            <Network className="mr-3 text-cyan-400" size={28} />
             Switches
           </h1>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex space-x-4 items-center">
           {canEdit && (
             <>
-              <input
-                type="file"
-                id="csv-upload"
-                className="hidden"
-                accept=".csv"
-                onChange={handleFileUpload}
-              />
-              <label htmlFor="csv-upload" className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all shadow-lg cursor-pointer">
-                <Upload size={18} className="mr-2" /> Upload CSV
+              <label htmlFor="csv-upload" className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors cursor-pointer">
+                <Upload size={14} className="mr-2" /> Bulk Import
               </label>
+              <input type="file" id="csv-upload" className="hidden" accept=".csv" onChange={handleFileUpload} />
             </>
           )}
-          <button onClick={exportToExcel} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-lg">
-            <Download size={18} className="mr-2" /> Export CSV
+          <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={printToPDF} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-all shadow-lg">
-            <Printer size={18} className="mr-2" /> Print PDF
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Printer size={14} className="mr-2" /> Print PDF
           </button>
           {canEdit && (
-            <button onClick={openNewModal} className="glass-button flex items-center px-5 py-2.5 text-sm font-medium">
-              <Plus size={18} className="mr-2" />
-              Add Switch
+            <button onClick={openNewModal} className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2">
+              <Plus size={16} className="mr-2" />
+              Register Asset
             </button>
           )}
         </div>
       </div>
 
       {/* Stats Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#3b82f6', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-blue-500 tracking-widest uppercase">[Total]</h3>
-            <Database size={18} className="text-blue-500 opacity-50 group-hover:scale-110 transition-transform" />
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-slide-up delay-100">
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL ASSETS]</h3>
+            <Database size={18} className="text-slate-500" />
           </div>
-          <div className="flex flex-col space-y-3">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>{stats.total}</span>
-            </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-cyan-400">{stats.total}</span>
           </div>
-        </div>
+          <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
+        </button>
 
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#10b981', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-emerald-500 tracking-widest uppercase">[Active]</h3>
-            <ShieldCheck size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[ONLINE UNITS]</h3>
+            <ShieldCheck size={18} className="text-slate-500" />
           </div>
-          <div className="flex flex-col space-y-3">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>{stats.online}</span>
-            </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{stats.online}</span>
           </div>
-        </div>
+        </button>
 
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#ef4444', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-red-500 tracking-widest uppercase">[Offline]</h3>
-            <ShieldAlert size={18} className="text-red-500 opacity-50 group-hover:scale-110 transition-transform" />
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-red-500/30">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-red-500 tracking-widest uppercase">[OFFLINE UNITS]</h3>
+            <ShieldAlert size={18} className="text-slate-500" />
           </div>
-          <div className="flex flex-col space-y-3">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(239, 68, 68, 0.6)' }}>{stats.offline}</span>
-            </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{stats.offline}</span>
           </div>
-        </div>
+          <div className="absolute bottom-0 left-0 h-1 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" style={{ width: '30%' }}></div>
+        </button>
 
-        <div className="glass-panel p-4 flex items-center justify-center min-h-[120px]">
-          <div className="w-full h-full min-w-[150px] relative">
-            <ResponsiveContainer width="100%" height={80}>
+        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
+          <div className="w-24 h-24 relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={chartData}
-                  innerRadius={25}
-                  outerRadius={35}
-                  paddingAngle={5}
-                  dataKey="value"
-                  stroke="none"
-                >
+                <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <RechartsTooltip
-                  contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
-                  itemStyle={{ color: '#fff' }}
-                />
               </PieChart>
             </ResponsiveContainer>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col space-y-1">
-              {chartData.map(d => (
-                <div key={d.name} className="flex items-center text-[8px] font-bold text-dim uppercase tracking-tighter">
-                  <span className="w-1.5 h-1.5 rounded-full mr-1.5" style={{ backgroundColor: d.color }}></span>
-                  {d.name}
-                </div>
-              ))}
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
             </div>
+          </div>
+          <div className="absolute right-2 flex flex-col space-y-2">
+            {chartData.map(d => (
+              <div key={d.name} className="flex items-center space-x-2">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
+                <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="glass-panel overflow-hidden animate-slide-up delay-100">
-        <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row gap-4 bg-white/5">
-          <div className="flex items-center space-x-4 w-full">
-            <div className="relative flex-1 group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-teal-500 transition-colors" size={18} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Deep search by Switch Name, Asset Number, Location, Brand..."
-                className="glass-input w-full !pl-12 pr-4 py-2.5 text-sm placeholder:text-slate-400"
-              />
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Deep search by Switch Name, Asset Number, Location, Brand..."
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
+        </div>
+        <button
+          onClick={() => setShowFilterPanel(!showFilterPanel)}
+          className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-wide shrink-0"
+        >
+          <Filter size={16} className="mr-2" />
+          {showFilterPanel ? 'HIDE FILTERS' : 'SHOW ADVANCED FILTERS'}
+        </button>
+      </div>
+
+      {showFilterPanel && (
+        <div className="bg-panel border border-main rounded-md p-6 mb-6 flex flex-wrap gap-8 animate-slide-up">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Occupation Filter</label>
+            <select value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)} className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]">
+              <option value="ALL">ALL Occupation ({switches.length})</option>
+              {uniqueColleges.map(college => {
+                const count = filterCounts.college[college] || 0;
+                return <option key={college} value={college}>{college?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Block Filter</label>
+            <select value={blockFilter} onChange={(e) => setBlockFilter(e.target.value)} className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]">
+              <option value="ALL">ALL BLOCKS ({switches.length})</option>
+              {uniqueBlocks.map(block => {
+                const count = filterCounts.block[block] || 0;
+                return <option key={block} value={block}>{block?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Floor Filter</label>
+            <select value={floorFilter} onChange={(e) => setFloorFilter(e.target.value)} className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[150px]">
+              <option value="ALL">ALL FLOORS ({switches.length})</option>
+              {uniqueFloors.map(floor => {
+                const count = filterCounts.floor[floor] || 0;
+                return <option key={floor} value={floor}>{floor?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Room Filter</label>
+            <select value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]">
+              <option value="ALL">ALL ROOMS ({switches.length})</option>
+              {uniqueRooms.map(room => {
+                const count = filterCounts.room[room] || 0;
+                return <option key={room} value={room}>{room?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+              })}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Device Status</label>
+            <div className="flex gap-2">
+              {['ALL', 'Online', 'Offline', 'Maintenance'].map((s) => (
+                <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${statusFilter === s ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{s}</button>
+              ))}
             </div>
-            <button
-              onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className={`flex items-center px-5 py-2.5 rounded-xl border transition-all text-sm font-black uppercase tracking-widest ${showFilterPanel ? 'bg-teal-500/10 border-teal-500/30 text-teal-600' : 'border-white/10 text-dim hover:text-teal-600 hover:bg-white/10'}`}
-            >
-              <Filter size={18} className="mr-2" />
-              {showFilterPanel ? 'Hide Filters' : 'Show Advanced Filters'}
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Campus Zone</label>
+            <div className="flex gap-2">
+              {['ALL', 'INSIDE', 'OUTSIDE'].map((z) => (
+                <button key={z} onClick={() => setFilterType(z)} className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${filterType === z ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{z}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 flex justify-end items-end space-x-4">
+            <button onClick={exportToExcel} className="flex items-center px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all text-xs font-bold uppercase tracking-widest">
+              <Download size={14} className="mr-2" /> Export
+            </button>
+            <button onClick={() => { setStatusFilter('ALL'); setAssetFilter('ALL'); setFilterType('ALL'); setSearchQuery(''); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); }} className="text-xs font-bold text-slate-400 hover:text-cyan-400 transition-colors uppercase tracking-widest underline underline-offset-4">
+              Reset Filters
             </button>
           </div>
         </div>
+      )}
 
-        {showFilterPanel && (
-          <div className="px-5 py-6 border-b border-main bg-panel flex flex-wrap gap-8 animate-slide-up">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Occupation Filter</label>
-              <select
-                value={collegeFilter}
-                onChange={(e) => setCollegeFilter(e.target.value)}
-                className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 min-w-[180px]"
-              >
-                <option value="ALL">ALL Occupation ({switches.length})</option>
-                {uniqueColleges.map(college => {
-                  const count = filterCounts.college[college] || 0;
-                  return <option key={college} value={college}>{college?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-                })}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Block Filter</label>
-              <select
-                value={blockFilter}
-                onChange={(e) => setBlockFilter(e.target.value)}
-                className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 min-w-[180px]"
-              >
-                <option value="ALL">ALL BLOCKS ({switches.length})</option>
-                {uniqueBlocks.map(block => {
-                  const count = filterCounts.block[block] || 0;
-                  return <option key={block} value={block}>{block?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-                })}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Floor Filter</label>
-              <select
-                value={floorFilter}
-                onChange={(e) => setFloorFilter(e.target.value)}
-                className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 min-w-[150px]"
-              >
-                <option value="ALL">ALL FLOORS ({switches.length})</option>
-                {uniqueFloors.map(floor => {
-                  const count = filterCounts.floor[floor] || 0;
-                  return <option key={floor} value={floor}>{floor?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-                })}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Room Filter</label>
-              <select
-                value={roomFilter}
-                onChange={(e) => setRoomFilter(e.target.value)}
-                className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 min-w-[180px]"
-              >
-                <option value="ALL">ALL ROOMS ({switches.length})</option>
-                {uniqueRooms.map(room => {
-                  const count = filterCounts.room[room] || 0;
-                  return <option key={room} value={room}>{room?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-                })}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Asset Number Filter</label>
-              <select
-                value={assetFilter}
-                onChange={(e) => setAssetFilter(e.target.value)}
-                className="glass-input !bg-card px-3 py-2 text-xs font-bold rounded-lg border-main outline-none focus:border-teal-500/50 min-w-[150px]"
-              >
-                <option value="ALL">ALL ASSETS ({switches.length})</option>
-                {uniqueAssets.map(asset => {
-                  const count = filterCounts.asset[asset] || 0;
-                  return <option key={asset} value={asset}>{asset} ({count})</option>
-                })}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Device Status</label>
-              <div className="flex gap-2">
-                {['ALL', 'Online', 'Offline', 'Maintenance'].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStatusFilter(s)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${statusFilter === s ? 'bg-teal-500/10 border-teal-500/30 text-teal-600' : 'bg-card border-main text-secondary hover:border-teal-500/30 hover:text-teal-600'}`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-secondary uppercase tracking-widest">Campus Zone</label>
-              <div className="flex gap-2">
-                {['ALL', 'INSIDE', 'OUTSIDE'].map((z) => (
-                  <button
-                    key={z}
-                    onClick={() => setFilterType(z)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${filterType === z ? 'bg-teal-500/10 border-teal-500/30 text-teal-600' : 'bg-card border-main text-secondary hover:border-teal-500/30 hover:text-teal-600'}`}
-                  >
-                    {z}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex-1 flex justify-end items-end space-x-4">
-              <button onClick={exportToExcel} className="flex items-center px-5 py-2.5 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-600 hover:bg-teal-500/20 transition-all text-xs font-black uppercase tracking-widest">
-                <Download size={14} className="mr-2" />
-                Export CSV
-              </button>
-              <button onClick={() => { setStatusFilter('ALL'); setAssetFilter('ALL'); setFilterType('ALL'); setSearchQuery(''); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); }} className="text-xs font-black text-secondary hover:text-teal-600 transition-colors uppercase tracking-widest underline underline-offset-4 decoration-main">
-                Reset All Filters
-              </button>
-            </div>
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
+        <div className="p-4 border-b border-main flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rows per page</span>
+            <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[11px] font-bold text-slate-300 outline-none focus:border-cyan-500 transition-colors">
+              <option value={10}>10</option>
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
           </div>
-        )}
-
-        <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 mr-2">
-              <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
-              >
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+          <div className="flex items-center space-x-3">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tighter">
+              {filteredSwitches.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredSwitches.length)}-${Math.min(currentPage * itemsPerPage, filteredSwitches.length)} of ${filteredSwitches.length}`}
+            </span>
+            <div className="flex space-x-1">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
                 <ChevronLeft size={14} />
               </button>
-              <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
-                {filteredSwitches.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredSwitches.length)}-${Math.min(currentPage * itemsPerPage, filteredSwitches.length)} of ${filteredSwitches.length}`}
-              </span>
-              <button disabled={currentPage >= Math.ceil(filteredSwitches.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <button disabled={currentPage >= Math.ceil(filteredSwitches.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -853,94 +771,81 @@ export default function NetworkSwitches() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-panel border-b border-main">
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center w-12">S.No</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Asset Number</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Info</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Location & Model</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">Ports</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">ETH Uplink</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">SFP Uplink</th>
-                <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Status</th>
-                {canEdit && <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-right">Actions</th>}
+            <thead className="bg-panel border-b border-main">
+              <tr className="text-slate-400">
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center w-12">S.No</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Asset Number</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Device Info</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">Ports</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">Status</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-main">
               {filteredSwitches.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((sw, index) => (
                 <tr
                   key={sw._id || sw.id}
-                  className="hover:bg-white/5 transition-all group cursor-pointer"
-                  onClick={(e) => {
-                    if (!e.target.closest('button')) {
-                      navigate(`/devices/switches/${sw._id || sw.id}`);
-                    }
-                  }}
+                  className="hover:bg-slate-700/30 transition-colors group cursor-pointer"
+                  onClick={() => navigate(`/devices/switches/${sw._id || sw.id}`)}
                 >
-                  <td className="p-5 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                  <td className="p-5">
-                    <span className="text-sm font-mono text-blue-300 font-bold">{sw.serialNumber || '—'}</span>
+                  <td className="px-5 py-4 text-[11px] font-bold text-slate-400 text-center">{((currentPage - 1) * itemsPerPage) + index + 1}</td>
+                  <td className="px-5 py-4">
+                    <span className="text-sm font-mono text-cyan-400 font-bold">{sw.serialNumber || '—'}</span>
                   </td>
-                  <td className="p-5">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20 group-hover:bg-blue-500/20 transition-colors shadow-lg">
-                        <Server size={24} className="text-blue-400" />
+                  <td className="px-5 py-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-yellow-500/10 rounded-md border border-yellow-500/20">
+                        <Network size={16} className="text-yellow-500" />
                       </div>
                       <div>
-                        <div className="font-semibold text-main">{sw.name}</div>
-                        <div className="text-xs text-dim mt-0.5 font-mono">IP: <span className="text-blue-300">{sw.ipAddress || '—'}</span></div>
+                        <div className="text-[12px] font-bold text-slate-200">{sw.name}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 font-mono">IP: <span className="text-cyan-400">{sw.ipAddress || '—'}</span></div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-5">
+                  <td className="px-5 py-4">
                     <div className="flex flex-col space-y-1">
-                      <div className="flex items-center space-x-2 text-sm font-bold text-main">
-                        <Building size={14} className="text-blue-400" />
+                      <div className="flex items-center space-x-2 text-[11px] text-slate-200 font-bold">
+                        <Building size={12} className="text-cyan-500" />
                         <span>{sw.block || '—'}</span>
                       </div>
-                      <div className="text-[10px] text-dim font-black uppercase tracking-widest pl-5">
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider pl-5">
                         {sw.divisionName || '—'}
                       </div>
-                      <div className="text-[10px] text-blue-300 font-bold pl-5">
+                      <div className="text-[9px] text-slate-500 font-bold pl-5">
                         {sw.brand} {sw.model ? `- ${sw.model}` : ''}
                       </div>
                     </div>
                   </td>
-                  <td className="p-5 text-center">
-                    <span className="px-3.5 py-1.5 bg-indigo-500/10 rounded-full border border-indigo-500/20 text-xs font-black text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
-                      {sw.portCount || '—'}
-                    </span>
+                  <td className="px-5 py-4 text-center">
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="text-[11px] font-bold text-slate-200">{sw.portCount || '—'} Ports</span>
+                      <div className="flex space-x-2 text-[9px] font-bold">
+                        <span className="text-cyan-400">ETH: {sw.ethUplink || '—'}</span>
+                        <span className="text-purple-400">SFP: {sw.sfpUplink || '—'}</span>
+                      </div>
+                    </div>
                   </td>
-                  <td className="p-5 text-center">
-                    <span className="px-3.5 py-1.5 bg-cyan-500/10 rounded-full border border-cyan-500/20 text-xs font-black text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
-                      {sw.ethUplink || '—'}
-                    </span>
-                  </td>
-                  <td className="p-5 text-center">
-                    <span className="px-3.5 py-1.5 bg-fuchsia-500/10 rounded-full border border-fuchsia-500/20 text-xs font-black text-fuchsia-400 shadow-[0_0_15px_rgba(217,70,239,0.1)]">
-                      {sw.sfpUplink || '—'}
-                    </span>
-                  </td>
-                  <td className="p-5">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${sw.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' :
-                      sw.status === 'Offline' ? 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]' :
-                        'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                      }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full mr-2 ${sw.status === 'Online' ? 'bg-emerald-400' : sw.status === 'Offline' ? 'bg-red-400' : 'bg-orange-400'}`}></span>
+                  <td className="px-5 py-4 text-center">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                      sw.status === 'Online' ? 'text-green-500 border-green-500/50' :
+                      sw.status === 'Offline' ? 'text-red-500 border-red-500/50' :
+                      'text-amber-500 border-amber-500/50'}`}>
                       {sw.status}
                     </span>
                   </td>
                   {canEdit && (
-                    <td className="p-5 text-right">
+                    <td className="px-5 py-4 text-right">
                       <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => navigate(`/devices/switches/${sw._id || sw.id}`)} className="p-2 text-dim hover:text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-all border border-transparent hover:border-emerald-500/30">
-                          <Info size={16} />
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/switches/${sw._id || sw.id}`) }} className="text-slate-400 hover:text-cyan-400 transition-colors">
+                          <Info size={14} />
                         </button>
-                        <button onClick={() => editSwitch(sw)} className="p-2 text-dim hover:text-blue-400 hover:bg-blue-500/10 rounded-xl transition-all border border-transparent hover:border-blue-500/30">
-                          <Edit2 size={16} />
+                        <button onClick={(e) => { e.stopPropagation(); editSwitch(sw) }} className="text-slate-400 hover:text-cyan-400 transition-colors">
+                          <Edit2 size={14} />
                         </button>
-                        <button onClick={() => deleteSwitch(sw._id || sw.id)} className="p-2 text-dim hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/30">
-                          <Trash2 size={16} />
+                        <button onClick={(e) => { e.stopPropagation(); deleteSwitch(sw._id || sw.id) }} className="text-slate-400 hover:text-red-500 transition-colors">
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </td>
@@ -949,9 +854,9 @@ export default function NetworkSwitches() {
               ))}
               {filteredSwitches.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="p-12 text-center text-dim">
-                    <Network size={48} className="mx-auto text-dim mb-4 opacity-50" />
-                    <p>No network switches found matching this filter.</p>
+                  <td colSpan="7" className="px-5 py-8 text-center text-slate-500">
+                    <Network size={32} className="mx-auto mb-3 opacity-50" />
+                    <p className="text-[12px] font-bold">No network switches found matching this filter.</p>
                   </td>
                 </tr>
               )}

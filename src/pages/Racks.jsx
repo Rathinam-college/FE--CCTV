@@ -395,8 +395,8 @@ export default function Racks() {
     }
 
     const headers = [
-      'Name', 'Location', 'Division Name', 'Block', 'Floor', 'Room', 
-      'Brand', 'Model', 'U Space', 'Serial Number', 'Status', 'Date Added'
+      'S.No', 'Name', 'Location', 'Division Name', 'Block', 'Floor', 'Room', 
+      'Brand', 'Model', 'U Space', 'Asset Number', 'Status', 'Date Added'
     ];
 
     const escapeCSV = (val) => {
@@ -408,7 +408,8 @@ export default function Racks() {
       return str;
     };
 
-    const rows = filteredRacks.map(r => [
+    const rows = filteredRacks.map((r, idx) => [
+      idx + 1,
       escapeCSV(r.name),
       escapeCSV(r.location),
       escapeCSV(r.divisionName),
