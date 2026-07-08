@@ -147,43 +147,45 @@ export default function Users() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 border-b border-main pb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
-            <UsersIcon className="mr-3 text-teal-500" size={28} />
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10 px-4 relative">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
+            <UsersIcon className="mr-3 text-cyan-400" size={28} />
             User Management
           </h1>
         </div>
-        <div className="flex space-x-3">
-          <label className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/20 transition-all cursor-pointer">
-            <Upload size={18} className="mr-2" /> Upload CSV
+        <div className="flex space-x-4 items-center">
+          <label className="flex items-center text-[12px] font-bold text-slate-355 hover:text-white transition-colors cursor-pointer">
+            <Upload size={14} className="mr-2" /> Upload CSV
             <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
           </label>
-          <button onClick={() => { setEditingId(null); setFormData({ name: '', email: '', password: '', role: 'Staff', branch: '', permissions: ['Dashboard:VIEW', 'Assets:VIEW', 'Maintenance:VIEW', 'Projects:VIEW'] }); setShowModal(true); }} className="glass-button flex items-center px-5 py-2.5 text-sm shrink-0">
-            <Plus size={18} className="mr-2" />
-            Create Identity
+          <button 
+            onClick={() => { setEditingId(null); setFormData({ name: '', email: '', password: '', role: 'Staff', branch: '', permissions: ['Dashboard:VIEW', 'Assets:VIEW', 'Maintenance:VIEW', 'Projects:VIEW'] }); setShowModal(true); }}
+            className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2"
+          >
+            <Plus size={16} className="mr-2" /> Create Identity
           </button>
         </div>
       </div>
 
-      <div className="glass-panel overflow-hidden animate-slide-up delay-100 border border-main bg-card shadow-sm">
-        <div className="p-5 border-b border-main bg-panel flex items-center">
-           <UsersIcon size={20} className="text-teal-500 mr-3" />
-           <h2 className="font-semibold text-main tracking-wide">Registered Personnel</h2>
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-100">
+        <div className="p-5 border-b border-main bg-card flex items-center">
+           <UsersIcon size={16} className="text-cyan-400 mr-2" />
+           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Registered Personnel</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-panel border-b border-main">
-                <th className="p-5 text-xs font-semibold text-main uppercase tracking-wider">Identity</th>
-                <th className="p-5 text-xs font-semibold text-main uppercase tracking-wider">Clearance Role</th>
-                <th className="p-5 text-xs font-semibold text-main uppercase tracking-wider">Operational Zone</th>
-                <th className="p-5 text-xs font-semibold text-main uppercase tracking-wider">Page Access</th>
-                <th className="p-5 text-xs font-semibold text-main uppercase tracking-wider text-right">Directives</th>
+              <tr className="bg-panel border-b border-main text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <th className="p-4">Identity</th>
+                <th className="p-4">Clearance Role</th>
+                <th className="p-4">Operational Zone</th>
+                <th className="p-4">Page Access</th>
+                <th className="p-4 text-right">Directives</th>
               </tr>
             </thead>
-            <tbody className="divide-y border-main">
+            <tbody className="divide-y divide-white/5 text-slate-350">
               {(() => {
                 const indexOfLastItem = currentPage * itemsPerPage;
                 const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -194,68 +196,68 @@ export default function Users() {
                 }
 
                 return currentItems.map((usr) => (
-                  <tr key={usr._id} className="hover:bg-panel transition-colors group">
-                    <td className="p-5">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 rounded-md bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-lg font-bold text-teal-600">
+                  <tr key={usr._id} className="hover:bg-slate-700/30 transition-colors group">
+                    <td className="p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-9 h-9 rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/10 flex items-center justify-center text-sm font-bold shrink-0">
                           {usr.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <div className="font-bold text-main tracking-wide">{usr.name}</div>
-                          <div className="text-xs text-secondary mt-0.5">{usr.email}</div>
+                          <div className="font-bold text-slate-200 tracking-wide text-xs">{usr.name}</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">{usr.email}</div>
                           {user?.role === 'Super Admin' && (
-                            <div className="text-[10px] text-amber-500 font-mono mt-1">
+                            <div className="text-[9px] text-amber-500 font-mono mt-0.5">
                               Pass: {usr.raw_password || 'Not Set'}
                             </div>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td className="p-5">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest border ${
-                        usr.role === 'Super Admin' ? 'bg-purple-500/10 text-purple-600 border-purple-500/20' :
-                        usr.role === 'Admin' ? 'bg-teal-500/10 text-teal-600 border-teal-500/20' :
-                        'bg-slate-500/10 text-secondary border-main'
+                    <td className="p-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${
+                        usr.role === 'Super Admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                        usr.role === 'Admin' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
+                        'bg-slate-800 text-slate-400 border-slate-700'
                       }`}>
-                        {usr.role === 'Super Admin' && <ShieldAlert size={10} className="mr-1.5" />}
+                        {usr.role === 'Super Admin' && <ShieldAlert size={10} className="mr-1" />}
                         {usr.role}
                       </span>
                     </td>
-                    <td className="p-5 text-sm font-medium text-secondary">
+                    <td className="p-4 text-xs font-bold text-slate-400">
                       {usr.branch ? (
-                        <span className="px-3 py-1 bg-panel rounded border border-main">{usr.branch}</span>
+                        <span className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 text-slate-350">{usr.branch}</span>
                       ) : (
-                        <span className="text-secondary italic">Global Access</span>
+                        <span className="text-slate-550 italic">Global Access</span>
                       )}
                     </td>
-                    <td className="p-5">
+                    <td className="p-4">
                       <div className="flex flex-wrap gap-1.5 max-w-[300px] max-h-24 overflow-y-auto pr-2 custom-scrollbar py-1">
                         {usr.role === 'Super Admin' ? (
-                          <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20 shadow-sm">Full System Access</span>
+                          <span className="text-[9px] font-bold text-purple-400 uppercase tracking-widest bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 shadow-sm">Full System Access</span>
                         ) : (usr.permissions || []).length > 0 ? (
                           usr.permissions.map((perm, idx) => {
                             const [page, type] = perm.split(':');
                             const isEdit = type === 'EDIT';
                             return (
-                              <span key={idx} className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-tighter flex items-center transition-all hover:scale-105 ${
-                                isEdit ? 'bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.1)]' : 'bg-teal-500/20 text-teal-600 border-teal-500/30 shadow-[0_0_8px_rgba(20,184,166,0.1)]'
+                              <span key={idx} className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-tighter flex items-center transition-all ${
+                                isEdit ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
                               }`}>
                                 {page} <span className="ml-1 opacity-60 font-black">{isEdit ? '(E)' : '(V)'}</span>
                               </span>
                             );
                           })
                         ) : (
-                          <span className="text-[10px] text-secondary italic">No Access Assigned</span>
+                          <span className="text-[9px] text-slate-500 italic">No Access Assigned</span>
                         )}
                       </div>
                     </td>
-                    <td className="p-5 text-right">
-                      <div className="flex justify-end space-x-2 transition-all">
-                        <button onClick={() => editUser(usr)} className="p-2.5 text-teal-600 bg-teal-500/10 hover:bg-teal-500 hover:text-white rounded-xl transition-all border border-teal-500/20 group">
-                          <Edit2 size={16} className="group-hover:scale-110 transition-transform" />
+                    <td className="p-4 text-right">
+                      <div className="flex justify-end space-x-3">
+                        <button onClick={() => editUser(usr)} className="text-xs font-bold text-cyan-400 hover:text-white transition-colors uppercase tracking-widest">
+                          Edit
                         </button>
-                        <button onClick={() => deleteUser(usr._id)} className="p-2.5 text-red-600 bg-red-500/10 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20 group">
-                          <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
+                        <button onClick={() => deleteUser(usr._id)} className="text-xs font-bold text-rose-500 hover:text-rose-450 transition-colors uppercase tracking-widest">
+                          Delete
                         </button>
                       </div>
                     </td>
@@ -264,7 +266,7 @@ export default function Users() {
               })()}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="p-12 text-center text-secondary italic">
+                  <td colSpan="5" className="p-12 text-center text-slate-500 italic text-xs uppercase tracking-widest">
                     No personnel found in directory.
                   </td>
                 </tr>
@@ -273,15 +275,15 @@ export default function Users() {
           </table>
         </div>
         {users.length > itemsPerPage && (
-          <div className="p-4 border-t border-main bg-panel flex items-center justify-between">
-            <div className="text-xs font-bold text-secondary uppercase tracking-widest">
+          <div className="p-4 border-t border-main bg-card flex items-center justify-between">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, users.length)} to {Math.min(currentPage * itemsPerPage, users.length)} of {users.length} Personnel
             </div>
             <div className="flex space-x-2">
               <button 
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-4 py-2 bg-panel border border-main rounded-lg text-xs font-bold text-secondary hover:text-main hover:bg-card disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-widest"
+                className="px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-750 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded text-xs font-bold uppercase tracking-widest"
               >
                 Previous
               </button>
@@ -289,10 +291,10 @@ export default function Users() {
                 <button
                   key={i}
                   onClick={() => setCurrentPage(i + 1)}
-                  className={`w-8 h-8 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${
+                  className={`w-7 h-7 rounded text-xs font-bold transition-all uppercase tracking-widest ${
                     currentPage === i + 1 
-                      ? 'bg-teal-500 text-white shadow-sm' 
-                      : 'bg-panel text-secondary hover:bg-card border border-main'
+                      ? 'bg-cyan-400 text-slate-900 shadow-sm' 
+                      : 'bg-slate-800 text-slate-350 hover:bg-slate-750 border border-slate-700'
                   }`}
                 >
                   {i + 1}
@@ -301,7 +303,7 @@ export default function Users() {
               <button 
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(users.length / itemsPerPage)))}
                 disabled={currentPage === Math.ceil(users.length / itemsPerPage)}
-                className="px-4 py-2 bg-panel border border-main rounded-lg text-xs font-bold text-secondary hover:text-main hover:bg-card disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-widest"
+                className="px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-750 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded text-xs font-bold uppercase tracking-widest"
               >
                 Next
               </button>
@@ -312,38 +314,38 @@ export default function Users() {
 
       {/* Modal Overlay */}
       {showModal && createPortal(
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in overflow-y-auto">
-          <div className="bg-card rounded-3xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-main shadow-2xl my-8">
-            <div className="p-8 border-b border-main bg-panel flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-main shadow-2xl my-8">
+            <div className="p-6 border-b border-main bg-panel flex justify-between items-center shrink-0">
               <div>
-                <h2 className="text-2xl font-black text-main tracking-tight uppercase">
+                <h2 className="text-xl font-bold text-main tracking-tight uppercase">
                   {editingId ? 'Modify Personnel' : 'Initialize Identity'}
                 </h2>
-                <p className="text-xs text-secondary mt-1 uppercase tracking-widest font-black">Security Clearance Protocol</p>
+                <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">Security Clearance Protocol</p>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-dim hover:text-main transition-all">
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all">
                 <Plus className="rotate-45" size={24} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Full Designation (Name)</label>
-                  <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="glass-input w-full p-3 bg-panel border-main focus:border-teal-500 transition-all" placeholder="John Doe" />
+                  <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">Full Designation (Name)</label>
+                  <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="glass-input w-full p-3 bg-panel border-main focus:border-cyan-500 text-main font-bold rounded-lg text-xs" placeholder="John Doe" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Comms Address (Email)</label>
-                  <input required type="email" name="email" value={formData.email} onChange={handleInputChange} className="glass-input w-full p-3 bg-panel border-main focus:border-teal-500 transition-all" placeholder="john@domain.com" />
+                  <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">Comms Address (Email)</label>
+                  <input required type="email" name="email" value={formData.email} onChange={handleInputChange} className="glass-input w-full p-3 bg-panel border-main focus:border-cyan-500 text-main font-bold rounded-lg text-xs" placeholder="john@domain.com" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">
-                    Security Passcode {editingId && <span className="text-secondary normal-case tracking-normal">(Leave blank to retain)</span>}
+                  <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">
+                    Security Passcode {editingId && <span className="text-dim normal-case tracking-normal">(Leave blank to retain)</span>}
                   </label>
-                  <input type="password" name="password" value={formData.password} onChange={handleInputChange} required={!editingId} className="glass-input w-full p-3 bg-panel border-main focus:border-teal-500 transition-all" placeholder="••••••••" />
+                  <input type="password" name="password" value={formData.password} onChange={handleInputChange} required={!editingId} className="glass-input w-full p-3 bg-panel border-main focus:border-cyan-500 text-main font-bold rounded-lg text-xs" placeholder="••••••••" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Clearance Level (Role)</label>
-                  <select name="role" value={formData.role} onChange={handleInputChange} className="glass-input w-full p-3 cursor-pointer [&>option]:bg-card [&>option]:text-main border-main focus:border-teal-500 transition-all">
+                  <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">Clearance Level (Role)</label>
+                  <select name="role" value={formData.role} onChange={handleInputChange} className="glass-input w-full p-3 bg-panel border-main focus:border-cyan-500 text-main font-bold rounded-lg text-xs cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-200">
                     <option value="Staff">Staff / Technician (Tier 3)</option>
                     <option value="Admin">Admin / Site Manager (Tier 2)</option>
                     <option value="Super Admin">Super Admin (Tier 1)</option>
@@ -351,14 +353,14 @@ export default function Users() {
                 </div>
                 {formData.role !== 'Super Admin' && (
                   <div className="animate-slide-up md:col-span-2">
-                    <label className="block text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-2">Operational Zone (Branch)</label>
-                    <input type="text" name="branch" value={formData.branch} onChange={handleInputChange} className="glass-input w-full p-3 bg-panel border-main focus:border-teal-500 transition-all" placeholder="e.g. Main Campus" />
+                    <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">Operational Zone (Branch)</label>
+                    <input type="text" name="branch" value={formData.branch} onChange={handleInputChange} className="glass-input w-full p-3 bg-panel border-main focus:border-cyan-500 text-main font-bold rounded-lg text-xs" placeholder="e.g. Main Campus" />
                   </div>
                 )}
               </div>
 
               <div className="pt-6 border-t border-main">
-                <label className="block text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-4">Operational Directives (Permissions)</label>
+                <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-4">Operational Directives (Permissions)</label>
                 <div className="space-y-4">
                   {(() => {
                     const pages = [
@@ -388,35 +390,35 @@ export default function Users() {
 
                     return (
                       <>
-                        <div className="flex items-center justify-between p-4 bg-teal-500/5 border border-teal-500/20 rounded-2xl mb-6 shadow-sm">
-                          <span className="text-[10px] font-black text-teal-600 uppercase tracking-[0.3em]">Global Protocols</span>
-                          <div className="flex space-x-6">
+                        <div className="flex items-center justify-between p-4 bg-cyan-400/5 border border-cyan-500/15 rounded-md mb-4">
+                          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Global Protocols</span>
+                          <div className="flex space-x-4">
                             <button 
                               type="button"
                               onClick={() => toggleAll('VIEW')}
-                              className="flex items-center space-x-3 bg-card px-3 py-1.5 rounded-xl border border-main hover:bg-panel transition-all shadow-sm"
+                              className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-750 px-3 py-1.5 rounded border border-slate-700 text-slate-300 hover:text-white transition-colors"
                             >
-                              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${formData.permissions.filter(p => p.endsWith(':VIEW')).length === pages.length ? 'bg-teal-600 border-teal-500' : 'bg-panel border-main'}`}>
-                                {formData.permissions.filter(p => p.endsWith(':VIEW')).length === pages.length && <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>}
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${formData.permissions.filter(p => p.endsWith(':VIEW')).length === pages.length ? 'bg-cyan-500 border-cyan-400' : 'bg-slate-900 border-slate-700'}`}>
+                                {formData.permissions.filter(p => p.endsWith(':VIEW')).length === pages.length && <div className="w-1.5 h-1.5 bg-slate-900 rounded-sm"></div>}
                               </div>
-                              <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Master View</span>
+                              <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">Master View</span>
                             </button>
                             <button 
                               type="button"
                               onClick={() => toggleAll('EDIT')}
-                              className="flex items-center space-x-3 bg-card px-3 py-1.5 rounded-xl border border-main hover:bg-panel transition-all shadow-sm"
+                              className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-750 px-3 py-1.5 rounded border border-slate-700 text-slate-300 hover:text-white transition-colors"
                             >
-                              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${formData.permissions.filter(p => p.endsWith(':EDIT')).length === pages.length ? 'bg-amber-600 border-amber-500' : 'bg-panel border-main'}`}>
-                                {formData.permissions.filter(p => p.endsWith(':EDIT')).length === pages.length && <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>}
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${formData.permissions.filter(p => p.endsWith(':EDIT')).length === pages.length ? 'bg-amber-500 border-amber-400' : 'bg-slate-900 border-slate-700'}`}>
+                                {formData.permissions.filter(p => p.endsWith(':EDIT')).length === pages.length && <div className="w-1.5 h-1.5 bg-slate-900 rounded-sm"></div>}
                               </div>
-                              <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Master Edit</span>
+                              <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">Master Edit</span>
                             </button>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-3 custom-scrollbar p-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-2 custom-scrollbar p-1">
                           {pages.map(page => (
-                            <div key={page} className="flex items-center justify-between p-3 bg-panel rounded-2xl border border-main hover:border-teal-500/30 transition-all group">
+                            <div key={page} className="flex items-center justify-between p-3 bg-panel rounded border border-main hover:border-cyan-500/20 transition-colors group">
                               <span className="text-[11px] font-bold text-secondary group-hover:text-main transition-colors uppercase tracking-tight">
                                 {page}
                               </span>
@@ -431,16 +433,16 @@ export default function Users() {
                                       : [...formData.permissions, perm];
                                     setFormData({ ...formData, permissions: newPerms });
                                   }}
-                                  className={`flex items-center space-x-1.5 transition-all group/btn`}
+                                  className="flex items-center space-x-1.5 transition-all"
                                 >
                                   <div className={`w-3.5 h-3.5 rounded border transition-all flex items-center justify-center ${
                                     formData.permissions.includes(`${page}:VIEW`) 
-                                      ? 'bg-teal-600 border-teal-500' 
-                                      : 'bg-card border-main group-hover/btn:border-teal-500/50'
+                                      ? 'bg-cyan-500 border-cyan-400' 
+                                      : 'bg-slate-900 border-slate-700 hover:border-cyan-500/50'
                                   }`}>
-                                    {formData.permissions.includes(`${page}:VIEW`) && <div className="w-1 h-1 bg-white rounded-sm"></div>}
+                                    {formData.permissions.includes(`${page}:VIEW`) && <div className="w-1.5 h-1.5 bg-slate-900 rounded-sm"></div>}
                                   </div>
-                                  <span className={`text-[9px] font-black uppercase tracking-widest ${formData.permissions.includes(`${page}:VIEW`) ? 'text-teal-600' : 'text-secondary'}`}>V</span>
+                                  <span className={`text-[9px] font-bold uppercase tracking-widest ${formData.permissions.includes(`${page}:VIEW`) ? 'text-cyan-400' : 'text-dim'}`}>V</span>
                                 </button>
 
                                 {/* EDIT Toggle */}
@@ -453,16 +455,16 @@ export default function Users() {
                                       : [...formData.permissions, perm];
                                     setFormData({ ...formData, permissions: newPerms });
                                   }}
-                                  className={`flex items-center space-x-1.5 transition-all group/btn`}
+                                  className="flex items-center space-x-1.5 transition-all"
                                 >
                                   <div className={`w-3.5 h-3.5 rounded border transition-all flex items-center justify-center ${
                                     formData.permissions.includes(`${page}:EDIT`) 
                                       ? 'bg-amber-500 border-amber-400' 
-                                      : 'bg-card border-main group-hover/btn:border-amber-500/50'
+                                      : 'bg-slate-900 border-slate-700 hover:border-amber-500/50'
                                   }`}>
-                                    {formData.permissions.includes(`${page}:EDIT`) && <div className="w-1 h-1 bg-white rounded-sm"></div>}
+                                    {formData.permissions.includes(`${page}:EDIT`) && <div className="w-1.5 h-1.5 bg-slate-900 rounded-sm"></div>}
                                   </div>
-                                  <span className={`text-[9px] font-black uppercase tracking-widest ${formData.permissions.includes(`${page}:EDIT`) ? 'text-amber-500' : 'text-secondary'}`}>E</span>
+                                  <span className={`text-[9px] font-bold uppercase tracking-widest ${formData.permissions.includes(`${page}:EDIT`) ? 'text-amber-500' : 'text-dim'}`}>E</span>
                                 </button>
                               </div>
                             </div>
@@ -473,14 +475,14 @@ export default function Users() {
                   })()}
                 </div>
               </div>
-              <div className="flex justify-end space-x-3 mt-10 pt-8 border-t border-main">
-                <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-secondary hover:text-main hover:bg-panel rounded-2xl transition-all">
+              <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-main">
+                <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest text-secondary hover:text-main rounded transition-colors">
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={submitting}
-                  className={`neon-button px-10 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className="px-8 py-2.5 bg-cyan-400 hover:bg-cyan-500 text-slate-900 rounded text-[10px] font-bold uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {submitting ? 'Processing...' : (editingId ? 'Update' : 'Save')}
                 </button>

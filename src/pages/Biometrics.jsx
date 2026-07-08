@@ -551,15 +551,15 @@ export default function Biometrics() {
           </h1>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
             <Printer size={14} className="mr-2" /> Print PDF
           </button>
           {canEdit && (
             <>
-              <label className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors cursor-pointer">
+              <label className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors cursor-pointer">
                 <Upload size={14} className="mr-2" />
                 Bulk Import
                 <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
@@ -580,7 +580,7 @@ export default function Biometrics() {
           <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50">
             <div className="flex justify-between items-start w-full">
               <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL ASSETS]</h3>
-              <Fingerprint size={18} className="text-slate-500" />
+              <Fingerprint size={18} className="text-dim" />
             </div>
             <div className="flex items-end mt-4">
               <span className="text-4xl font-bold text-cyan-400">{stats.total}</span>
@@ -591,31 +591,31 @@ export default function Biometrics() {
           <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30">
             <div className="flex justify-between items-start w-full">
               <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[ONLINE UNITS]</h3>
-              <Building size={18} className="text-slate-500" />
+              <Building size={18} className="text-dim" />
             </div>
             <div className="flex items-end mt-4">
-              <span className="text-4xl font-bold text-white">{stats.online}</span>
+              <span className="text-4xl font-bold text-main">{stats.online}</span>
             </div>
           </button>
  
           <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-orange-500/30">
             <div className="flex justify-between items-start w-full">
               <h3 className="text-[11px] font-bold text-orange-500 tracking-widest uppercase">[OFFLINE UNITS]</h3>
-              <Users size={18} className="text-slate-500" />
+              <Users size={18} className="text-dim" />
             </div>
             <div className="flex items-end mt-4">
-              <span className="text-4xl font-bold text-white">{stats.offline}</span>
+              <span className="text-4xl font-bold text-main">{stats.offline}</span>
             </div>
             <div className="absolute bottom-0 left-0 h-1 bg-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]" style={{ width: '30%' }}></div>
           </button>
-
+ 
           <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-purple-500/30">
             <div className="flex justify-between items-start w-full">
               <h3 className="text-[11px] font-bold text-purple-500 tracking-widest uppercase">[TYPES]</h3>
-              <Fingerprint size={18} className="text-slate-500" />
+              <Fingerprint size={18} className="text-dim" />
             </div>
             <div className="flex items-end mt-4">
-              <span className="text-4xl font-bold text-white">{stats.types}</span>
+              <span className="text-4xl font-bold text-main">{stats.types}</span>
             </div>
           </button>
         </div>
@@ -632,14 +632,14 @@ export default function Biometrics() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+              <span className="text-[12px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[7px] text-dim">DIST.</span></span>
             </div>
           </div>
           <div className="absolute right-2 flex flex-col space-y-2">
             {chartData.map(d => (
               <div key={d.name} className="flex items-center space-x-2">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
-                <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+                <span className="text-[9px] text-secondary font-bold uppercase">{d.name}</span>
               </div>
             ))}
           </div>
@@ -648,18 +648,18 @@ export default function Biometrics() {
 
       <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
         <div className="relative flex-1 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-dim" size={16} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Deep search by Biometric Name, Asset Number, Location, IP..."
-            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+            className="bg-panel text-sm text-main border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-dim"
           />
         </div>
         <button
           onClick={() => setShowFilterPanel(!showFilterPanel)}
-          className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-wide shrink-0"
+          className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-secondary hover:text-main transition-colors uppercase tracking-wide shrink-0"
         >
           <Filter size={16} className="mr-2" />
           {showFilterPanel ? 'HIDE FILTERS' : 'SHOW ADVANCED FILTERS'}
@@ -669,11 +669,11 @@ export default function Biometrics() {
       {showFilterPanel && (
         <div className="bg-panel border border-main rounded-md p-6 mb-6 flex flex-wrap gap-8 animate-slide-up">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Occupation</label>
+            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Occupation</label>
             <select
               value={collegeFilter}
               onChange={(e) => setCollegeFilter(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+              className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]"
             >
               <option value="ALL">ALL Occupation ({devices.length})</option>
               {uniqueColleges.map(college => {
@@ -684,11 +684,11 @@ export default function Biometrics() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Block</label>
+            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Block</label>
             <select
               value={blockFilter}
               onChange={(e) => setBlockFilter(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+              className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]"
             >
               <option value="ALL">ALL BLOCKS ({devices.length})</option>
               {uniqueBlocks.map(block => {
@@ -699,11 +699,11 @@ export default function Biometrics() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Floor</label>
+            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Floor</label>
             <select
               value={floorFilter}
               onChange={(e) => setFloorFilter(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[150px]"
+              className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[150px]"
             >
               <option value="ALL">ALL FLOORS ({devices.length})</option>
               {uniqueFloors.map(floor => {
@@ -714,11 +714,11 @@ export default function Biometrics() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Room</label>
+            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Room</label>
             <select
               value={roomFilter}
               onChange={(e) => setRoomFilter(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+              className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]"
             >
               <option value="ALL">ALL ROOMS ({devices.length})</option>
               {uniqueRooms.map(room => {
@@ -729,13 +729,13 @@ export default function Biometrics() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Device Status</label>
+            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Device Status</label>
             <div className="flex gap-2">
               {['ALL', 'Online', 'Offline', 'Maintenance'].map((s) => (
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${statusFilter === s ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                  className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${statusFilter === s ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'}`}
                 >
                   {s}
                 </button>
@@ -744,11 +744,11 @@ export default function Biometrics() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Biometric Type</label>
+            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Biometric Type</label>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 min-w-[180px]"
+              className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]"
             >
               <option value="ALL">ALL TYPES ({devices.length})</option>
               {uniqueTypes.map(t => {
@@ -759,11 +759,11 @@ export default function Biometrics() {
           </div>
 
           <div className="flex-1 flex justify-end items-end space-x-4">
-            <button onClick={exportToExcel} className="flex items-center px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all text-xs font-bold uppercase tracking-widest">
+            <button onClick={exportToExcel} className="flex items-center px-4 py-2 rounded bg-panel border border-main hover:border-cyan-500/30 text-secondary transition-all text-xs font-bold uppercase tracking-widest">
               <Download size={14} className="mr-2" />
               Export
             </button>
-            <button onClick={() => { setStatusFilter('ALL'); setTypeFilter('ALL'); setFilterType('ALL'); setSearchQuery(''); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); }} className="text-xs font-bold text-slate-400 hover:text-cyan-400 transition-colors uppercase tracking-widest underline underline-offset-4">
+            <button onClick={() => { setStatusFilter('ALL'); setTypeFilter('ALL'); setFilterType('ALL'); setSearchQuery(''); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); }} className="text-xs font-bold text-secondary hover:text-cyan-400 transition-colors uppercase tracking-widest underline underline-offset-4">
               Reset Filters
             </button>
           </div>
@@ -773,11 +773,11 @@ export default function Biometrics() {
       <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
         <div className="p-4 border-b border-main flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rows per page</span>
+            <span className="text-[10px] font-bold text-dim uppercase tracking-widest">Rows per page</span>
             <select
               value={itemsPerPage}
               onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[11px] font-bold text-slate-300 outline-none focus:border-cyan-500 transition-colors"
+              className="bg-panel border border-main rounded px-2 py-1 text-[11px] font-bold text-main outline-none focus:border-cyan-500 transition-colors"
             >
               <option value={10}>10</option>
               <option value={15}>15</option>
@@ -787,14 +787,14 @@ export default function Biometrics() {
             </select>
           </div>
           <div className="flex items-center space-x-3">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tighter">
+            <span className="text-[11px] font-bold text-secondary uppercase tracking-tighter">
               {filteredDevices.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredDevices.length)}-${Math.min(currentPage * itemsPerPage, filteredDevices.length)} of ${filteredDevices.length}`}
             </span>
             <div className="flex space-x-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-secondary hover:text-main disabled:opacity-30 transition-colors bg-panel rounded">
                 <ChevronLeft size={14} />
               </button>
-              <button disabled={currentPage >= Math.ceil(filteredDevices.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
+              <button disabled={currentPage >= Math.ceil(filteredDevices.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-secondary hover:text-main disabled:opacity-30 transition-colors bg-panel rounded">
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -804,7 +804,7 @@ export default function Biometrics() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-panel border-b border-main">
-              <tr className="text-slate-400">
+              <tr className="text-secondary">
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center w-12">S.No</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Device Details</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location</th>
@@ -817,32 +817,32 @@ export default function Biometrics() {
               {filteredDevices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((device, index) => (
                 <tr
                   key={device.id || device._id}
-                  className="hover:bg-slate-700/30 transition-colors group cursor-pointer"
+                  className="hover:bg-slate-700/30 transition-colors group cursor-pointer text-main"
                   onClick={() => navigate(`/devices/biometrics/${device.id || device._id}`)}
                 >
-                  <td className="px-5 py-4 text-[11px] font-bold text-slate-400 text-center">{((currentPage - 1) * itemsPerPage) + index + 1}</td>
+                  <td className="px-5 py-4 text-[11px] font-bold text-secondary text-center">{((currentPage - 1) * itemsPerPage) + index + 1}</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center space-x-3">
                       <div className="p-2 bg-yellow-500/10 rounded-md border border-yellow-500/20">
                         <Fingerprint size={16} className="text-yellow-500" />
                       </div>
                       <div className="flex flex-col space-y-0.5">
-                        <div className="text-[12px] font-bold text-slate-200">{device.name}</div>
-                        <div className="text-[10px] font-mono text-slate-400">{device.serialNumber || '—'}</div>
-                        <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{device.type || 'FINGERPRINT'}</div>
+                        <div className="text-[12px] font-bold text-main">{device.name}</div>
+                        <div className="text-[10px] font-mono text-dim">{device.serialNumber || '—'}</div>
+                        <div className="text-[9px] font-bold text-dim uppercase tracking-widest">{device.type || 'FINGERPRINT'}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex flex-col space-y-1">
-                      <div className="flex items-center space-x-2 text-[11px] text-slate-200 font-bold">
+                      <div className="flex items-center space-x-2 text-[11px] text-main font-bold">
                         <Building size={12} className="text-cyan-500" />
                         <span>{device.block || '—'}</span>
                       </div>
-                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider pl-5">
+                      <div className="text-[9px] text-dim font-bold uppercase tracking-wider pl-5">
                         {device.divisionName || '—'}
                       </div>
-                      <div className="text-[9px] text-slate-500 font-bold pl-5">
+                      <div className="text-[9px] text-dim font-bold pl-5">
                         {device.brand || '—'} {device.model ? `(${device.model})` : ''}
                       </div>
                     </div>
@@ -850,7 +850,7 @@ export default function Biometrics() {
                   <td className="px-5 py-4">
                     <div className="flex flex-col space-y-1">
                       <span className="text-[11px] font-mono text-cyan-400 font-bold">{device.ipAddress || '—'}</span>
-                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{device.macAddress || 'NO MAC'}</span>
+                      <span className="text-[9px] text-dim font-mono tracking-widest uppercase">{device.macAddress || 'NO MAC'}</span>
                     </div>
                   </td>
                   <td className="px-5 py-4 text-center">
@@ -864,13 +864,13 @@ export default function Biometrics() {
                   {canEdit && (
                     <td className="px-5 py-4 text-right">
                       <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/biometrics/${device.id || device._id}`) }} className="text-slate-400 hover:text-cyan-400 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/biometrics/${device.id || device._id}`) }} className="text-secondary hover:text-cyan-400 transition-colors">
                           <Info size={14} />
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); editDevice(device) }} className="text-slate-400 hover:text-cyan-400 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); editDevice(device) }} className="text-secondary hover:text-cyan-400 transition-colors">
                           <Edit2 size={14} />
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); deleteDevice(device.id || device._id) }} className="text-slate-400 hover:text-red-500 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); deleteDevice(device.id || device._id) }} className="text-secondary hover:text-red-500 transition-colors">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -880,7 +880,7 @@ export default function Biometrics() {
               ))}
               {filteredDevices.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan="6" className="px-5 py-8 text-center text-dim">
                     <Fingerprint size={32} className="mx-auto mb-3 opacity-50" />
                     <p className="text-[12px] font-bold">No biometrics found matching this filter.</p>
                   </td>

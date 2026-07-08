@@ -23,7 +23,6 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
-import TicketDashboard from './pages/TicketDashboard';
 import Upgrades from './pages/Upgrades';
 import Billing from './pages/Billing';
 import ProjectTickets from './pages/ProjectTickets';
@@ -137,7 +136,6 @@ function App() {
           <Route path="racks" element={hasPermission('Racks') ? <Racks /> : <Navigate to="/" />} />
           <Route path="maintenance" element={hasPermission('Tickets') ? <Maintenance /> : <Navigate to="/" />} />
           <Route path="tickets" element={hasPermission('Tickets') ? <Tickets /> : <Navigate to="/" />} />
-          <Route path="tickets-dashboard" element={hasPermission('Tickets') ? <TicketDashboard /> : <Navigate to="/" />} />
           <Route path="tickets/:id" element={hasPermission('Tickets') ? <TicketDetail /> : <Navigate to="/" />} />
           <Route path="upgrades" element={hasPermission('Upgrades') ? <Upgrades /> : <Navigate to="/" />} />
           <Route path="billing" element={hasPermission('Billing & PO') ? <Billing /> : <Navigate to="/" />} />

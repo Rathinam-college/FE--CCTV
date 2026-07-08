@@ -136,141 +136,129 @@ export default function EntryView() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center space-x-3 mb-8">
-        <div className="p-3 bg-indigo-500/10 text-indigo-600 rounded-xl">
-          <Activity size={24} />
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10 px-4 relative">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
+            <Activity className="mr-3 text-cyan-400" size={28} />
+            Entry View Logs
+          </h1>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-main tracking-tight">Entry View</h1>
-          <p className="text-secondary text-sm">Overview of all system data entries and activity</p>
-        </div>
-      </div>
-
-      <div className="bg-card rounded-2xl shadow-sm border border-main p-5 space-y-4">
-        {/* Search and Export Row */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full sm:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={18} />
-            <input
-              type="text"
-              placeholder="Search by user, action, or details..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-panel border border-main rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-main placeholder-dim"
-            />
-          </div>
+        <div className="flex space-x-4 items-center">
           <button 
             onClick={handleDownload}
             disabled={filteredLogs.length === 0}
-            className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/20 px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors disabled:opacity-50"
           >
-            <Download size={18} />
-            <span className="text-sm font-bold">Export CSV</span>
-          </button>
-        </div>
-
-        {/* Filter Row matching the image */}
-        <div className="flex flex-wrap items-end gap-6 pt-2 border-t border-main/50">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-secondary tracking-wide">Date Range</label>
-            <div className="flex items-center space-x-2">
-              <input 
-                type="date" 
-                value={startMonth}
-                onChange={(e) => setStartMonth(e.target.value)}
-                className="bg-panel border border-main text-main text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 min-w-[140px]"
-                title="Start Date"
-              />
-              <input 
-                type="date" 
-                value={endMonth}
-                onChange={(e) => setEndMonth(e.target.value)}
-                className="bg-panel border border-main text-main text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 min-w-[140px]"
-                title="End Date"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5 flex-1 min-w-[200px]">
-            <label className="text-xs font-bold text-secondary tracking-wide">Section</label>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="bg-panel border border-main text-main text-sm rounded-lg w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none"
-              style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right .7rem top 50%', backgroundSize: '.65rem auto' }}
-            >
-              <option value="All">All Sections</option>
-              {getUniquePages().filter(p => p !== 'All').map(page => (
-                <option key={page} value={page}>{getDisplayPageName(page)}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center ml-auto space-x-4">
-            <div className="flex items-center space-x-2 bg-panel px-4 py-2 rounded-lg border border-main">
-              <input 
-                type="checkbox" 
-                id="newEntryFilter"
-                checked={showNewEntriesOnly}
-                onChange={(e) => {
-                  setShowNewEntriesOnly(e.target.checked);
-                  if (e.target.checked) setShowErrorsOnly(false);
-                }}
-                className="rounded text-emerald-500 focus:ring-emerald-500 cursor-pointer"
-              />
-              <label htmlFor="newEntryFilter" className="text-sm font-bold text-emerald-500 cursor-pointer">
-                New Entries
-              </label>
-            </div>
-
-            <div className="flex items-center space-x-2 bg-panel px-4 py-2 rounded-lg border border-main">
-              <input 
-                type="checkbox" 
-                id="errorFilter"
-                checked={showErrorsOnly}
-                onChange={(e) => {
-                  setShowErrorsOnly(e.target.checked);
-                  if (e.target.checked) setShowNewEntriesOnly(false);
-                }}
-                className="rounded text-red-500 focus:ring-red-500 cursor-pointer"
-              />
-              <label htmlFor="errorFilter" className="text-sm font-bold text-red-500 cursor-pointer">
-                Errors Only
-              </label>
-            </div>
-          </div>
-
-          <button 
-            onClick={() => {
-              setSearchTerm('');
-              setStartMonth('');
-              setEndMonth('');
-              setFilterType('All');
-              setShowErrorsOnly(false);
-              setShowNewEntriesOnly(false);
-            }}
-            className="bg-panel hover:bg-main hover:text-white text-secondary border border-main text-sm font-medium px-6 py-2 rounded-lg transition-colors"
-          >
-            Reset Filters
+            <Download size={14} className="mr-2" /> Export CSV
           </button>
         </div>
       </div>
 
-      <div className="bg-card rounded-2xl shadow-sm border border-main overflow-hidden">
+      {/* Query Filter row */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            placeholder="Search by user, action, details..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="bg-panel text-sm text-main border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-3 bg-panel px-4 py-2 rounded-md border border-main">
+          <Calendar size={16} className="text-dim" />
+          <input 
+            type="date" 
+            value={startMonth}
+            onChange={(e) => setStartMonth(e.target.value)}
+            className="bg-panel text-main text-xs font-bold rounded px-3 py-1.5 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
+            title="Start Date"
+          />
+          <span className="text-dim text-xs">to</span>
+          <input 
+            type="date" 
+            value={endMonth}
+            onChange={(e) => setEndMonth(e.target.value)}
+            className="bg-panel text-main text-xs font-bold rounded px-3 py-1.5 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
+            title="End Date"
+          />
+        </div>
+      </div>
+
+      {/* Section and checkbox row */}
+      <div className="flex flex-wrap items-center gap-4 bg-panel/40 p-4 rounded-md border border-main">
+        <div className="flex-1 min-w-[200px] flex items-center space-x-3">
+          <span className="text-xs font-bold text-secondary uppercase tracking-widest">Section:</span>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 cursor-pointer flex-1"
+          >
+            <option value="All">All Sections</option>
+            {getUniquePages().filter(p => p !== 'All').map(page => (
+              <option key={page} value={page}>{getDisplayPageName(page)}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <label className="flex items-center space-x-2 text-xs font-bold text-secondary cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={showNewEntriesOnly}
+              onChange={(e) => {
+                setShowNewEntriesOnly(e.target.checked);
+                if (e.target.checked) setShowErrorsOnly(false);
+              }}
+              className="accent-cyan-400 w-4 h-4 rounded cursor-pointer"
+            />
+            <span className="text-emerald-450">New Entries</span>
+          </label>
+
+          <label className="flex items-center space-x-2 text-xs font-bold text-secondary cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={showErrorsOnly}
+              onChange={(e) => {
+                setShowErrorsOnly(e.target.checked);
+                if (e.target.checked) setShowNewEntriesOnly(false);
+              }}
+              className="accent-cyan-400 w-4 h-4 rounded cursor-pointer"
+            />
+            <span className="text-rose-500">Errors Only</span>
+          </label>
+        </div>
+
+        <button 
+          onClick={() => {
+            setSearchTerm('');
+            setStartMonth('');
+            setEndMonth('');
+            setFilterType('All');
+            setShowErrorsOnly(false);
+            setShowNewEntriesOnly(false);
+          }}
+          className="text-xs font-bold text-secondary hover:text-main border border-main px-4 py-2 bg-panel rounded transition-colors ml-auto uppercase tracking-widest"
+        >
+          Reset Filters
+        </button>
+      </div>
+
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
         {/* Pagination Controls */}
         {filteredLogs.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-main bg-panel/30">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-main bg-card">
             <div className="flex items-center space-x-2">
-              <span className="text-xs font-bold text-secondary uppercase tracking-widest">SHOW</span>
+              <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">SHOW</span>
               <select
                 value={rowsPerPage}
                 onChange={(e) => {
                   setRowsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="bg-panel border border-main text-main text-xs font-bold rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer"
-                style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right .5rem top 50%', backgroundSize: '.5rem auto', paddingRight: '1.5rem' }}
+                className="bg-panel text-main text-xs font-bold rounded px-2.5 py-1 outline-none border border-main focus:border-cyan-500 cursor-pointer"
               >
                 <option value={15}>15</option>
                 <option value={30}>30</option>
@@ -286,7 +274,7 @@ export default function EntryView() {
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
               </button>
-              <span className="text-xs font-bold text-secondary uppercase tracking-widest">
+              <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">
                 {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredLogs.length)} OF {filteredLogs.length}
               </span>
               <button
@@ -302,31 +290,31 @@ export default function EntryView() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-main bg-panel/50">
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-secondary w-1/5">User</th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-secondary w-1/6">Section</th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-secondary w-1/6">Action</th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-secondary w-1/3">Details</th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-secondary w-1/6">Date</th>
+              <tr className="bg-panel border-b border-main text-[10px] font-bold text-secondary uppercase tracking-widest">
+                <th className="p-4 w-1/5">User</th>
+                <th className="p-4 w-1/6">Section</th>
+                <th className="p-4 w-1/6">Action</th>
+                <th className="p-4 w-1/3">Details</th>
+                <th className="p-4 w-1/6">Date</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-main">
+            <tbody className="divide-y divide-white/5 text-secondary">
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="p-8 text-center text-secondary">
+                  <td colSpan="5" className="p-8 text-center text-dim">
                     <div className="flex flex-col items-center justify-center space-y-2">
-                      <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                      <p className="text-sm">Loading entries...</p>
+                      <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs font-bold uppercase tracking-widest">Loading entries...</p>
                     </div>
                   </td>
                 </tr>
               ) : paginatedLogs.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="p-8 text-center text-secondary">
+                  <td colSpan="5" className="p-8 text-center text-dim">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Activity size={32} className="text-dim mb-2" />
-                      <p className="text-base font-bold text-main">No entries found</p>
-                      <p className="text-sm">Try adjusting your filters.</p>
+                      <p className="text-xs font-bold uppercase tracking-widest">No entries found</p>
+                      <p className="text-xs text-dim">Try adjusting your filters.</p>
                     </div>
                   </td>
                 </tr>
@@ -339,57 +327,57 @@ export default function EntryView() {
                   let rowBg = '';
                   if (isError) rowBg = 'bg-red-500/5 hover:bg-red-500/10';
                   else if (isNew) rowBg = 'bg-emerald-500/5 hover:bg-emerald-500/10';
-                  else rowBg = 'hover:bg-panel/30';
-
-                  let iconBg = 'bg-indigo-500/10 text-indigo-600';
-                  if (isError) iconBg = 'bg-red-500/20 text-red-600';
-                  else if (isNew) iconBg = 'bg-emerald-500/20 text-emerald-600';
-
+                  else rowBg = 'hover:bg-slate-700/30';
+ 
+                  let iconBg = 'bg-slate-800 text-slate-400';
+                  if (isError) iconBg = 'bg-red-500/20 text-red-400';
+                  else if (isNew) iconBg = 'bg-emerald-500/20 text-emerald-400';
+ 
                   let textNameColor = 'text-main';
-                  if (isError) textNameColor = 'text-red-500';
-                  else if (isNew) textNameColor = 'text-emerald-500';
-
-                  let badgeStyle = 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20';
-                  if (isError) badgeStyle = 'bg-red-500 text-white';
-                  else if (isNew) badgeStyle = 'bg-emerald-500 text-white';
-
+                  if (isError) textNameColor = 'text-red-450';
+                  else if (isNew) textNameColor = 'text-emerald-450';
+ 
+                  let badgeStyle = 'bg-panel text-secondary border border-main';
+                  if (isError) badgeStyle = 'bg-red-550 border border-red-500/30 text-red-100';
+                  else if (isNew) badgeStyle = 'bg-emerald-550 border border-emerald-500/30 text-emerald-100';
+ 
                   let detailsColor = 'text-secondary';
-                  if (isError) detailsColor = 'text-red-400 font-medium';
-                  else if (isNew) detailsColor = 'text-emerald-500 font-medium';
-
+                  if (isError) detailsColor = 'text-red-400 font-bold';
+                  else if (isNew) detailsColor = 'text-emerald-400 font-bold';
+ 
                   return (
                     <tr key={log.id} className={`transition-colors ${rowBg}`}>
                       <td className="p-4">
                         <div className="flex items-center space-x-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${iconBg}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${iconBg}`}>
                             <User size={14} />
                           </div>
                           <div>
-                            <p className={`text-sm font-bold ${textNameColor}`}>{log.userName || 'System'}</p>
-                            <p className="text-xs text-secondary">{log.userEmail || log.ipAddress || 'Unknown'}</p>
+                            <p className={`text-xs font-bold ${textNameColor}`}>{log.userName || 'System'}</p>
+                            <p className="text-[10px] text-dim font-mono mt-0.5">{log.userEmail || log.ipAddress || 'Unknown'}</p>
                           </div>
                         </div>
                       </td>
                       <td className="p-4">
                         <div className="flex items-center space-x-2 text-secondary">
                           <Monitor size={14} />
-                          <span className="text-sm font-medium">{getDisplayPageName(log.page)}</span>
+                          <span className="text-xs font-bold uppercase tracking-wider">{getDisplayPageName(log.page)}</span>
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className={`text-xs font-black px-2.5 py-1 rounded-md uppercase tracking-wide ${badgeStyle}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${badgeStyle}`}>
                           {log.action}
                         </span>
                       </td>
                       <td className="p-4">
-                        <p className={`text-sm break-words ${detailsColor}`}>
+                        <p className={`text-xs break-words ${detailsColor}`}>
                           {log.details || '—'}
                         </p>
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center space-x-2 text-secondary">
+                        <div className="flex items-center space-x-2 text-dim">
                           <Calendar size={14} className="shrink-0" />
-                          <span className="text-xs whitespace-nowrap">{formatDate(log.timestamp)}</span>
+                          <span className="text-[10px] whitespace-nowrap">{formatDate(log.timestamp)}</span>
                         </div>
                       </td>
                     </tr>

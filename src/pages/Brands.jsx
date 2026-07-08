@@ -166,38 +166,26 @@ export default function Brands() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-80px)] -m-6 lg:-m-10 p-6 lg:p-10 bg-main text-main animate-fade-in relative">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-main pb-8 gap-6 mb-10">
-        <div>
-          <h1 className="text-2xl font-bold text-main tracking-tight flex items-center">
-            <Tag className="mr-3 text-teal-500" size={20} />
-            Brand
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
+            <Tag className="mr-3 text-cyan-400" size={28} />
+            Brand Management
           </h1>
         </div>
-        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 w-full md:w-auto">
-          <div className="relative w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search size={16} className="text-dim" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search brands..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-panel border border-main rounded-xl text-sm font-bold text-main focus:outline-none focus:border-blue-500 transition-all"
-            />
-          </div>
-          <button
-            onClick={exportBrandsCSV}
-            disabled={brands.length === 0}
-            className="px-6 py-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all flex items-center disabled:opacity-50"
+        <div className="flex space-x-4 items-center">
+          <button 
+            onClick={exportBrandsCSV} 
+            disabled={brands.length === 0} 
+            className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors disabled:opacity-50"
           >
-            <Download size={16} className="mr-2" /> Export CSV
+            <Download size={14} className="mr-2" /> Export CSV
           </button>
           {canEdit && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] transform hover:-translate-y-1 flex items-center"
+            <button 
+              onClick={() => setShowModal(true)} 
+              className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2"
             >
               <Plus size={16} className="mr-2" /> Add Brand
             </button>
@@ -205,106 +193,116 @@ export default function Brands() {
         </div>
       </div>
 
-      <div>
-        {/* List Section */}
-        <div className="w-full">
-          <div className="bg-panel border border-main shadow-xl rounded-2xl overflow-hidden min-h-[400px]">
-            <div className="p-6 border-b border-main bg-main flex items-center justify-between">
-              <h2 className="text-lg font-black text-main tracking-tight uppercase flex items-center">
-                <Tag className="mr-2 text-teal-500" size={20} />
-                BRAND REGISTRY
-              </h2>
-              <div className="text-[10px] font-black text-teal-500 bg-teal-500/10 border border-teal-500/20 px-4 py-1.5 rounded-full uppercase">
-                {brands.length} Total
-              </div>
+      {/* Search Input */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-dim" size={16} />
+          <input
+            type="text"
+            placeholder="Search brands by Name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-panel text-sm text-main border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
+        </div>
+      </div>
+
+      {/* List Section */}
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
+        <div className="p-5 border-b border-main bg-card flex items-center justify-between">
+          <h2 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center">
+            <Tag className="mr-2 text-cyan-400" size={16} />
+            BRAND REGISTRY
+          </h2>
+          <div className="text-[10px] font-bold text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1 rounded-full uppercase">
+            {brands.length} Total
+          </div>
+        </div>
+        <div className="p-6">
+          {loading ? (
+            <div className="text-center p-12">
+              <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-xs font-bold text-dim uppercase tracking-widest">Loading data...</p>
             </div>
-            <div className="p-6">
-              {loading ? (
-                <div className="text-center p-12">
-                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-xs font-bold text-dim uppercase tracking-widest">Loading data...</p>
-                </div>
-              ) : filteredBrands.length === 0 ? (
-                <div className="text-center p-12 border-2 border-dashed border-main rounded-2xl">
-                  <Tag size={32} className="mx-auto mb-4 text-main/20" />
-                  <p className="text-main/50 text-xs font-bold uppercase tracking-widest">No brands found</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredBrands.map(brand => (
-                    <div key={brand.id} className="bg-main border border-main rounded-2xl p-5 flex items-start justify-between hover:border-blue-500/40 hover:shadow-lg transition-all group">
-                      <div className="flex items-start flex-1">
-                        <div className="w-8 h-8 flex items-center justify-center rounded-xl mr-4 bg-teal-500/10 text-teal-500 border border-teal-500/10 shrink-0">
-                          <Tag size={16} />
-                        </div>
-                        <div className="pt-1 flex-1 pr-4">
-                          {editingId === brand.id ? (
-                            <input 
-                              type="text" 
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-full bg-panel border border-blue-500/50 rounded-lg px-3 py-1.5 text-main font-bold focus:outline-none focus:border-blue-500"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleUpdate(brand.id);
-                                if (e.key === 'Escape') setEditingId(null);
-                              }}
-                              onBlur={() => handleUpdate(brand.id)}
-                            />
-                          ) : (
-                            <h4 className="text-lg font-black text-main leading-none mb-2">{brand.name}</h4>
-                          )}
-                        </div>
-                      </div>
-                      {canEdit && (
-                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all mt-1">
-                          <button 
-                            onClick={() => handleEdit(brand)}
-                            className="p-2.5 text-main/40 hover:text-blue-500 hover:bg-blue-500/10 rounded-xl transition-all"
-                            title="Edit"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(brand.id)}
-                            className="p-2.5 text-main/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+          ) : filteredBrands.length === 0 ? (
+            <div className="text-center p-12 border border-dashed border-main rounded-md">
+              <Tag size={32} className="mx-auto mb-4 text-dim" />
+              <p className="text-dim text-xs font-bold uppercase tracking-widest">No brands found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredBrands.map(brand => (
+                <div key={brand.id} className="bg-panel border border-main rounded-md p-5 flex items-start justify-between hover:ring-1 hover:ring-cyan-500/30 transition-all relative group overflow-hidden">
+                  <div className="flex items-start flex-1">
+                    <div className="w-8 h-8 flex items-center justify-center rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/10 shrink-0 mr-4">
+                      <Tag size={16} />
+                    </div>
+                    <div className="pt-1 flex-1 pr-4">
+                      {editingId === brand.id ? (
+                        <input 
+                          type="text" 
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="w-full bg-slate-800 border border-slate-700 focus:border-cyan-500 rounded px-3 py-1.5 text-slate-200 text-sm outline-none font-bold"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleUpdate(brand.id);
+                            if (e.key === 'Escape') setEditingId(null);
+                          }}
+                          onBlur={() => handleUpdate(brand.id)}
+                        />
+                      ) : (
+                        <h4 className="text-md font-bold text-main leading-none mb-2">{brand.name}</h4>
                       )}
                     </div>
-                  ))}
+                  </div>
+                  {canEdit && (
+                    <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                      <button 
+                        onClick={() => handleEdit(brand)}
+                        className="text-secondary hover:text-cyan-400 transition-colors p-1"
+                        title="Edit"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(brand.id)}
+                        className="text-secondary hover:text-red-500 transition-colors p-1"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Modal Overlay */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[150] animate-fade-in">
-          <div className="bg-panel border border-main shadow-2xl rounded-3xl w-full max-w-md overflow-hidden transform animate-slide-up">
-            <div className="p-6 border-b border-main bg-main flex justify-between items-center">
-              <h2 className="text-xl font-black text-main tracking-tight uppercase flex items-center">
-                <Plus className="mr-3 text-blue-500" size={24} />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-md overflow-hidden border border-main shadow-2xl relative my-8 flex flex-col">
+            <div className="p-6 border-b border-main bg-panel flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-bold text-main tracking-tight uppercase flex items-center">
+                <Plus className="mr-3 text-cyan-400" size={24} />
                 ADD BRAND
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-main/50 hover:text-main transition-colors p-2 hover:bg-main/5 rounded-xl">
+              <button onClick={() => setShowModal(false)} className="text-secondary hover:text-white transition-colors p-2 hover:bg-slate-800 rounded-xl">
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-8 space-y-6">
               <div>
-                <label className="block text-[11px] font-black text-dim uppercase tracking-widest mb-2 ml-1">
+                <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2 ml-1">
                   Brand Names
                 </label>
                 <div className="relative">
-                  <div className="w-full p-2 bg-main border border-main focus-within:border-blue-500 rounded-xl flex flex-wrap gap-2 items-center min-h-[56px] transition-all shadow-inner">
+                  <div className="w-full p-3 bg-panel border border-main focus-within:border-cyan-500 rounded-xl flex flex-wrap gap-2 items-center min-h-[56px] transition-all">
                     {selectedNames.map(name => (
-                      <span key={name} className="flex items-center space-x-1 bg-black/10 text-dim px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest border border-main">
+                      <span key={name} className="flex items-center space-x-1 bg-slate-800 text-slate-350 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-slate-700">
                         <span>{name}</span>
                         <button type="button" onClick={() => handleRemoveName(name)} className="hover:text-red-500 transition-colors ml-1">
                           <X size={12} />
@@ -316,7 +314,7 @@ export default function Brands() {
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="flex-1 min-w-[150px] bg-transparent focus:outline-none text-main font-bold placeholder:text-main/30 text-sm px-2 py-1"
+                      className="flex-1 min-w-[150px] bg-transparent focus:outline-none text-main font-bold placeholder:text-slate-600 text-sm px-2 py-1"
                       placeholder={selectedNames.length === 0 ? "Type brand name..." : "Add more..."}
                     />
                   </div>
@@ -326,7 +324,7 @@ export default function Brands() {
               <button 
                 type="submit" 
                 disabled={isSubmitting || (selectedNames.length === 0 && !inputValue.trim())}
-                className="w-full py-4 mt-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shadow-lg hover:shadow-blue-500/20"
+                className="w-full py-4 mt-4 bg-cyan-400 hover:bg-cyan-500 text-slate-900 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center font-bold"
               >
                 {isSubmitting ? 'PROCESSING...' : 'CREATE BRAND'}
               </button>

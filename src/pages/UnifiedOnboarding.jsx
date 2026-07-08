@@ -380,60 +380,53 @@ export default function UnifiedOnboarding() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-20 animate-fade-in relative">
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10 px-4 relative">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/10 pb-8 gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center">
-            <Plus className="mr-3 text-blue-500" size={28} />
-            Add New Site
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
+            <Plus className="mr-3 text-cyan-400" size={28} />
+            Add New Site & Location
           </h1>
         </div>
-        <div className="flex flex-col items-end space-y-4">
-          <div className="flex items-center text-emerald-500 font-bold text-sm bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
-            ACTIVE HIERARCHY MODE
-          </div>
-          <div className="flex space-x-3">
-            <button
-              onClick={exportLocationsCSV}
-              disabled={hierarchy.length === 0}
-              className="px-6 py-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all flex items-center disabled:opacity-50"
-            >
-              <Download size={16} className="mr-2" /> Export CSV
-            </button>
-            {canEdit && (
-              <>
-                <label className="px-6 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 border border-indigo-500/30 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all flex items-center cursor-pointer disabled:opacity-50">
-                  <Upload size={16} className="mr-2" /> Upload CSV
-                  <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} disabled={isSubmitting} />
-                </label>
-                <button
-                  onClick={() => handleOpenPrompt('Block', null)}
-                  className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] transform hover:-translate-y-1 flex items-center disabled:opacity-50"
-                  disabled={isSubmitting}
-                >
-                  <Plus size={16} className="mr-2" /> Add Block
-                </button>
-              </>
-            )}
-          </div>
+        <div className="flex space-x-4 items-center">
+          <button 
+            onClick={exportLocationsCSV}
+            disabled={hierarchy.length === 0}
+            className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors"
+          >
+            <Download size={14} className="mr-2" /> Export Locations
+          </button>
+          {canEdit && (
+            <>
+              <label className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors cursor-pointer">
+                <Upload size={14} className="mr-2" /> Upload CSV
+                <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} disabled={isSubmitting} />
+              </label>
+              <button 
+                onClick={() => handleOpenPrompt('Block', null)} 
+                className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2"
+              >
+                <Plus size={16} className="mr-2" /> Add Block
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       <div className="w-full">
-        <div className="glass-panel bg-panel border-main shadow-xl overflow-hidden min-h-[500px]">
-          <div className="p-6 border-b border-main flex flex-col sm:flex-row justify-between items-center bg-panel">
+        <div className="bg-panel border border-main rounded-md overflow-hidden min-h-[500px]">
+          <div className="p-5 border-b border-main bg-card flex flex-col sm:flex-row justify-between items-center">
             {activeBlockObj && activeFloorObj ? (
               <div className="flex items-center space-x-4 mb-4 sm:mb-0">
                 <button 
                   onClick={() => setActiveFloorId(null)}
-                  className="px-3 py-1.5 bg-main hover:bg-panel border border-main text-secondary hover:text-main rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded text-xs font-bold uppercase tracking-widest transition-all flex items-center"
                 >
                    ← Back to Floors
                 </button>
-                <h3 className="text-sm font-black text-main uppercase tracking-widest flex items-center">
-                  <Layers className="mr-3 text-emerald-500" size={18} />
+                <h3 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center">
+                  <Layers className="mr-2 text-cyan-400" size={16} />
                   Block {activeBlockObj.name} &gt; {activeFloorObj.name}
                 </h3>
               </div>
@@ -441,18 +434,18 @@ export default function UnifiedOnboarding() {
               <div className="flex items-center space-x-4 mb-4 sm:mb-0">
                 <button 
                   onClick={() => { setActiveBlockId(null); setActiveFloorId(null); }}
-                  className="px-3 py-1.5 bg-main hover:bg-panel border border-main text-secondary hover:text-main rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded text-xs font-bold uppercase tracking-widest transition-all flex items-center"
                 >
                    ← Back to Blocks
                 </button>
-                <h3 className="text-sm font-black text-main uppercase tracking-widest flex items-center">
-                  <Building className="mr-3 text-teal-500" size={18} />
+                <h3 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center">
+                  <Building className="mr-2 text-cyan-400" size={16} />
                   Block {activeBlockObj.name}
                 </h3>
               </div>
             ) : (
-              <h3 className="text-sm font-black text-main uppercase tracking-widest flex items-center mb-4 sm:mb-0">
-                <LayoutGrid className="mr-3 text-blue-500" size={18} />
+              <h3 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center mb-4 sm:mb-0">
+                <LayoutGrid className="mr-2 text-cyan-400" size={16} />
                 Location Registry
               </h3>
             )}
@@ -463,25 +456,25 @@ export default function UnifiedOnboarding() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter hierarchy..."
-                className="glass-input p-2.5 text-xs bg-panel border-main focus:border-blue-500 transition-all text-main w-full sm:w-64 rounded-xl"
+                className="bg-panel text-sm text-main border border-main rounded px-3 py-2 outline-none focus:border-cyan-500 w-full sm:w-64 placeholder:text-slate-500"
               />
             )}
             
             {activeBlockObj && !activeFloorObj && canEdit && (
                <button 
                  onClick={() => handleOpenPrompt('Floor', { divisionName: activeBlockObj.divisionName, block: activeBlockObj.name })}
-                 className="px-4 py-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border border-blue-500/20 flex items-center"
+                 className="text-[10px] font-bold text-cyan-400 hover:text-white border border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1.5 rounded transition-colors uppercase tracking-widest"
                >
-                 <Plus size={14} className="mr-2" /> Add Floor
+                 <Plus size={14} className="mr-2 inline" /> Add Floor
                </button>
             )}
 
             {activeFloorObj && canEdit && (
                <button 
                  onClick={() => handleOpenPrompt('Room', { divisionName: activeBlockObj.divisionName, block: activeBlockObj.name, floor: activeFloorObj.name })}
-                 className="px-4 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border border-emerald-500/20 flex items-center"
+                 className="text-[10px] font-bold text-emerald-400 hover:text-white border border-emerald-500/30 hover:bg-emerald-500/20 px-3 py-1.5 rounded transition-colors uppercase tracking-widest"
                >
-                 <Plus size={14} className="mr-2" /> Add Room
+                 <Plus size={14} className="mr-2 inline" /> Add Room
                </button>
             )}
           </div>
@@ -489,17 +482,17 @@ export default function UnifiedOnboarding() {
           <div className="p-6">
             {!activeBlockObj ? (
               hierarchy.length === 0 ? (
-                <div className="text-center p-12 border-2 border-dashed border-main rounded-2xl">
-                  <Layers size={48} className="mx-auto mb-4 text-dim" />
-                  <p className="text-dim text-xs font-bold uppercase tracking-widest">No hardware found</p>
+                <div className="text-center p-12 border border-dashed border-main rounded-md">
+                  <Layers size={48} className="mx-auto mb-4 text-slate-650" />
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">No hardware found</p>
                   {canEdit && (
-                    <button onClick={() => handleOpenPrompt('Block', null)} className="mt-4 text-blue-400 text-xs font-bold hover:text-blue-300">
+                    <button onClick={() => handleOpenPrompt('Block', null)} className="mt-4 text-cyan-400 text-xs font-bold hover:text-cyan-300">
                       + Create First Block
                     </button>
                   )}
                 </div>
               ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {hierarchy.map(block => {
                     const blockDevices = devices.filter(d => {
                       const blockName = parseLocation(d).block;
@@ -511,102 +504,101 @@ export default function UnifiedOnboarding() {
                     const swsCount = blockDevices.filter(d => d.deviceType === 'Switch').length;
 
                     return (
-                    <div 
-                      key={block.name} 
-                      className="hud-panel p-6 hover:shadow-lg transition-all cursor-pointer group hover:border-blue-500/30 flex flex-col justify-between relative overflow-hidden"
-                      onClick={() => setActiveBlockId(block.name)}
-                    >
-                      <div className="hud-corner-tr"></div>
-                      <div className="hud-corner-bl"></div>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center">
-                          <div className="p-3 bg-teal-500/10 rounded-xl mr-4 group-hover:bg-teal-500/20 transition-colors">
-                            <Building size={24} className="text-teal-500" />
+                      <div 
+                        key={block.name} 
+                        className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between hover:ring-1 hover:ring-cyan-500/30 transition-all group cursor-pointer relative overflow-hidden"
+                        onClick={() => setActiveBlockId(block.name)}
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center">
+                            <div className="w-10 h-10 flex items-center justify-center rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/10 group-hover:scale-110 transition-transform shrink-0 mr-4">
+                              <Building size={20} />
+                            </div>
+                            <div>
+                              <h4 className="text-md font-bold text-white tracking-widest uppercase">{block.name}</h4>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{block.floors.length} Floors | {blockDevices.length} Devices</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-lg font-black text-main tracking-widest uppercase">{block.name}</h4>
-                            <p className="text-xs text-dim font-bold uppercase tracking-widest">{block.floors.length} Floors | {blockDevices.length} Devices</p>
-                          </div>
+                          {canEdit && block.id && (
+                            <button 
+                              onClick={(e) => handleDelete(e, block.id, 'Block')} 
+                              className="text-slate-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
-                        {canEdit && block.id && (
-                          <button 
-                            onClick={(e) => handleDelete(e, block.id, 'Block')} 
-                            className="p-2 hover:bg-red-500/10 text-dim hover:text-red-500 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
 
-                      {/* Device type breakdown */}
-                      <div className="flex flex-wrap gap-2 mb-6">
-                        {camsCount > 0 && (
-                          <span className="inline-flex items-center text-[10px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
-                            <Cctv size={12} className="mr-1" /> {camsCount}
-                          </span>
-                        )}
-                        {nvrsCount > 0 && (
-                          <span className="inline-flex items-center text-[10px] font-bold text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
-                            <Server size={12} className="mr-1" /> {nvrsCount}
-                          </span>
-                        )}
-                        {biosCount > 0 && (
-                          <span className="inline-flex items-center text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                            <Fingerprint size={12} className="mr-1" /> {biosCount}
-                          </span>
-                        )}
-                        {swsCount > 0 && (
-                          <span className="inline-flex items-center text-[10px] font-bold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
-                            <Network size={12} className="mr-1" /> {swsCount}
-                          </span>
-                        )}
-                      </div>
+                        {/* Device type breakdown */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {camsCount > 0 && (
+                            <span className="inline-flex items-center text-[9px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                              <Cctv size={10} className="mr-1" /> {camsCount}
+                            </span>
+                          )}
+                          {nvrsCount > 0 && (
+                            <span className="inline-flex items-center text-[9px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                              <Server size={10} className="mr-1" /> {nvrsCount}
+                            </span>
+                          )}
+                          {biosCount > 0 && (
+                            <span className="inline-flex items-center text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                              <Fingerprint size={10} className="mr-1" /> {biosCount}
+                            </span>
+                          )}
+                          {swsCount > 0 && (
+                            <span className="inline-flex items-center text-[9px] font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+                              <Network size={10} className="mr-1" /> {swsCount}
+                            </span>
+                          )}
+                        </div>
 
-                      <div className="flex items-center justify-between text-xs font-bold text-blue-500 uppercase tracking-widest">
-                        <span>Enter Block</span>
-                        <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                        <div className="flex items-center justify-between text-[11px] font-bold text-cyan-400 uppercase tracking-widest mt-2">
+                          <span>Enter Block</span>
+                          <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                        </div>
                       </div>
-                    </div>
-                  )})}
+                    );
+                  })}
                 </div>
               )
             ) : activeBlockObj && !activeFloorObj ? (
               <div className="space-y-6">
                  {activeBlockObj.floors.length === 0 ? (
-                   <div className="text-center p-12 border-2 border-dashed border-main rounded-2xl">
-                     <Layers size={48} className="mx-auto mb-4 text-dim" />
-                     <p className="text-dim text-xs font-bold uppercase tracking-widest">No floors in this block</p>
+                   <div className="text-center p-12 border border-dashed border-main rounded-md">
+                     <Layers size={48} className="mx-auto mb-4 text-slate-650" />
+                     <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">No floors in this block</p>
                    </div>
                  ) : (
-                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                      {activeBlockObj.floors.map(floor => (
                         <div 
                           key={floor.name} 
-                          className="bg-panel border border-main rounded-2xl p-6 hover:shadow-lg transition-all cursor-pointer group hover:border-emerald-500/30 flex flex-col justify-between"
+                          className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between hover:ring-1 hover:ring-cyan-500/30 transition-all group cursor-pointer"
                           onClick={() => setActiveFloorId(floor.name)}
                         >
-                          <div className="flex justify-between items-start mb-6">
+                          <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center">
-                              <div className="p-3 bg-emerald-500/10 rounded-xl mr-4 group-hover:bg-emerald-500/20 transition-colors">
-                                <Layers size={24} className="text-emerald-500" />
+                              <div className="w-10 h-10 flex items-center justify-center rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/10 group-hover:scale-110 transition-transform shrink-0 mr-4">
+                                <Layers size={20} />
                               </div>
                               <div>
-                                <h4 className="text-lg font-black text-main tracking-widest uppercase">{floor.name}</h4>
-                                <p className="text-xs text-dim font-bold uppercase tracking-widest">{floor.rooms.length} Rooms</p>
+                                <h4 className="text-md font-bold text-white tracking-widest uppercase">{floor.name}</h4>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{floor.rooms.length} Rooms</p>
                               </div>
                             </div>
                             {canEdit && floor.id && (
                               <button 
                                 onClick={(e) => handleDelete(e, floor.id, 'Floor')} 
-                                className="p-2 hover:bg-red-500/10 text-dim hover:text-red-500 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
+                                className="text-slate-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                               >
-                                <Trash2 size={16} />
+                                <Trash2 size={14} />
                               </button>
                             )}
                           </div>
-                          <div className="flex items-center justify-between text-xs font-bold text-emerald-500 uppercase tracking-widest">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-cyan-400 uppercase tracking-widest mt-2">
                             <span>Enter Floor</span>
-                            <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                            <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
                           </div>
                         </div>
                      ))}
@@ -614,24 +606,24 @@ export default function UnifiedOnboarding() {
                  )}
 
                   {/* Devices connected to this block */}
-                  <div className="mt-12 bg-panel border border-main rounded-3xl overflow-hidden shadow-sm">
-                    <div className="p-6 border-b border-main flex flex-col md:flex-row justify-between items-start md:items-center bg-panel gap-4">
+                  <div className="mt-8 bg-panel border border-main rounded-md overflow-hidden animate-slide-up">
+                    <div className="p-5 border-b border-main bg-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                       <div>
-                        <h3 className="text-base font-black text-main uppercase tracking-widest flex items-center">
-                          <Cctv className="mr-3 text-blue-500" size={20} />
+                        <h3 className="text-xs font-bold text-slate-355 uppercase tracking-widest flex items-center">
+                          <Cctv className="mr-2 text-cyan-400" size={14} />
                           Devices in Block {activeBlockObj.name}
                         </h3>
-                        <p className="text-xs text-dim font-bold uppercase tracking-widest mt-1">
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
                           Showing {filteredBlockDevices.length} of {activeBlockDevices.length} Devices
                         </p>
                       </div>
                       
                       {/* Search and type filters */}
-                      <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                      <div className="flex flex-wrap items-center gap-3 ml-auto">
                         <select
                           value={deviceTypeFilter}
                           onChange={(e) => setDeviceTypeFilter(e.target.value)}
-                          className="glass-input p-2.5 text-xs bg-panel border-main focus:border-blue-500 text-main font-bold uppercase tracking-wider rounded-xl cursor-pointer"
+                          className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[120px]"
                         >
                           <option value="ALL">All Types</option>
                           <option value="Camera">Cameras</option>
@@ -644,8 +636,8 @@ export default function UnifiedOnboarding() {
                           type="text"
                           value={deviceSearchQuery}
                           onChange={(e) => setDeviceSearchQuery(e.target.value)}
-                          placeholder="Search devices by name, IP, serial..."
-                          className="glass-input p-2.5 text-xs bg-panel border-main focus:border-blue-500 transition-all text-main w-full sm:w-64 rounded-xl font-medium"
+                          placeholder="Search devices..."
+                          className="bg-slate-800 text-slate-200 text-xs font-medium rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 w-full sm:w-48 placeholder:text-slate-500"
                         />
                       </div>
                     </div>
@@ -653,16 +645,16 @@ export default function UnifiedOnboarding() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="border-b border-main bg-main/50 text-[10px] font-black text-secondary uppercase tracking-[0.2em]">
-                            <th className="p-5">Device</th>
-                            <th className="p-5">Type</th>
-                            <th className="p-5">Location</th>
-                            <th className="p-5">Network & Serial</th>
-                            <th className="p-5">Status</th>
-                            <th className="p-5 text-right">Actions</th>
+                          <tr className="bg-panel border-b border-main text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <th className="p-4">Device</th>
+                            <th className="p-4">Type</th>
+                            <th className="p-4">Location</th>
+                            <th className="p-4">Network & Serial</th>
+                            <th className="p-4">Status</th>
+                            <th className="p-4 text-right">Actions</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-white/5 text-slate-350">
                           {filteredBlockDevices.map((device) => {
                             const loc = parseLocation(device);
                             const deviceName = device.name || device.cameraName || device.nvrName || device.biometricName || device.switchName || 'Unnamed Device';
@@ -675,65 +667,60 @@ export default function UnifiedOnboarding() {
                             else if (device.deviceType === 'Switch') detailUrl = `/devices/switches/${device.id || device._id}`;
 
                             return (
-                              <tr key={`${device.deviceType}-${device.id || device._id}`} className="border-b border-main/50 hover:bg-main/20 transition-all group">
-                                <td className="p-5">
+                              <tr key={`${device.deviceType}-${device.id || device._id}`} className="hover:bg-slate-700/30 transition-colors group">
+                                <td className="p-4">
                                   <div className="flex items-center space-x-3">
-                                    <div className={`p-2.5 rounded-xl border ${
-                                      device.deviceType === 'Camera' ? 'bg-blue-500/10 border-blue-500/20 text-blue-500' :
-                                      device.deviceType === 'NVR' ? 'bg-purple-500/10 border-purple-500/20 text-purple-500' :
-                                      device.deviceType === 'Biometric' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
-                                      'bg-orange-500/10 border-orange-500/20 text-orange-500'
+                                    <div className={`p-2 rounded ${
+                                      device.deviceType === 'Camera' ? 'bg-blue-500/10 text-blue-500' :
+                                      device.deviceType === 'NVR' ? 'bg-purple-500/10 text-purple-500' :
+                                      device.deviceType === 'Biometric' ? 'bg-emerald-500/10 text-emerald-500' :
+                                      'bg-orange-500/10 text-orange-500'
                                     }`}>
-                                      {device.deviceType === 'Camera' && <Cctv size={16} />}
-                                      {device.deviceType === 'NVR' && <Server size={16} />}
-                                      {device.deviceType === 'Biometric' && <Fingerprint size={16} />}
-                                      {device.deviceType === 'Switch' && <Network size={16} />}
+                                      {device.deviceType === 'Camera' && <Cctv size={14} />}
+                                      {device.deviceType === 'NVR' && <Server size={14} />}
+                                      {device.deviceType === 'Biometric' && <Fingerprint size={14} />}
+                                      {device.deviceType === 'Switch' && <Network size={14} />}
                                     </div>
                                     <div>
-                                      <div className="text-xs font-black text-main uppercase tracking-wider">{deviceName}</div>
-                                      <div className="text-[9px] font-mono text-secondary mt-0.5">{serialNo}</div>
+                                      <div className="text-xs font-bold text-slate-300">{deviceName}</div>
+                                      <div className="text-[9px] font-mono text-slate-500 mt-0.5">{serialNo}</div>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="p-5">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${
-                                    device.deviceType === 'Camera' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
-                                    device.deviceType === 'NVR' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
-                                    device.deviceType === 'Biometric' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                                    'bg-orange-500/10 text-orange-500 border-orange-500/20'
-                                  }`}>
+                                <td className="p-4">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border border-slate-700 text-slate-400 bg-slate-800">
                                     {device.deviceType}
                                   </span>
                                 </td>
-                                <td className="p-5">
-                                  <div className="text-xs font-black text-main uppercase tracking-tight flex items-center">
-                                    <MapPin size={12} className="mr-1.5 text-secondary" />
+                                <td className="p-4">
+                                  <div className="text-xs font-bold text-slate-350 flex items-center">
+                                    <MapPin size={12} className="mr-1.5 text-slate-500" />
                                     {loc.floor !== '—' ? `Floor ${loc.floor}` : '—'}
-                                    {loc.room !== '—' && <span className="mx-1.5 text-secondary">•</span>}
+                                    {loc.room !== '—' && <span className="mx-1.5 text-slate-500">•</span>}
                                     {loc.room !== '—' ? `Room ${loc.room}` : ''}
                                   </div>
                                 </td>
-                                <td className="p-5">
-                                  <div className="text-xs font-mono text-main font-bold">{device.ipAddress || '—'}</div>
-                                  <div className="text-[9px] font-mono text-secondary uppercase tracking-widest mt-0.5">{device.macAddress || 'NO MAC'}</div>
+                                <td className="p-4">
+                                  <div className="text-xs font-mono text-cyan-400 font-bold">{device.ipAddress || '—'}</div>
+                                  <div className="text-[9px] font-mono text-slate-550 uppercase tracking-widest mt-0.5">{device.macAddress || 'NO MAC'}</div>
                                 </td>
-                                <td className="p-5">
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                                    device.status === 'Online' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
-                                    device.status === 'Offline' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
-                                    device.status === 'Maintenance' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
-                                    'bg-slate-500/10 text-slate-600 border-slate-500/20'
+                                <td className="p-4">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                                    device.status === 'Online' ? 'text-emerald-500 border-emerald-500/50 bg-emerald-500/10' :
+                                    device.status === 'Offline' ? 'text-rose-500 border-rose-500/50 bg-rose-500/10' :
+                                    device.status === 'Maintenance' ? 'text-amber-550 border-amber-500/50 bg-amber-550/10' :
+                                    'text-slate-500 border-slate-750 bg-slate-800'
                                   }`}>
                                     {device.status || 'Offline'}
                                   </span>
                                 </td>
-                                <td className="p-5 text-right">
+                                <td className="p-4 text-right">
                                   {detailUrl && (
                                     <button
                                       onClick={() => navigate(detailUrl)}
-                                      className="px-3 py-1.5 bg-main hover:bg-panel border border-main text-secondary hover:text-main rounded-lg text-[10px] font-black uppercase tracking-widest transition-all inline-flex items-center"
+                                      className="text-[10px] font-bold text-cyan-400 hover:text-white border border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1 rounded transition-colors uppercase tracking-widest"
                                     >
-                                      View Details
+                                      View
                                     </button>
                                   )}
                                 </td>
@@ -742,7 +729,7 @@ export default function UnifiedOnboarding() {
                           })}
                           {filteredBlockDevices.length === 0 && (
                             <tr>
-                              <td colSpan="6" className="p-10 text-center text-dim font-bold uppercase tracking-widest text-[10px]">
+                              <td colSpan="6" className="p-10 text-center text-slate-500 font-bold uppercase tracking-widest text-[10px]">
                                 No devices found matching filters
                               </td>
                             </tr>
@@ -755,25 +742,25 @@ export default function UnifiedOnboarding() {
             ) : activeFloorObj ? (
               <div className="space-y-6">
                  {activeFloorObj.rooms.length === 0 ? (
-                   <div className="text-center p-12 border-2 border-dashed border-main rounded-2xl">
+                   <div className="text-center p-12 border border-dashed border-main rounded-md">
                      <MapPin size={48} className="mx-auto mb-4 text-dim" />
                      <p className="text-dim text-xs font-bold uppercase tracking-widest">No rooms added to this floor</p>
                    </div>
                  ) : (
                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                      {activeFloorObj.rooms.map(room => (
-                        <div key={room.id} className="group relative flex flex-col justify-between bg-panel border border-main p-4 rounded-xl hover:border-amber-500/50 hover:shadow-sm transition-all">
-                          <div className="flex items-center justify-between mb-3">
+                        <div key={room.id} className="group relative flex flex-col justify-between bg-card border border-main p-4 rounded hover:ring-1 hover:ring-cyan-500/30 transition-all">
+                          <div className="flex items-center justify-between">
                             <div className="flex items-center">
-                              <MapPin size={16} className="text-amber-500 mr-2" />
-                              <span className="text-sm font-black text-main uppercase tracking-wider">{room.name}</span>
+                              <MapPin size={14} className="text-amber-500 mr-2" />
+                              <span className="text-xs font-bold text-main uppercase tracking-wider">{room.name}</span>
                             </div>
                             {canEdit && (
                               <button 
                                 onClick={(e) => handleDelete(e, room.id, 'Room')} 
-                                className="text-dim hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-dim hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={12} />
                               </button>
                             )}
                           </div>
@@ -789,23 +776,23 @@ export default function UnifiedOnboarding() {
 
       {/* Input Prompt Modal */}
       {promptModal.isOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[200] animate-fade-in">
-          <div className="bg-panel rounded-3xl w-full max-w-sm border border-main shadow-2xl overflow-hidden transform animate-slide-up">
-            <div className="p-6 border-b border-main flex justify-between items-center bg-main">
-              <h2 className="text-lg font-black text-main tracking-tight uppercase flex items-center">
-                <Plus className="mr-2 text-blue-500" size={20} />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-sm overflow-hidden border border-main shadow-2xl relative my-8 flex flex-col">
+            <div className="p-6 border-b border-main bg-panel flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-bold text-main tracking-tight uppercase flex items-center">
+                <Plus className="mr-3 text-cyan-400" size={24} />
                 Add {promptModal.type}
               </h2>
-              <button onClick={() => !isSubmitting && setPromptModal({ isOpen: false, type: '', parentData: null, value: '', secondaryValue: '', floorMode: 'bulk', selectedCollege: '' })} className="p-2 hover:bg-main rounded-xl text-dim hover:text-main transition-all">
+              <button onClick={() => !isSubmitting && setPromptModal({ isOpen: false, type: '', parentData: null, value: '', secondaryValue: '', floorMode: 'bulk', selectedCollege: '' })} className="p-2 hover:bg-card rounded-xl text-secondary hover:text-white transition-all">
                 <X size={20} />
               </button>
             </div>
             
             <form onSubmit={handlePromptSubmit} className="p-6 space-y-6">
               {promptModal.parentData && (
-                <div className="bg-main p-3 rounded-xl border border-main text-[9px] font-mono text-dim uppercase">
+                <div className="bg-panel p-3 rounded-lg border border-main text-[10px] font-mono text-slate-350 uppercase">
                   Creating under:<br/>
-                  <span className="text-main">
+                  <span className="text-main font-bold">
                     {promptModal.parentData.divisionName}
                     {promptModal.parentData.block && ` > ${promptModal.parentData.block}`}
                     {promptModal.parentData.floor && ` > ${promptModal.parentData.floor}`}
@@ -820,18 +807,16 @@ export default function UnifiedOnboarding() {
                     id="bulkFloor"
                     checked={promptModal.floorMode === 'bulk'}
                     onChange={(e) => setPromptModal(prev => ({ ...prev, floorMode: e.target.checked ? 'bulk' : 'single', value: '' }))}
-                    className="accent-blue-500 w-4 h-4"
+                    className="accent-cyan-400 w-4 h-4 bg-panel border-main rounded cursor-pointer"
                   />
-                  <label htmlFor="bulkFloor" className="text-[10px] font-bold text-main uppercase cursor-pointer">
+                  <label htmlFor="bulkFloor" className="text-[10px] font-bold text-secondary uppercase cursor-pointer select-none">
                     Auto-Generate {promptModal.type}s
                   </label>
                 </div>
               )}
 
-
-
               <div>
-                <label className="block text-[10px] font-black text-secondary uppercase tracking-widest mb-2">
+                <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">
                   {(promptModal.type === 'Floor' || promptModal.type === 'Room') && promptModal.floorMode === 'bulk' ? `${promptModal.type}s to Generate` : `${promptModal.type} Name`}
                 </label>
                 <input 
@@ -840,7 +825,7 @@ export default function UnifiedOnboarding() {
                   autoFocus
                   value={promptModal.value} 
                   onChange={(e) => setPromptModal(prev => ({ ...prev, value: e.target.value }))}
-                  className="glass-input w-full p-3 text-xs bg-main border-main focus:border-blue-500 text-main font-bold" 
+                  className="glass-input w-full p-3 text-xs bg-panel border-main focus:border-cyan-500 text-main font-bold rounded-lg" 
                   placeholder={
                     promptModal.type === 'Floor' 
                       ? (promptModal.floorMode === 'bulk' ? 'e.g. 6 (makes G to 6) or G-6 or G,1,2' : 'e.g. Basement')
@@ -854,7 +839,7 @@ export default function UnifiedOnboarding() {
               <button 
                 type="submit" 
                 disabled={isSubmitting || !promptModal.value.trim()}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                className="w-full py-4 mt-4 bg-cyan-400 hover:bg-cyan-500 text-slate-900 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 font-bold"
               >
                 {isSubmitting ? 'SAVING...' : 'CREATE'}
               </button>
