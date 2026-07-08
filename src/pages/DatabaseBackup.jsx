@@ -204,61 +204,61 @@ export default function DatabaseBackup() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center space-x-3">
-          <div className="p-3 bg-teal-500/10 text-teal-600 rounded-xl">
-            <Database size={24} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-main tracking-tight">Database Management</h1>
-            <p className="text-secondary text-sm">Backup or clear your CCTV datasets</p>
-          </div>
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10 px-4 relative">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
+            <Database className="mr-3 text-cyan-400" size={28} />
+            Database & Backups
+          </h1>
         </div>
         <a 
           href={window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000/cctv/admin/' : '/cctv/admin/'}
           target="_blank" 
           rel="noopener noreferrer"
-          className="px-4 py-2.5 bg-panel border border-main text-secondary hover:text-teal-600 hover:border-teal-500/30 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 shadow-sm"
+          className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors"
         >
-          <span>Open Django Admin</span>
-          <ExternalLink size={16} />
+          Open Django Admin <ExternalLink size={12} className="ml-1.5" />
         </a>
       </div>
 
       {successMsg && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 rounded-xl flex items-center space-x-3 animate-fade-in">
-          <CheckCircle2 size={20} />
-          <span className="font-medium">{successMsg}</span>
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-md flex items-center space-x-3 animate-fade-in text-xs font-bold uppercase tracking-wider">
+          <CheckCircle2 size={16} />
+          <span>{successMsg}</span>
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-600 rounded-xl flex items-center space-x-3 animate-fade-in">
-          <AlertTriangle size={20} />
-          <span className="font-medium">{errorMsg}</span>
+        <div className="p-4 bg-rose-500/10 border border-rose-500/30 text-rose-500 rounded-md flex items-center space-x-3 animate-fade-in text-xs font-bold uppercase tracking-wider">
+          <AlertTriangle size={16} />
+          <span>{errorMsg}</span>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Backup Card */}
-        <div className="bg-card rounded-2xl shadow-sm border border-main p-6 flex flex-col items-start space-y-4">
-          <div className="w-12 h-12 bg-teal-500/10 text-teal-600 rounded-full flex items-center justify-center">
-            <Download size={24} />
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group">
+          <div className="flex items-start space-x-4 mb-4">
+            <div className="w-10 h-10 flex items-center justify-center rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/10 shrink-0">
+              <Download size={20} />
+            </div>
+            <div>
+              <h3 className="text-md font-bold text-main uppercase tracking-wider">Download Backup</h3>
+              <p className="text-[11px] text-secondary font-bold uppercase tracking-widest mt-1">
+                Select datasets or month to dump DB.
+              </p>
+            </div>
           </div>
-          <h3 className="text-xl font-bold text-main">Download Backup</h3>
-          <p className="text-secondary text-sm">
-            Download a JSON dump of your database. Select specific datasets below or leave empty to download everything.
-          </p>
 
-          <div className="w-full bg-panel rounded-xl p-4 space-y-3 flex-1">
-            <div className="flex items-center justify-between border-b border-main pb-2">
-              <span className="font-bold text-sm text-main">Filter by Month</span>
+          <div className="w-full bg-slate-800/40 rounded-md border border-slate-700/50 p-4 space-y-3 flex-1 mb-4">
+            <div className="flex items-center justify-between border-b border-slate-700/50 pb-2">
+              <span className="font-bold text-xs text-secondary uppercase">Filter by Month</span>
             </div>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full bg-card border border-main rounded-lg px-3 py-2 text-sm text-main focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+              className="w-full bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 cursor-pointer"
             >
               <option value="">All Time (No Filter)</option>
               {availableMonths.map(month => {
@@ -271,28 +271,26 @@ export default function DatabaseBackup() {
             </select>
           </div>
 
-          <div className="w-full bg-panel rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-main pb-2">
-              <span className="font-bold text-sm text-main">Select Datasets</span>
+          <div className="w-full bg-slate-800/40 rounded-md border border-slate-700/50 p-4 space-y-3 mb-4">
+            <div className="flex items-center justify-between border-b border-slate-700/50 pb-2">
+              <span className="font-bold text-xs text-secondary uppercase">Select Datasets</span>
               <button 
                 onClick={handleSelectAll}
-                className="text-xs font-bold text-teal-600 hover:text-teal-700 uppercase tracking-wider"
+                className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-widest"
               >
                 {selectedModels.length === datasetOptions.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-2 text-secondary">
               {datasetOptions.map(option => (
-                <label key={option.value} className="flex items-center space-x-2 cursor-pointer group">
-                  <div className="relative flex items-center">
-                    <input 
-                      type="checkbox" 
-                      className="peer w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-600/20 cursor-pointer"
-                      checked={selectedModels.includes(option.value)}
-                      onChange={() => handleToggleModel(option.value)}
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-secondary group-hover:text-main transition-colors select-none">
+                <label key={option.value} className="flex items-center space-x-2 cursor-pointer group select-none">
+                  <input 
+                    type="checkbox" 
+                    className="accent-cyan-400 w-4 h-4 rounded cursor-pointer bg-slate-800 border-slate-700"
+                    checked={selectedModels.includes(option.value)}
+                    onChange={() => handleToggleModel(option.value)}
+                  />
+                  <span className="text-xs font-bold text-secondary group-hover:text-main transition-colors">
                     {option.label}
                   </span>
                 </label>
@@ -304,29 +302,36 @@ export default function DatabaseBackup() {
             <button
               onClick={() => handleDownload('json')}
               disabled={loadingDownload}
-              className="flex-1 flex items-center justify-center space-x-2 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center space-x-2 py-3 bg-cyan-400 hover:bg-cyan-500 text-slate-900 rounded font-bold text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-50"
             >
-              <Download size={18} />
-              <span>{loadingDownload ? 'Generating...' : 'Download JSON'}</span>
+              <Download size={14} />
+              <span>{loadingDownload ? 'Generating...' : 'JSON'}</span>
             </button>
             <button
               onClick={() => handleDownload('sql')}
               disabled={loadingDownload}
-              className="flex-1 flex items-center justify-center space-x-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center space-x-2 py-3 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded font-bold text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-50"
             >
-              <Database size={18} />
-              <span>{loadingDownload ? 'Generating...' : 'Full SQL Dump'}</span>
+              <Database size={14} />
+              <span>{loadingDownload ? 'Generating...' : 'SQL Dump'}</span>
             </button>
           </div>
         </div>
 
         {/* Restore Card */}
-        <div className="bg-card rounded-2xl shadow-sm border border-main p-6 flex flex-col items-start space-y-4">
-          <div className="w-12 h-12 bg-indigo-500/10 text-indigo-600 rounded-full flex items-center justify-center">
-            <Upload size={24} />
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group">
+          <div className="flex items-start space-x-4 mb-4">
+            <div className="w-10 h-10 flex items-center justify-center rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/10 shrink-0">
+              <Upload size={20} />
+            </div>
+            <div>
+              <h3 className="text-md font-bold text-main uppercase tracking-wider">Restore Data</h3>
+              <p className="text-[11px] text-secondary font-bold uppercase tracking-widest mt-1">
+                Import JSON or SQL files to overwrite database.
+              </p>
+            </div>
           </div>
-          <h3 className="text-xl font-bold text-main">Restore Data</h3>
-          <p className="text-secondary text-sm flex-1">
+          <p className="text-xs text-dim leading-relaxed mb-6">
             Upload a previously downloaded JSON backup file or an SQL file to instantly restore your data. The data will be safely updated in your database.
           </p>
 
@@ -341,46 +346,47 @@ export default function DatabaseBackup() {
           <button
             onClick={handleUploadClick}
             disabled={loadingUpload}
-            className="w-full flex items-center justify-center space-x-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center space-x-2 py-3 bg-cyan-400 hover:bg-cyan-500 text-slate-900 rounded font-bold text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-50"
           >
-            <Upload size={18} />
-            <span>{loadingUpload ? 'Uploading & Restoring...' : 'Upload JSON / SQL Backup'}</span>
+            <Upload size={14} />
+            <span>{loadingUpload ? 'Uploading & Restoring...' : 'Upload Backup File'}</span>
           </button>
         </div>
 
         {/* Danger Zone Card */}
-        <div className="bg-card rounded-2xl shadow-sm border border-rose-200 p-6 flex flex-col items-start space-y-4 relative overflow-hidden md:col-span-2">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 rounded-bl-[100px] -z-10" />
-          <div className="w-12 h-12 bg-rose-500/10 text-rose-600 rounded-full flex items-center justify-center">
-            <Trash2 size={24} />
+        <div className="bg-panel border border-rose-500/30 rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group md:col-span-2">
+          <div className="flex items-start space-x-4 mb-4">
+            <div className="w-10 h-10 flex items-center justify-center rounded bg-rose-500/10 text-rose-500 border border-rose-500/10 shrink-0">
+              <Trash2 size={20} />
+            </div>
+            <div>
+              <h3 className="text-md font-bold text-rose-500 uppercase tracking-wider">Danger Zone</h3>
+              <p className="text-[11px] text-secondary font-bold uppercase tracking-widest mt-1">
+                Permanently clear selected core datasets.
+              </p>
+            </div>
           </div>
-          <h3 className="text-xl font-bold text-rose-600">Danger Zone</h3>
-          <p className="text-secondary text-sm flex-1">
-            Permanently clear selected core data. User accounts and settings are preserved. This action cannot be undone!
-          </p>
 
-          <div className="w-full bg-rose-50 rounded-xl p-4 space-y-3 relative z-10 border border-rose-100">
-            <div className="flex items-center justify-between border-b border-rose-200 pb-2">
-              <span className="font-bold text-sm text-rose-800">Select Datasets to Delete</span>
+          <div className="w-full bg-rose-500/5 rounded-md p-4 space-y-3 border border-rose-500/15 mb-4">
+            <div className="flex items-center justify-between border-b border-rose-500/20 pb-2">
+              <span className="font-bold text-xs text-rose-400 uppercase">Select Datasets to Delete</span>
               <button 
                 onClick={handleDeleteSelectAll}
-                className="text-xs font-bold text-rose-600 hover:text-rose-700 uppercase tracking-wider"
+                className="text-[10px] font-bold text-rose-450 hover:text-rose-400 uppercase tracking-widest"
               >
                 {deleteSelectedModels.length === datasetOptions.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-2 text-rose-400">
               {datasetOptions.map(option => (
-                <label key={option.value} className="flex items-center space-x-2 cursor-pointer group">
-                  <div className="relative flex items-center">
-                    <input 
-                      type="checkbox" 
-                      className="peer w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-600/20 cursor-pointer"
-                      checked={deleteSelectedModels.includes(option.value)}
-                      onChange={() => handleDeleteToggleModel(option.value)}
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-rose-800/80 group-hover:text-rose-900 transition-colors select-none">
+                <label key={option.value} className="flex items-center space-x-2 cursor-pointer group select-none">
+                  <input 
+                    type="checkbox" 
+                    className="accent-rose-500 w-4 h-4 rounded cursor-pointer bg-slate-800 border-slate-700"
+                    checked={deleteSelectedModels.includes(option.value)}
+                    onChange={() => handleDeleteToggleModel(option.value)}
+                  />
+                  <span className="text-xs font-bold text-rose-400 group-hover:text-rose-300 transition-colors">
                     {option.label}
                   </span>
                 </label>
@@ -397,25 +403,25 @@ export default function DatabaseBackup() {
                 }
                 setShowConfirm(true);
               }}
-              className="w-full flex items-center justify-center space-x-2 py-3 bg-rose-100 text-rose-600 hover:bg-rose-200 rounded-xl font-bold transition-colors z-10 relative"
+              className="w-full flex items-center justify-center space-x-2 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded font-bold text-xs font-bold uppercase tracking-widest transition-colors border border-rose-500/25"
             >
-              <Trash2 size={18} />
+              <Trash2 size={14} />
               <span>Clear Selected Data</span>
             </button>
           ) : (
-            <div className="w-full p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-3 animate-fade-in">
-              <p className="text-sm font-bold text-rose-700 text-center">Are you absolutely sure?</p>
+            <div className="w-full p-4 bg-rose-500/5 border border-rose-500/20 rounded-md space-y-3 animate-fade-in">
+              <p className="text-xs font-bold text-rose-400 uppercase tracking-widest text-center">Are you absolutely sure?</p>
               <div className="flex space-x-2">
                 <button
                   onClick={() => setShowConfirm(false)}
-                  className="flex-1 py-2 bg-white text-slate-600 border border-slate-200 rounded-lg font-bold hover:bg-slate-50 transition-colors"
+                  className="flex-1 py-2 bg-slate-800 text-slate-350 border border-slate-700 rounded text-xs font-bold uppercase tracking-widest hover:bg-slate-700 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleClearDatabase}
                   disabled={loadingDelete}
-                  className="flex-1 py-2 bg-rose-600 text-white rounded-lg font-bold hover:bg-rose-500 transition-colors disabled:opacity-50"
+                  className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {loadingDelete ? 'Wiping...' : 'Yes, Delete'}
                 </button>

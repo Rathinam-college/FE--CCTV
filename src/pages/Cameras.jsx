@@ -912,15 +912,15 @@ export default function Cameras() {
           </h1>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
             <Printer size={14} className="mr-2" /> Print PDF
           </button>
           {canEdit && (
             <>
-              <label className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors cursor-pointer">
+              <label className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors cursor-pointer">
                 <Upload size={14} className="mr-2" />
                 Bulk Import
                 <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
@@ -944,7 +944,7 @@ export default function Cameras() {
           <button onClick={() => { setActiveView('LIST'); setFilterType('ALL'); }} className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ${activeView === 'LIST' && filterType === 'ALL' ? 'ring-1 ring-cyan-500/50' : 'hover:ring-1 hover:ring-cyan-500/30'}`}>
             <div className="flex justify-between items-start w-full">
               <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL ASSETS]</h3>
-              <Video size={18} className="text-slate-500" />
+              <Video size={18} className="text-dim" />
             </div>
             <div className="flex items-end mt-4">
               <span className="text-4xl font-bold text-cyan-400">{stats.total}</span>
@@ -955,20 +955,20 @@ export default function Cameras() {
           <button onClick={() => setFilterType('INSIDE')} className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ${filterType === 'INSIDE' ? 'ring-1 ring-yellow-500/50' : 'hover:ring-1 hover:ring-yellow-500/30'}`}>
             <div className="flex justify-between items-start w-full">
               <h3 className="text-[11px] font-bold text-yellow-500 tracking-widest uppercase">[INSIDE CAMPUS]</h3>
-              <Building size={18} className="text-slate-500" />
+              <Building size={18} className="text-dim" />
             </div>
             <div className="flex items-end mt-4">
-              <span className="text-4xl font-bold text-white">{stats.inside}</span>
+              <span className="text-4xl font-bold text-main">{stats.inside}</span>
             </div>
           </button>
  
           <button onClick={() => setFilterType('OUTSIDE')} className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ${filterType === 'OUTSIDE' ? 'ring-1 ring-orange-500/50' : 'hover:ring-1 hover:ring-orange-500/30'}`}>
             <div className="flex justify-between items-start w-full">
               <h3 className="text-[11px] font-bold text-orange-500 tracking-widest uppercase">[OUTSIDE CAMPUS]</h3>
-              <Map size={18} className="text-slate-500" />
+              <Map size={18} className="text-dim" />
             </div>
             <div className="flex items-end mt-4">
-              <span className="text-4xl font-bold text-white">{stats.outside}</span>
+              <span className="text-4xl font-bold text-main">{stats.outside}</span>
             </div>
             <div className="absolute bottom-0 left-0 h-1 bg-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]" style={{ width: '30%' }}></div>
           </button>
@@ -985,17 +985,17 @@ export default function Cameras() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+              <span className="text-[12px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[7px] text-dim">DIST.</span></span>
             </div>
           </div>
           <div className="absolute right-6 flex flex-col space-y-2">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 rounded-full bg-slate-600"></div>
-              <span className="text-[10px] text-slate-300 font-bold uppercase">Inside</span>
+              <span className="text-[10px] text-secondary font-bold uppercase">Inside</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
-              <span className="text-[10px] text-slate-300 font-bold uppercase">Outside</span>
+              <span className="text-[10px] text-secondary font-bold uppercase">Outside</span>
             </div>
           </div>
         </div>
@@ -1006,18 +1006,18 @@ export default function Cameras() {
 
           <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200">
             <div className="relative flex-1 group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-dim" size={16} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Deep search by camera name, asset number, location, IP..."
-                className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+                className="bg-panel text-sm text-main border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
               />
             </div>
             <button
               onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-wide"
+              className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-secondary hover:text-main transition-colors uppercase tracking-wide"
             >
               <Filter size={16} className="mr-2" />
               {showFilterPanel ? 'HIDE FILTERS' : 'SHOW ADVANCED FILTERS'}
@@ -1128,20 +1128,20 @@ export default function Cameras() {
               </div>
             )}
 
-          <div className="bg-panel rounded-md overflow-hidden border border-main mt-4">
+            <div className="bg-panel rounded-md overflow-hidden border border-main mt-4">
             <div className="p-4 flex justify-between items-center border-b border-main">
               <div className="flex items-center space-x-2">
                 <Video size={16} className="text-cyan-400" />
-                <span className="text-[12px] font-bold text-white uppercase tracking-wider">Device Inventory <span className="text-slate-400 font-normal">({filteredCameras.length} Assets)</span></span>
+                <span className="text-[12px] font-bold text-main uppercase tracking-wider">Device Inventory <span className="text-dim font-normal">({filteredCameras.length} Assets)</span></span>
               </div>
-
+ 
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2 mr-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Show</span>
+                  <span className="text-[10px] font-bold text-dim uppercase tracking-widest">Show</span>
                   <select
                     value={itemsPerPage}
                     onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                    className="bg-[#0f172a] border-none text-white text-[10px] font-bold rounded px-2 py-0.5 outline-none"
+                    className="bg-panel border border-main text-main text-[10px] font-bold rounded px-2 py-0.5 outline-none"
                   >
                     <option value={10}>10</option>
                     <option value={15}>15</option>
@@ -1150,20 +1150,20 @@ export default function Cameras() {
                     <option value={100}>100</option>
                   </select>
                 </div>
-                <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                <div className="flex items-center space-x-2 text-[10px] font-bold text-secondary uppercase tracking-widest">
                   <span>{Math.min((currentPage - 1) * itemsPerPage + 1, filteredCameras.length)}-{Math.min(currentPage * itemsPerPage, filteredCameras.length)} OF {filteredCameras.length}</span>
                   <div className="flex items-center ml-2 space-x-1">
-                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 hover:text-white disabled:opacity-30"><ChevronLeft size={14}/></button>
-                    <button disabled={currentPage >= Math.ceil(filteredCameras.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 hover:text-white disabled:opacity-30"><ChevronRight size={14}/></button>
+                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 hover:text-main disabled:opacity-30"><ChevronLeft size={14}/></button>
+                    <button disabled={currentPage >= Math.ceil(filteredCameras.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 hover:text-main disabled:opacity-30"><ChevronRight size={14}/></button>
                   </div>
                 </div>
               </div>
             </div>
-
+ 
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 z-10 bg-panel border-b border-main">
-                  <tr className="text-slate-400">
+                  <tr className="text-secondary">
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider w-16">S.No</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Device Identity</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location & Brand</th>
@@ -1179,33 +1179,33 @@ export default function Cameras() {
                     const isExt = isOutside(camera.siteName, camera.campusZone);
                     const serialNumber = (currentPage - 1) * itemsPerPage + index + 1;
                     return (
-                      <tr key={camera._id || camera.id} onClick={() => navigate(`/devices/cameras/${camera._id || camera.id}`)} className="hover:bg-slate-700/30 cursor-pointer transition-colors group text-white">
-                        <td className="p-4 text-[10px] font-bold text-slate-300">
+                      <tr key={camera._id || camera.id} onClick={() => navigate(`/devices/cameras/${camera._id || camera.id}`)} className="hover:bg-slate-700/30 cursor-pointer transition-colors group text-main">
+                        <td className="p-4 text-[10px] font-bold text-secondary">
                           {serialNumber}
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col space-y-0.5">
                             <span className="text-[11px] font-bold text-cyan-400 tracking-wider">{camera.cameraId || '—'}</span>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Asset ID</span>
+                            <span className="text-[9px] text-dim font-bold uppercase tracking-wider">Asset ID</span>
                           </div>
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col space-y-1">
-                            <div className="flex items-center space-x-1.5 text-[11px] font-bold text-white uppercase tracking-wider">
+                            <div className="flex items-center space-x-1.5 text-[11px] font-bold text-main uppercase tracking-wider">
                               <Building size={12} className="text-cyan-400" />
                               <span>{loc.block || '—'}</span>
                             </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider pl-4">
+                            <div className="text-[9px] text-dim font-bold uppercase tracking-wider pl-4">
                               {loc.college || '—'} {loc.floor && loc.floor !== '—' ? `| Floor ${loc.floor}` : ''} {loc.room && loc.room !== '—' ? `| ${loc.room}` : ''}
                             </div>
-                            <div className={`text-[8px] font-bold uppercase tracking-wider pl-4 ${isExt ? 'text-cyan-400' : 'text-slate-400'}`}>
+                            <div className={`text-[8px] font-bold uppercase tracking-wider pl-4 ${isExt ? 'text-cyan-400' : 'text-dim'}`}>
                               [{camera.campusZone || (isExt ? 'OUTSIDE' : 'INSIDE')}]
                             </div>
                           </div>
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col space-y-1">
-                            <span className="text-[11px] font-bold text-white uppercase tracking-wider">{camera.name || '—'}</span>
+                            <span className="text-[11px] font-bold text-main uppercase tracking-wider">{camera.name || '—'}</span>
                             {camera.dvrNvrDetails && (
                               <div className="flex flex-wrap gap-1 mt-1 max-w-[150px]">
                                 {String(camera.dvrNvrDetails).split(',').filter(Boolean).map((nvr, idx) => {
@@ -1214,7 +1214,7 @@ export default function Cameras() {
                                   const nvrName = actualNvr ? actualNvr.nvrName : nvrRaw;
                                   const displayText = nvrName.toUpperCase().startsWith('NVR') ? nvrName : `NVR - ${nvrName}`;
                                   return (
-                                    <span key={idx} className="inline-flex items-center px-2 py-0.5 bg-[#2d333b] border border-[#444c56] rounded text-[8px] font-bold text-slate-300 uppercase tracking-wider w-fit">
+                                    <span key={idx} className="inline-flex items-center px-2 py-0.5 bg-panel border border-main rounded text-[8px] font-bold text-secondary uppercase tracking-wider w-fit">
                                       {displayText}
                                     </span>
                                   );
@@ -1225,10 +1225,10 @@ export default function Cameras() {
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col space-y-0.5">
-                            <span className="text-[11px] font-bold text-white">{camera.ipAddress || '—'}</span>
+                            <span className="text-[11px] font-bold text-main">{camera.ipAddress || '—'}</span>
                             <div className="flex flex-col space-y-0.5 mt-1">
                               <span className="text-[8px] font-bold text-cyan-400 uppercase tracking-widest">MFR SN:</span>
-                              <span className="text-[9px] text-slate-300 tracking-wider">{camera.serialNumber || '—'}</span>
+                              <span className="text-[9px] text-secondary tracking-wider">{camera.serialNumber || '—'}</span>
                             </div>
                           </div>
                         </td>

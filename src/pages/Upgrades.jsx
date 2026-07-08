@@ -383,150 +383,146 @@ export default function Upgrades() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-white/10 pb-6">
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <Shield className="mr-3 text-purple-400" size={28} />
+            <Shield className="mr-3 text-cyan-400" size={28} />
             Upgrades
           </h1>
         </div>
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <div className="flex items-center space-x-2">
-            <Calendar size={16} className="text-dim" />
-            <input 
-              type="month" 
-              value={startMonth}
-              onChange={(e) => setStartMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
-              title="From Month"
-            />
-            <span className="text-secondary text-xs">to</span>
-            <input 
-              type="month" 
-              value={endMonth}
-              onChange={(e) => setEndMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
-              title="To Month"
-            />
-          </div>
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search upgrades..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="glass-input w-full !pl-14 pr-4 py-2 text-sm"
-            />
-          </div>
-          <div className="flex space-x-3">
-            <button onClick={handleDownload} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-teal-500/10 border-teal-500/30 text-teal-600 hover:bg-teal-500/20 transition-all">
-              <Download size={18} className="mr-2" />
-              Export CSV
+        <div className="flex space-x-4 items-center">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Download size={14} className="mr-2" /> Export CSV
+          </button>
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Printer size={14} className="mr-2" /> Print PDF
+          </button>
+          {canEdit && (
+            <button onClick={() => { resetForm(); setShowModal(true); }} className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2">
+              <Plus size={16} className="mr-2" />
+              Register Upgrade
             </button>
-            <button onClick={printToPDF} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-purple-500/10 border-purple-500/30 text-purple-600 hover:bg-purple-500/20 transition-all">
-              <Printer size={18} className="mr-2" />
-              Print PDF
-            </button>
-            {canEdit && (
-              <button onClick={() => { resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2.5 text-sm font-medium">
-                <Plus size={18} className="mr-2" />
-                Register Upgrade
-              </button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-red-500/30 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-rose-500 tracking-widest uppercase">[OPEN UPGRADES]</h3>
+            <Clock size={18} className="text-slate-500" />
+          </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{summaryStats.open}</span>
+          </div>
+        </button>
+
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-amber-500/30 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-amber-500 tracking-widest uppercase">[IN PROGRESS]</h3>
+            <Shield size={18} className="text-slate-500" />
+          </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{summaryStats.inProgress}</span>
+          </div>
+        </button>
+
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[COMPLETED]</h3>
+            <CheckCircle size={18} className="text-slate-500" />
+          </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
+          </div>
+        </button>
+
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL UPGRADES]</h3>
+            <Briefcase size={18} className="text-slate-500" />
+          </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-cyan-400">{summaryStats.total}</span>
+          </div>
+          <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
+        </button>
+
+        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
+          <div className="w-24 h-24 relative flex items-center justify-center">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
             )}
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+            </div>
+          </div>
+          <div className="absolute right-2 flex flex-col space-y-1">
+            {chartData.map(d => (
+              <div key={d.name} className="flex items-center space-x-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
+                <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
-        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f43f5e', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-rose-500 tracking-[0.2em] uppercase">[Open]</h3>
-              <Clock size={18} className="text-rose-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(244, 63, 94, 0.6)' }}>{summaryStats.open}</span>
-                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest pb-1">Pending</span>
-              </div>
-            </div>
-          </div>
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f59e0b', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-amber-500 tracking-[0.2em] uppercase">[In Progress]</h3>
-              <Shield size={18} className="text-amber-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.6)' }}>{summaryStats.inProgress}</span>
-                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Working</span>
-              </div>
-            </div>
-          </div>
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#10b981', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-emerald-500 tracking-[0.2em] uppercase">[Completed]</h3>
-              <CheckCircle size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>{summaryStats.completed}</span>
-                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Resolved</span>
-              </div>
-            </div>
-          </div>
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#8b5cf6', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-purple-500 tracking-[0.2em] uppercase">[Total Upgrades]</h3>
-              <Briefcase size={18} className="text-purple-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(139, 92, 246, 0.6)' }}>{summaryStats.total}</span>
-                <span className="text-[10px] font-bold text-purple-500 uppercase tracking-widest pb-1">Log Entries</span>
-              </div>
-            </div>
-          </div>
+      {/* Search & Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search upgrades by Description, Location..."
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
         </div>
-        
-        <div className="glass-panel p-6 bg-card border-main shadow-sm flex items-center justify-center min-h-[140px]">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={120}>
-              <PieChart>
-                <Pie data={chartData} innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value">
-                  {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : <p className="text-[10px] text-secondary font-black uppercase tracking-widest text-center">No Data</p>}
+        <div className="flex items-center space-x-2 bg-panel px-4 py-3 rounded-md border border-main">
+          <Calendar size={16} className="text-slate-400" />
+          <input 
+            type="month" 
+            value={startMonth}
+            onChange={(e) => setStartMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="From Month"
+          />
+          <span className="text-slate-400 text-xs">to</span>
+          <input 
+            type="month" 
+            value={endMonth}
+            onChange={(e) => setEndMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="To Month"
+          />
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 bg-panel p-4 rounded-2xl border border-main">
-        <div className="flex p-1 bg-card rounded-xl border border-main">
+      <div className="flex flex-wrap items-center gap-4 bg-panel p-4 rounded-md border border-main mb-6">
+        <div className="flex p-1 bg-slate-800 rounded-lg border border-slate-700">
           {['ALL', 'Open', 'In Progress', 'Completed'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
+              className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${
                 statusFilter === status 
-                  ? 'bg-purple-500 text-white shadow-lg' 
-                  : 'text-secondary hover:text-main hover:bg-panel'
+                  ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' 
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               {status}
@@ -565,32 +561,32 @@ export default function Upgrades() {
         </div>
       </div>
 
-      <div className="glass-panel overflow-hidden border border-main shadow-sm">
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-panel border-b border-main">
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center w-12">S.No</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Date</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Location</th>
-                <th className="p-4 text-[11px] font-bold text-purple-300 uppercase tracking-widest">Upgrade Description</th>
-                <th className="p-4 text-[11px] font-bold text-purple-300 uppercase tracking-widest">Action Taken</th>
-                <th className="p-4 text-[11px] font-bold text-purple-300 uppercase tracking-widest">Instruction By</th>
-                <th className="p-4 text-[11px] font-bold text-purple-300 uppercase tracking-widest text-center">Time (R/E/T)</th>
-                <th className="p-4 text-[11px] font-bold text-purple-300 uppercase tracking-widest">Status</th>
-                {canEdit && <th className="p-4 text-[11px] font-bold text-purple-300 uppercase tracking-widest text-right">Actions</th>}
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">S.No</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Location</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upgrade Description</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Action Taken</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                {canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-main">
               {loading ? (
-                <tr><td colSpan="8" className="p-10 text-center text-dim">Loading upgrades...</td></tr>
+                <tr><td colSpan="9" className="p-10 text-center text-dim">Loading upgrades...</td></tr>
               ) : filteredTickets.length === 0 ? (
-                <tr><td colSpan="8" className="p-10 text-center text-dim">No upgrades found.</td></tr>
+                <tr><td colSpan="9" className="p-10 text-center text-dim">No upgrades found.</td></tr>
               ) : (
                 filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((ticket, index) => (
                   <tr 
                     key={ticket.id || ticket._id} 
-                    className="hover:bg-white/5 transition-colors cursor-pointer group"
+                    className="hover:bg-slate-700/30 transition-colors cursor-pointer group"
                     onClick={(e) => {
                       if (!e.target.closest('button')) {
                         navigate(`/tickets/${ticket.id || ticket._id}`);
@@ -598,39 +594,41 @@ export default function Upgrades() {
                     }}
                   >
                     <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                    <td className="p-4 text-xs font-mono">{ticket.operationDate || new Date().toISOString().split('T')[0]}</td>
+                    <td className="p-4 text-xs font-mono text-slate-300">{ticket.operationDate || new Date().toISOString().split('T')[0]}</td>
                     <td className="p-4 text-xs font-semibold text-main uppercase">{ticket.divisionName || 'N/A'} - {ticket.block}</td>
-                    <td className="p-4 text-xs text-dim uppercase">{ticket.issueDescription}</td>
-                    <td className="p-4 text-xs text-dim uppercase">{ticket.actionTaken || 'Pending'}</td>
+                    <td className="p-4 text-xs text-slate-400 uppercase">{ticket.issueDescription}</td>
+                    <td className="p-4 text-xs text-slate-400 uppercase">{ticket.actionTaken || 'Pending'}</td>
                     <td className="p-4 text-xs text-main uppercase">{ticket.instructionBy || 'N/A'}</td>
                     <td className="p-4">
                       <div className="flex flex-col items-center space-y-1">
                         <span className="text-[10px] text-emerald-400 font-mono">{ticket.receivedTime || '--:--'}</span>
                         <span className="text-[10px] text-red-400 font-mono">{ticket.endTime || '--:--'}</span>
-                        <div className="h-[1px] w-8 bg-white/10"></div>
+                        <div className="h-[1px] w-8 bg-slate-700"></div>
                         <span className="text-[10px] text-main font-bold">{ticket.totalTime || '0h 0m'}</span>
                       </div>
                     </td>
                     <td className="p-4">
-                      <span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border ${
-                        ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20' :
-                        ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20' :
-                        'text-red-400 border-red-500/20'
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                        ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                        ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                        'text-red-500 border-red-500/50'
                       }`}>
                         {ticket.status}
                       </span>
                     </td>
                     {canEdit && (
                       <td className="p-4 text-right">
-                        <button 
-                          onClick={() => navigate(`/tickets/${ticket.id || ticket._id}`)} 
-                          className="p-1.5 text-dim hover:text-emerald-400 transition-colors"
-                          title="View Full Details"
-                        >
-                          <Info size={14} />
-                        </button>
-                        <button onClick={() => handleEdit(ticket)} className="p-1.5 text-dim hover:text-blue-400 transition-colors"><Edit2 size={14} /></button>
-                        <button onClick={() => handleDelete(ticket.id || ticket._id)} className="p-1.5 text-dim hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                        <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => navigate(`/tickets/${ticket.id || ticket._id}`)} 
+                            className="text-slate-400 hover:text-cyan-400 transition-colors"
+                            title="View Full Details"
+                          >
+                            <Info size={14} />
+                          </button>
+                          <button onClick={() => handleEdit(ticket)} className="text-slate-400 hover:text-cyan-400 transition-colors"><Edit2 size={14} /></button>
+                          <button onClick={() => handleDelete(ticket.id || ticket._id)} className="text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                        </div>
                       </td>
                     )}
                   </tr>

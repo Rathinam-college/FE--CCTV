@@ -255,7 +255,7 @@ export default function Reports() {
   const filteredData = getFilteredData();
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-20 animate-fade-in px-4 relative">
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10 px-4 relative">
       {/* Formal Letterhead (Visible in PDF only) */}
       <div className="hidden print-only-header">
         <div className="letter-branding text-black">RATHINAM GLOBAL UNIVERSITY</div>
@@ -266,53 +266,53 @@ export default function Reports() {
       </div>
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-end border-b border-main pb-8 gap-6 no-print">
-        <div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2 no-print">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <FileText className="mr-3 text-blue-500" size={28} />
-            Reports
+            <FileText className="mr-3 text-cyan-400" size={28} />
+            Reports & Audits
           </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center space-x-2">
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-secondary uppercase tracking-widest block ml-1">From Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="glass-input px-4 py-3 text-xs bg-panel border-main text-main cursor-pointer"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-secondary uppercase tracking-widest block ml-1">To Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="glass-input px-4 py-3 text-xs bg-panel border-main text-main cursor-pointer"
-              />
-            </div>
-          </div>
-          <button
+        <div className="flex space-x-4 items-center">
+          <button 
             onClick={() => handleExport(true)}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-4 rounded-xl flex items-center space-x-3 shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] mt-auto"
+            className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors"
           >
-            <FileDown size={20} className="text-white" />
-            <span className="text-[10px] font-black text-white uppercase tracking-widest">Download {reportType}</span>
+            <FileDown size={14} className="mr-2" /> Download {reportType}
           </button>
-          <button
-            onClick={() => handleExport(false)}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 px-8 py-4 rounded-xl flex items-center space-x-3 shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] mt-auto"
+          <button 
+            onClick={() => handleExport(false)} 
+            className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2"
           >
-            <Database size={20} className="text-white" />
-            <span className="text-[10px] font-black text-white uppercase tracking-widest">Download Full DB</span>
+            <Database size={16} className="mr-2" /> Download Full DB
           </button>
         </div>
       </div>
 
+      {/* Date Range & Selection row */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6 no-print">
+        <div className="flex items-center space-x-2 bg-panel px-4 py-3 rounded-md border border-main w-full sm:w-auto">
+          <Calendar size={16} className="text-dim" />
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="bg-panel text-main text-xs font-bold rounded px-3 py-1.5 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
+            title="Start Date"
+          />
+          <span className="text-dim text-xs">to</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="bg-panel text-main text-xs font-bold rounded px-3 py-1.5 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
+            title="End Date"
+          />
+        </div>
+      </div>
+
       {/* Category Selection Bar */}
-      <div className="flex flex-wrap items-center gap-3 p-2 bg-panel rounded-2xl border border-main shadow-sm no-print">
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-panel rounded-lg border border-main no-print">
         {[
           { id: 'Ticket', label: 'Tickets', icon: FileText },
           { id: 'Project', label: 'Projects', icon: Briefcase },
@@ -324,62 +324,61 @@ export default function Reports() {
           <button
             key={type.id}
             onClick={() => setReportType(type.id)}
-            className={`flex items-center space-x-3 px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${reportType === type.id
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                : 'text-dim hover:bg-card hover:text-main'
-              }`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded text-xs font-bold uppercase tracking-widest transition-all ${
+              reportType === type.id
+                ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50'
+                : 'text-secondary hover:text-main'
+            }`}
           >
-            <type.icon size={16} />
+            <type.icon size={14} />
             <span>{type.label}</span>
           </button>
         ))}
       </div>
 
-
-
       {/* Dynamic Data Preview Table */}
-      <div className="glass-panel overflow-hidden border-main shadow-2xl animate-slide-up bg-panel rounded-[2rem]">
-        <div className="p-6 border-b border-main bg-card flex items-center justify-between">
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
+        <div className="p-5 border-b border-main bg-card flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
-              <Database size={18} />
+            <div className="p-2 rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/10">
+              <Database size={16} />
             </div>
-            <h3 className="text-sm font-black text-main uppercase tracking-widest">Live Preview</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Live Preview</h3>
           </div>
-          <span className="text-[10px] font-black text-secondary uppercase tracking-widest px-3 py-1 bg-card rounded-full border border-main">
+          <span className="text-[10px] font-bold text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1 rounded-full uppercase">
             {filteredData.length} Records Found
           </span>
         </div>
         <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
           <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 z-20 bg-panel border-b border-main">
+            <thead className="sticky top-0 z-20 bg-panel border-b border-main text-slate-400">
               <tr>
                 {reportType === 'Ticket' ? (
                   <>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Ticket ID</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Subject</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">Status</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-right">DB Store Date</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Ticket ID</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Subject</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-center">Status</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-right">DB Store Date</th>
                   </>
                 ) : reportType === 'Project' ? (
                   <>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Project Name</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Client</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">Status</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-right">DB Store Date</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Project Name</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Client</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-center">Status</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-right">DB Store Date</th>
                   </>
                 ) : (
                   <>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Device Name</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">IP Address</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest">Identity / Brand</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-center">Operational State</th>
-                    <th className="p-5 text-[10px] font-black text-main uppercase tracking-widest text-right">DB Store Date</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Device Name</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">IP Address</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Identity / Brand</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-center">Operational State</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-right">DB Store Date</th>
                   </>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-main">
+            <tbody className="divide-y divide-white/5 text-secondary">
               {filteredData.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-20 text-center text-dim text-xs font-bold uppercase tracking-widest italic">
@@ -392,33 +391,33 @@ export default function Reports() {
                   if (reportType === 'Ticket') {
                     return (
                       <React.Fragment key={id}>
-                       <tr className="hover:bg-white/5 transition-all group border-b border-white/5">
-                          <td className="p-5 text-xs font-mono text-dim">#{ String(id).slice(-6).toUpperCase() }</td>
-                          <td className="p-5 text-xs font-bold text-main">{item.issueDescription || 'No Description'}</td>
-                          <td className="p-5 text-center">
-                            <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${
-                              item.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              item.status === 'In Progress' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                              'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                        <tr className="hover:bg-slate-700/30 transition-colors group">
+                          <td className="p-4 text-xs font-mono text-dim">#{ String(id).slice(-6).toUpperCase() }</td>
+                          <td className="p-4 text-xs font-bold text-main">{item.issueDescription || 'No Description'}</td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                              item.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                              item.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                              'text-red-500 border-red-500/50'
                             }`}>
                               {item.status || 'Open'}
                             </span>
                           </td>
-                          <td className="p-5 text-right text-[10px] font-bold text-dim">
+                          <td className="p-4 text-right text-[10px] font-bold text-dim">
                             {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
                           </td>
                         </tr>
                         {item.documents && item.documents.length > 0 && (
-                          <tr className="bg-blue-500/[0.02]">
+                          <tr className="bg-slate-900/10">
                             <td colSpan={4} className="p-4 pl-8 border-b border-main">
                               <div className="flex flex-col space-y-3">
                                 <div className="flex items-center space-x-2">
-                                  <FileText size={14} className="text-blue-500" />
-                                  <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ticket Documents</h4>
+                                  <FileText size={14} className="text-cyan-400" />
+                                  <h4 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Ticket Documents</h4>
                                 </div>
                                 <div className="flex flex-wrap gap-3">
                                   {item.documents.map((doc, idx) => (
-                                    <a key={doc.id || idx} href={getImageUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 px-3 py-2 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 rounded-xl transition-all border border-blue-500/20 hover:border-blue-500/40 shadow-sm">
+                                    <a key={doc.id || idx} href={getImageUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-450 border border-blue-500/20 hover:border-blue-500/40 rounded transition-all shadow-sm">
                                       <FileText size={12} />
                                       <span className="text-[10px] font-bold">{doc.name}</span>
                                     </a>
@@ -433,33 +432,33 @@ export default function Reports() {
                   } else if (reportType === 'Project') {
                     return (
                       <React.Fragment key={id}>
-                        <tr className="hover:bg-white/5 transition-all group border-b border-white/5">
-                          <td className="p-5 text-xs font-bold text-main">{item.name || 'Untitled Project'}</td>
-                          <td className="p-5 text-xs font-bold text-main">{item.client_name || 'Internal'}</td>
-                          <td className="p-5 text-center">
-                            <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${
-                              item.status === 'Completed' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                              item.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        <tr className="hover:bg-slate-700/30 transition-colors group">
+                          <td className="p-4 text-xs font-bold text-main">{item.name || 'Untitled Project'}</td>
+                          <td className="p-4 text-xs font-bold text-secondary">{item.client_name || 'Internal'}</td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                              item.status === 'Completed' ? 'text-blue-500 border-blue-500/50' :
+                              item.status === 'Active' ? 'text-green-500 border-green-500/50' :
+                              'text-amber-500 border-amber-500/50'
                             }`}>
                               {item.status || 'Active'}
                             </span>
                           </td>
-                          <td className="p-5 text-right text-[10px] font-bold text-dim">
+                          <td className="p-4 text-right text-[10px] font-bold text-dim">
                             {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
                           </td>
                         </tr>
                         {item.documents && item.documents.length > 0 && (
-                          <tr className="bg-blue-500/[0.02]">
+                          <tr className="bg-slate-900/10">
                             <td colSpan={4} className="p-4 pl-8 border-b border-main">
                               <div className="flex flex-col space-y-3">
                                 <div className="flex items-center space-x-2">
-                                  <Briefcase size={14} className="text-blue-500" />
-                                  <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Project Documents</h4>
+                                  <Briefcase size={14} className="text-cyan-400" />
+                                  <h4 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Project Documents</h4>
                                 </div>
                                 <div className="flex flex-wrap gap-3">
                                   {item.documents.map((doc, idx) => (
-                                    <a key={doc.id || idx} href={getImageUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 px-3 py-2 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 rounded-xl transition-all border border-blue-500/20 hover:border-blue-500/40 shadow-sm">
+                                    <a key={doc.id || idx} href={getImageUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-450 border border-blue-500/20 hover:border-blue-500/40 rounded transition-all shadow-sm">
                                       <FileText size={12} />
                                       <span className="text-[10px] font-bold">{doc.name}</span>
                                     </a>
@@ -482,21 +481,21 @@ export default function Reports() {
                     const isActive = item.status === 'Active' || item.status === 'Online' || !item.status;
 
                     return (
-                       <tr key={id} className="hover:bg-white/5 transition-all group border-b border-white/5">
-                         <td className="p-5 text-xs font-bold text-main">{name}</td>
-                         <td className="p-5 text-xs font-mono text-blue-400">{item.ipAddress || '0.0.0.0'}</td>
-                         <td className="p-5 text-xs font-bold text-secondary uppercase">{sub}</td>
-                         <td className="p-5 text-center">
-                           <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${
-                             isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                           }`}>
-                             {item.status || (reportType === 'Camera' ? 'Active' : 'Online')}
-                           </span>
-                         </td>
-                         <td className="p-5 text-right text-[10px] font-bold text-dim">
-                           {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : (item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'N/A')}
-                         </td>
-                       </tr>
+                      <tr key={id} className="hover:bg-slate-700/30 transition-colors group">
+                        <td className="p-4 text-xs font-bold text-main">{name}</td>
+                        <td className="p-4 text-xs font-mono text-cyan-400">{item.ipAddress || '0.0.0.0'}</td>
+                        <td className="p-4 text-xs font-bold text-secondary uppercase">{sub}</td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            isActive ? 'text-green-500 border-green-500/50 bg-green-500/10' : 'text-red-500 border-red-500/50 bg-red-500/10'
+                          }`}>
+                            {item.status || (reportType === 'Camera' ? 'Active' : 'Online')}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right text-[10px] font-bold text-dim">
+                          {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : (item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'N/A')}
+                        </td>
+                      </tr>
                     );
                   }
                 })

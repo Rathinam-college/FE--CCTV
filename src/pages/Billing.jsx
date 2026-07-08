@@ -415,57 +415,59 @@ export default function Billing() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-main pb-6">
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <FileText className="mr-3 text-blue-400" size={28} />
+            <FileText className="mr-3 text-cyan-400" size={28} />
             Billing & PO Tracking
           </h1>
         </div>
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <div className="flex items-center space-x-2">
-            <Calendar size={16} className="text-dim" />
-            <input 
-              type="month" 
-              value={startMonth}
-              onChange={(e) => setStartMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
-              title="From Month"
-            />
-            <span className="text-secondary text-xs">to</span>
-            <input 
-              type="month" 
-              value={endMonth}
-              onChange={(e) => setEndMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
-              title="To Month"
-            />
-          </div>
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search descriptions, numbers..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="glass-input w-full !pl-14 pr-4 py-2 text-sm bg-panel border-main text-main"
-            />
-          </div>
-          <div className="flex space-x-2">
-            <button onClick={handleDownload} className="glass-panel flex items-center px-4 py-2 text-sm font-medium bg-teal-500/10 border-teal-500/30 text-teal-600 hover:bg-teal-500/20 transition-all whitespace-nowrap" title="Export CSV">
-              <Download size={16} className="mr-2" />
-              CSV
-            </button>
-            <button onClick={handleDownloadPDF} className="glass-panel flex items-center px-4 py-2 text-sm font-medium bg-rose-500/10 border-rose-500/30 text-rose-600 hover:bg-rose-500/20 transition-all whitespace-nowrap" title="Export PDF">
-              <FileText size={16} className="mr-2" />
-              PDF
-            </button>
-          </div>
+        <div className="flex space-x-4 items-center">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Download size={14} className="mr-2" /> Export CSV
+          </button>
+          <button onClick={handleDownloadPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <FileText size={14} className="mr-2" /> Export PDF
+          </button>
         </div>
       </div>
 
-      <div className="flex space-x-2 border-b border-main mb-4">
+      {/* Search & Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search descriptions, numbers..."
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
+        </div>
+        <div className="flex items-center space-x-2 bg-panel px-4 py-3 rounded-md border border-main">
+          <Calendar size={16} className="text-slate-400" />
+          <input 
+            type="month" 
+            value={startMonth}
+            onChange={(e) => setStartMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="From Month"
+          />
+          <span className="text-slate-400 text-xs">to</span>
+          <input 
+            type="month" 
+            value={endMonth}
+            onChange={(e) => setEndMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="To Month"
+          />
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex space-x-2 border-b border-main mb-6 bg-slate-900/40 p-1 rounded-lg">
         {[
           { id: 'Billing & PO', icon: FileBarChart },
           { id: 'Ticket Documents', icon: FileText },
@@ -475,13 +477,13 @@ export default function Billing() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center space-x-2 px-6 py-3 border-b-2 font-bold text-xs uppercase tracking-widest transition-all ${
+            className={`flex items-center space-x-2 px-6 py-2.5 rounded-md font-bold text-xs uppercase tracking-widest transition-all ${
               activeTab === tab.id
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-dim hover:text-main hover:border-main/50'
+                ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
             }`}
           >
-            <tab.icon size={16} />
+            <tab.icon size={14} />
             <span>{tab.id}</span>
           </button>
         ))}
@@ -493,10 +495,10 @@ export default function Billing() {
             <button
               key={filter}
               onClick={() => setBillingFilter(filter)}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition-all ${
                 billingFilter === filter
-                  ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
-                  : 'bg-card text-dim hover:bg-main/5'
+                  ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50'
+                  : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
               }`}
             >
               {filter}
@@ -505,61 +507,63 @@ export default function Billing() {
         </div>
       )}
 
-      <div className="glass-panel overflow-hidden border border-main shadow-2xl bg-panel rounded-[2rem]">
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
         <div className="overflow-x-auto min-h-[400px]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-card border-b border-main">
-                <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Date / ID</th>
-                <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Description</th>
-                <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">Location / Details</th>
-                <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest">
+              <tr className="bg-panel border-b border-main">
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date / ID</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Location / Details</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   {activeTab === 'Billing & PO' ? 'Billing Info' : 'Documents'}
                 </th>
-                {canEdit && <th className="p-5 text-[11px] font-black text-secondary uppercase tracking-widest text-right">Actions</th>}
+                {canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-main text-main">
+            <tbody className="divide-y divide-white/5 text-main">
               {loading ? (
-                <tr><td colSpan="5" className="p-10 text-center text-dim font-bold tracking-widest uppercase text-xs">Loading data...</td></tr>
+                <tr><td colSpan="5" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">Loading data...</td></tr>
               ) : filteredRecords.length === 0 ? (
-                <tr><td colSpan="5" className="p-10 text-center text-dim font-bold tracking-widest uppercase text-xs">No records found.</td></tr>
+                <tr><td colSpan="5" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">No records found.</td></tr>
               ) : (
                 filteredRecords.map(record => {
                   if (activeTab === 'Billing & PO') {
                     return (
-                      <tr key={record.id || record._id} className="hover:bg-card transition-colors">
-                        <td className="p-5 text-xs font-mono text-dim">
+                      <tr key={record.id || record._id} className="hover:bg-slate-700/30 transition-colors">
+                        <td className="p-4 text-xs font-mono text-slate-400">
                           {record.isMasterProject ? (record.start_date || 'N/A') : (record.operationDate || new Date(record.createdAt || Date.now()).toISOString().split('T')[0])}
                         </td>
-                        <td className="p-5 text-xs font-bold">
+                        <td className="p-4 text-xs font-bold text-slate-200">
                           {record.isMasterProject ? record.name : record.issueDescription}
-                          {record.billingCategory === 'Project Logs' && (
-                            <span className="block mt-1 text-[9px] text-blue-400 font-black uppercase tracking-widest bg-blue-500/10 w-max px-2 py-0.5 rounded">Project Log</span>
-                          )}
-                          {record.billingCategory === 'Upgrades' && (
-                            <span className="block mt-1 text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 w-max px-2 py-0.5 rounded">Upgrade</span>
-                          )}
-                          {record.isMasterProject && (
-                            <span className="block mt-1 text-[9px] text-purple-400 font-black uppercase tracking-widest bg-purple-500/10 w-max px-2 py-0.5 rounded">Master Project</span>
-                          )}
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {record.billingCategory === 'Project Logs' && (
+                              <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">Project Log</span>
+                            )}
+                            {record.billingCategory === 'Upgrades' && (
+                              <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Upgrade</span>
+                            )}
+                            {record.isMasterProject && (
+                              <span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">Master Project</span>
+                            )}
+                          </div>
                         </td>
-                        <td className="p-5 text-xs text-secondary">
+                        <td className="p-4 text-xs text-slate-400">
                           {record.isMasterProject ? record.client_name : (
                             (record.project?.name || (record.remarks && record.remarks.includes('projectName') ? JSON.parse(record.remarks).projectName : null)) || 
                             `${record.divisionName || ''} ${record.block || ''} ${record.room || ''}`
                           )}
                         </td>
-                        <td className="p-5">
+                        <td className="p-4">
                           <div className="space-y-2">
                             {record.billing_records?.filter(b => b.record_type === 'Bill').map(bill => (
                               <div key={bill.id} className="flex items-center space-x-2 text-xs">
                                 <Hash size={12} className="text-emerald-500 flex-shrink-0" />
-                                <span className="text-dim flex-shrink-0">Bill:</span>
+                                <span className="text-slate-500 flex-shrink-0">Bill:</span>
                                 <span className="font-mono text-emerald-400">{bill.number}</span>
-                                {bill.amount && <span className="text-dim">({bill.amount})</span>}
+                                {bill.amount && <span className="text-slate-500">({bill.amount})</span>}
                                 {bill.file && (
-                                  <a href={getFullUrl(bill.file)} target="_blank" rel="noopener noreferrer" className="flex items-center text-blue-400 hover:text-blue-300 ml-2" title="View Bill">
+                                  <a href={getFullUrl(bill.file)} target="_blank" rel="noopener noreferrer" className="flex items-center text-cyan-400 hover:text-cyan-300 ml-2" title="View Bill">
                                     <File size={12} className="mr-1" />
                                     <span className="text-[10px] font-bold truncate max-w-[100px]">{getFileName(bill.file)}</span>
                                   </a>
@@ -569,11 +573,11 @@ export default function Billing() {
                             {record.billing_records?.filter(p => p.record_type === 'PO').map(po => (
                               <div key={po.id} className="flex items-center space-x-2 text-xs mt-1">
                                 <Hash size={12} className="text-purple-500 flex-shrink-0" />
-                                <span className="text-dim flex-shrink-0">PO:</span>
+                                <span className="text-slate-500 flex-shrink-0">PO:</span>
                                 <span className="font-mono text-purple-400">{po.number}</span>
-                                {po.amount && <span className="text-dim">({po.amount})</span>}
+                                {po.amount && <span className="text-slate-500">({po.amount})</span>}
                                 {po.file && (
-                                  <a href={getFullUrl(po.file)} target="_blank" rel="noopener noreferrer" className="flex items-center text-blue-400 hover:text-blue-300 ml-2" title="View PO">
+                                  <a href={getFullUrl(po.file)} target="_blank" rel="noopener noreferrer" className="flex items-center text-cyan-400 hover:text-cyan-300 ml-2" title="View PO">
                                     <File size={12} className="mr-1" />
                                     <span className="text-[10px] font-bold truncate max-w-[100px]">{getFileName(po.file)}</span>
                                   </a>
@@ -585,10 +589,10 @@ export default function Billing() {
                             {(record.bill_number || record.bill_document) && (
                               <div className="flex items-center space-x-2 text-xs">
                                 <Hash size={12} className="text-emerald-500" />
-                                <span className="text-dim flex-shrink-0">Bill:</span>
+                                <span className="text-slate-500 flex-shrink-0">Bill:</span>
                                 {record.bill_number && <span className="font-mono text-emerald-400">{record.bill_number}</span>}
                                 {record.bill_document && (
-                                  <a href={getFullUrl(record.bill_document)} target="_blank" rel="noopener noreferrer" className="flex items-center text-blue-400 hover:text-blue-300 ml-2" title="View Bill">
+                                  <a href={getFullUrl(record.bill_document)} target="_blank" rel="noopener noreferrer" className="flex items-center text-cyan-400 hover:text-cyan-300 ml-2" title="View Bill">
                                     <File size={12} className="mr-1" />
                                     <span className="text-[10px] font-bold truncate max-w-[100px]">{getFileName(record.bill_document)}</span>
                                   </a>
@@ -598,10 +602,10 @@ export default function Billing() {
                             {(record.po_number || record.po_document) && (
                               <div className="flex items-center space-x-2 text-xs mt-1">
                                 <Hash size={12} className="text-purple-500" />
-                                <span className="text-dim flex-shrink-0">PO:</span>
+                                <span className="text-slate-500 flex-shrink-0">PO:</span>
                                 {record.po_number && <span className="font-mono text-purple-400">{record.po_number}</span>}
                                 {record.po_document && (
-                                  <a href={getFullUrl(record.po_document)} target="_blank" rel="noopener noreferrer" className="flex items-center text-blue-400 hover:text-blue-300 ml-2" title="View PO">
+                                  <a href={getFullUrl(record.po_document)} target="_blank" rel="noopener noreferrer" className="flex items-center text-cyan-400 hover:text-cyan-300 ml-2" title="View PO">
                                     <File size={12} className="mr-1" />
                                     <span className="text-[10px] font-bold truncate max-w-[100px]">{getFileName(record.po_document)}</span>
                                   </a>
@@ -610,15 +614,15 @@ export default function Billing() {
                             )}
                             
                             {(!record.billing_records?.length && !record.bill_number && !record.po_number && !record.bill_document && !record.po_document) && (
-                              <span className="text-[10px] text-dim uppercase tracking-widest font-bold">No Billing Attached</span>
+                              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">No Billing Attached</span>
                             )}
                           </div>
                         </td>
                         {canEdit && (
-                          <td className="p-5 text-right">
+                          <td className="p-4 text-right">
                             <button 
                               onClick={() => handleOpenModal(record)} 
-                              className="bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+                              className="bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all border border-cyan-500/20"
                             >
                               Manage Billing
                             </button>
@@ -630,29 +634,29 @@ export default function Billing() {
 
                   // Render Documents Tabs
                   return (
-                    <tr key={record.id || record._id} className="hover:bg-card transition-colors">
-                      <td className="p-5 text-xs font-mono text-dim">
+                    <tr key={record.id || record._id} className="hover:bg-slate-700/30 transition-colors">
+                      <td className="p-4 text-xs font-mono text-slate-400">
                         {record.isMasterProject ? (record.start_date || 'N/A') : (record.operationDate || new Date(record.createdAt || Date.now()).toISOString().split('T')[0])}
                       </td>
-                      <td className="p-5 text-xs font-bold">
+                      <td className="p-4 text-xs font-bold text-slate-200">
                         {record.isMasterProject ? record.name : record.issueDescription}
                       </td>
-                      <td className="p-5 text-xs text-secondary">
+                      <td className="p-4 text-xs text-slate-400">
                         {record.isMasterProject ? record.client_name : (
                           (record.project?.name || (record.remarks && record.remarks.includes('projectName') ? JSON.parse(record.remarks).projectName : null)) || 
                           `${record.divisionName || ''} ${record.block || ''} ${record.room || ''}`
                         )}
                       </td>
-                      <td className="p-5">
+                      <td className="p-4">
                         <div className="space-y-2">
                           {record.documents && record.documents.length > 0 ? (
                             record.documents.map(doc => (
                               <div key={doc.id} className="flex items-center space-x-2 text-xs">
-                                <File size={12} className="text-blue-500 flex-shrink-0" />
-                                <span className="text-dim flex-shrink-0">Doc:</span>
-                                <span className="font-mono text-blue-400">{doc.name}</span>
+                                <File size={12} className="text-cyan-500 flex-shrink-0" />
+                                <span className="text-slate-500 flex-shrink-0">Doc:</span>
+                                <span className="font-mono text-cyan-400">{doc.name}</span>
                                 {doc.file && (
-                                  <a href={getFullUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="flex items-center text-blue-400 hover:text-blue-300 ml-2" title="View Document">
+                                  <a href={getFullUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="flex items-center text-cyan-400 hover:text-cyan-300 ml-2" title="View Document">
                                     <Eye size={12} className="mr-1" />
                                     <span className="text-[10px] font-bold truncate max-w-[100px]">View</span>
                                   </a>
@@ -660,15 +664,15 @@ export default function Billing() {
                               </div>
                             ))
                           ) : (
-                            <span className="text-[10px] text-dim uppercase tracking-widest font-bold">No Documents Attached</span>
+                            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">No Documents Attached</span>
                           )}
                         </div>
                       </td>
                       {canEdit && (
-                        <td className="p-5 text-right">
+                        <td className="p-4 text-right">
                           <button 
                             onClick={() => handleOpenDocModal(record)} 
-                            className="bg-purple-600/20 text-purple-400 hover:bg-purple-600/40 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+                            className="bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all border border-cyan-500/20"
                           >
                             Manage Documents
                           </button>

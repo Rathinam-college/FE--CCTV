@@ -223,153 +223,122 @@ export default function Projects() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-main pb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <Briefcase className="mr-3 text-teal-500" size={28} />
-            Project
+            <Briefcase className="mr-3 text-cyan-400" size={28} />
+            Projects
           </h1>
         </div>
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <div className="flex items-center space-x-2">
-            <Calendar size={16} className="text-dim" />
-            <input 
-              type="month" 
-              value={startMonth}
-              onChange={(e) => setStartMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
-              title="From Month"
-            />
-            <span className="text-secondary text-xs">to</span>
-            <input 
-              type="month" 
-              value={endMonth}
-              onChange={(e) => setEndMonth(e.target.value)}
-              className="glass-input px-3 py-2 text-xs w-36 cursor-pointer"
-              title="To Month"
-            />
-          </div>
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search projects..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="glass-input w-full !pl-14 pr-4 py-2 text-sm"
-            />
-          </div>
-          <button 
-            onClick={handleDownload}
-            className="glass-panel flex items-center px-4 py-2 text-xs font-bold uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/20 transition-all"
-          >
-            <Download size={16} className="mr-2" />
-            Download
+        <div className="flex space-x-4 items-center">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <div className="flex space-x-3">
           {canEdit && (
-              <button onClick={() => { setEditingId(null); resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2.5 text-sm">
-                <Plus size={18} className="mr-2" />
-                New Project
-              </button>
+            <button onClick={() => { setEditingId(null); resetForm(); setShowModal(true); }} className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2">
+              <Plus size={16} className="mr-2" />
+              Register Project
+            </button>
           )}
         </div>
       </div>
-    </div>
 
       {/* Summary Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 mt-6">
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#10b981', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-emerald-500 tracking-[0.2em] uppercase">[Active Projects]</h3>
-            <Activity size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-slide-up delay-100">
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[ACTIVE PROJECTS]</h3>
+            <Activity size={18} className="text-slate-500" />
           </div>
-          <div className="flex flex-col space-y-3 mt-4 text-left">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>{summaryStats.active}</span>
-              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">In Progress</span>
-            </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{summaryStats.active}</span>
           </div>
-        </div>
+        </button>
 
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f59e0b', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-amber-500 tracking-[0.2em] uppercase">[On Hold]</h3>
-            <AlertCircle size={18} className="text-amber-500 opacity-50 group-hover:scale-110 transition-transform" />
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-amber-500/30 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-amber-500 tracking-widest uppercase">[ON HOLD]</h3>
+            <AlertCircle size={18} className="text-slate-500" />
           </div>
-          <div className="flex flex-col space-y-3 mt-4 text-left">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.6)' }}>{summaryStats.onHold}</span>
-              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Paused</span>
-            </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{summaryStats.onHold}</span>
           </div>
-        </div>
+        </button>
 
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#3b82f6', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-blue-500 tracking-[0.2em] uppercase">[Completed]</h3>
-            <CheckCircle size={18} className="text-blue-500 opacity-50 group-hover:scale-110 transition-transform" />
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-blue-500/30 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-blue-500 tracking-widest uppercase">[COMPLETED]</h3>
+            <CheckCircle size={18} className="text-slate-500" />
           </div>
-          <div className="flex flex-col space-y-3 mt-4 text-left">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>{summaryStats.completed}</span>
-              <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Finished</span>
-            </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
           </div>
-        </div>
+        </button>
 
-        <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-          <div className="hud-corner-tr"></div>
-          <div className="hud-corner-bl"></div>
-          <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#8b5cf6', opacity: 0.1, filter: 'blur(20px)' }}></div>
-          <div className="flex justify-between items-start">
-            <h3 className="text-[10px] font-bold text-purple-500 tracking-[0.2em] uppercase">[Total Projects]</h3>
-            <Briefcase size={18} className="text-purple-500 opacity-50 group-hover:scale-110 transition-transform" />
+        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50 text-left">
+          <div className="flex justify-between items-start w-full">
+            <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL PROJECTS]</h3>
+            <Briefcase size={18} className="text-slate-500" />
           </div>
-          <div className="flex flex-col space-y-3 mt-4 text-left">
-            <div className="flex items-end space-x-2 font-mono">
-              <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(139, 92, 246, 0.6)' }}>{summaryStats.total}</span>
-              <span className="text-[10px] font-bold text-purple-500 uppercase tracking-widest pb-1">All Projects</span>
-            </div>
+          <div className="flex items-end mt-4">
+            <span className="text-4xl font-bold text-cyan-400">{summaryStats.total}</span>
           </div>
+          <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
+        </button>
+      </div>
+
+      {/* Search & Date Range */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search projects by Name, Client Name..."
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
+        </div>
+        <div className="flex items-center space-x-2 bg-panel px-4 py-3 rounded-md border border-main">
+          <Calendar size={16} className="text-slate-400" />
+          <input 
+            type="month" 
+            value={startMonth}
+            onChange={(e) => setStartMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="From Month"
+          />
+          <span className="text-slate-400 text-xs">to</span>
+          <input 
+            type="month" 
+            value={endMonth}
+            onChange={(e) => setEndMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="To Month"
+          />
         </div>
       </div>
 
-      <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 mr-2">
-            <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
-            >
-              <option value={10}>10</option>
-              <option value={15}>15</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-          <div className="flex items-center space-x-1">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300 p-4 flex justify-between items-center mb-6">
+        <div className="flex items-center space-x-2">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rows per page</span>
+          <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[11px] font-bold text-slate-300 outline-none focus:border-cyan-500 transition-colors">
+            <option value={9}>9</option>
+            <option value={15}>15</option>
+            <option value={30}>30</option>
+          </select>
+        </div>
+        <div className="flex items-center space-x-3">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tighter">
+            {filteredProjects.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredProjects.length)}-${Math.min(currentPage * itemsPerPage, filteredProjects.length)} of ${filteredProjects.length}`}
+          </span>
+          <div className="flex space-x-1">
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
               <ChevronLeft size={14} />
             </button>
-            <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
-              {filteredProjects.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredProjects.length)}-${Math.min(currentPage * itemsPerPage, filteredProjects.length)} of ${filteredProjects.length}`}
-            </span>
-            <button disabled={currentPage >= Math.ceil(filteredProjects.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+            <button disabled={currentPage >= Math.ceil(filteredProjects.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
               <ChevronRight size={14} />
             </button>
           </div>
@@ -381,47 +350,48 @@ export default function Projects() {
         {filteredProjects.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((project, index) => (
           <div 
             key={project.id || project._id} 
-            className="hud-panel p-6 hover:border-teal-500/30 transition-all group animate-slide-up relative overflow-hidden"
+            className="bg-panel border border-main rounded-md p-6 hover:ring-1 hover:ring-cyan-500/30 transition-all group animate-slide-up relative overflow-hidden"
             style={{ animationDelay: `${index * 50}ms` }}
           >
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
             <div className="flex justify-between items-start mb-4">
-              <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border ${getStatusColor(project.status)}`}>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                project.status === 'Active' ? 'text-green-500 border-green-500/50' :
+                project.status === 'Completed' ? 'text-blue-500 border-blue-500/50' :
+                'text-amber-500 border-amber-500/50'}`}>
                 {project.status}
-              </div>
+              </span>
               {canEdit && (
-                <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleEdit(project)} className="p-1.5 hover:bg-white/10 rounded-lg text-dim hover:text-main transition-colors">
+                <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleEdit(project)} className="text-slate-400 hover:text-cyan-400 transition-colors">
                     <Edit2 size={14} />
                   </button>
-                  <button onClick={() => handleDelete(project.id || project._id)} className="p-1.5 hover:bg-red-500/10 rounded-lg text-dim hover:text-red-400 transition-colors">
+                  <button onClick={() => handleDelete(project.id || project._id)} className="text-slate-400 hover:text-red-500 transition-colors">
                     <Trash2 size={14} />
                   </button>
                 </div>
               )}
             </div>
             
-            <h3 className="text-xl font-bold text-main mb-2 group-hover:text-teal-500 transition-colors flex items-center space-x-2">
-              <span className="text-sm text-dim bg-panel px-2 py-0.5 rounded-md border border-main">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
+            <h3 className="text-xl font-bold text-main mb-2 group-hover:text-cyan-400 transition-colors flex items-center space-x-2">
+              <span className="text-sm text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md border border-main">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
               <span>{project.name}</span>
             </h3>
-            <p className="text-sm text-secondary line-clamp-2 mb-6 h-10">
+            <p className="text-sm text-slate-400 line-clamp-2 mb-6 h-10">
               {project.description || 'No description provided.'}
             </p>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs font-medium">
-                <span className="text-secondary uppercase tracking-wider">Client</span>
+                <span className="text-slate-400 uppercase tracking-wider">Client</span>
                 <span className="text-main">{project.client_name || 'N/A'}</span>
               </div>
               <div className="flex items-center justify-between text-xs font-medium mt-2">
-                <span className="text-secondary uppercase tracking-wider">Instruction By</span>
+                <span className="text-slate-400 uppercase tracking-wider">Instruction By</span>
                 <span className="text-main">{project.instructionBy || 'N/A'}</span>
               </div>
               <button 
                 onClick={() => navigate(`/projects/${project.id || project._id}`)}
-                className="w-full flex items-center justify-between text-xs font-bold hover:bg-teal-500/10 text-teal-600 p-2 rounded-lg transition-colors border border-teal-500/20 mt-2"
+                className="w-full flex items-center justify-between text-xs font-bold hover:bg-cyan-500/10 text-cyan-400 p-2 rounded-lg transition-colors border border-cyan-500/20 mt-2"
               >
                 <span className="uppercase tracking-wider">View Full Details</span>
                 <ChevronRight size={14} />
@@ -429,21 +399,21 @@ export default function Projects() {
               
               <button 
                 onClick={() => handleViewTickets(project)}
-                className="w-full flex items-center justify-between text-xs font-medium hover:bg-panel p-2 rounded-lg transition-colors"
+                className="w-full flex items-center justify-between text-xs font-medium hover:bg-slate-700/30 p-2 rounded-lg transition-colors"
               >
-                <span className="text-secondary uppercase tracking-wider">Active Tickets</span>
-                <div className="flex items-center space-x-1 text-teal-600 font-bold">
+                <span className="text-slate-400 uppercase tracking-wider">Active Tickets</span>
+                <div className="flex items-center space-x-1 text-cyan-400 font-bold">
                   <span>{project.ticket_count || 0}</span>
                   <ChevronRight size={12} />
                 </div>
               </button>
               
               <div className="pt-4 border-t border-main flex items-center justify-between">
-                <div className="flex items-center text-[10px] text-secondary font-bold uppercase tracking-widest">
+                <div className="flex items-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                   <Calendar size={12} className="mr-1.5" />
                   {project.start_date || 'N/A'}
                 </div>
-                <div className="flex items-center text-[10px] text-secondary font-bold uppercase tracking-widest">
+                <div className="flex items-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                   <Clock size={12} className="mr-1.5" />
                   {project.end_date || 'Open Ended'}
                 </div>
@@ -453,7 +423,7 @@ export default function Projects() {
         ))}
         
         {filteredProjects.length === 0 && (
-          <div className="col-span-full py-20 flex flex-col items-center justify-center text-dim">
+          <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-500">
             <Briefcase size={48} className="mb-4 opacity-20" />
             <p className="text-lg font-medium">No projects found</p>
             <p className="text-sm">Create your first project to start grouping tickets.</p>
@@ -473,7 +443,7 @@ export default function Projects() {
                   {editingId ? 'Modify Project' : 'Project'}
                 </h2>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-dim hover:text-main transition-all">
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-secondary hover:text-main transition-all">
                 <X size={24} />
               </button>
             </div>
@@ -526,7 +496,6 @@ export default function Projects() {
                     placeholder="Name of authorize officer"
                   />
                 </div>
-
 
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-secondary uppercase tracking-widest mb-2">Scope of Operations (Description)</label>

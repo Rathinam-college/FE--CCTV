@@ -308,73 +308,69 @@ export default function GeneralBilling() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-main pb-6">
-        <div>
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <FileText className="mr-3 text-emerald-500" size={28} />
+            <FileText className="mr-3 text-cyan-400" size={28} />
             Master Billing & OPEX Records
           </h1>
-          <p className="text-xs text-secondary mt-2">Manage standalone billing, PO, OPEX, and payment tracking.</p>
         </div>
-          <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
-            <div className="relative flex-1 md:w-48">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="glass-input w-full !pl-10 pr-4 py-2 text-sm bg-panel border-main text-main"
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <div className="relative md:w-40">
-                <input 
-                  type="month" 
-                  value={filterFromMonth}
-                  onChange={(e) => setFilterFromMonth(e.target.value)}
-                  className="glass-input w-full px-3 py-2 text-xs bg-panel border-main text-main cursor-pointer uppercase tracking-widest font-bold"
-                  title="From Month"
-                />
-              </div>
-              
-              <span className="text-dim text-[10px] font-black tracking-widest">TO</span>
-
-              <div className="relative md:w-40">
-                <input 
-                  type="month" 
-                  value={filterToMonth}
-                  onChange={(e) => setFilterToMonth(e.target.value)}
-                  className="glass-input w-full px-3 py-2 text-xs bg-panel border-main text-main cursor-pointer uppercase tracking-widest font-bold"
-                  title="To Month"
-                />
-              </div>
-            </div>
-            
+        <div className="flex space-x-4 items-center">
+          <button 
+            onClick={handleDownloadCSV}
+            className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors"
+          >
+            <Download size={14} className="mr-2" /> Export CSV
+          </button>
+          {canEdit && (
             <button 
-              onClick={handleDownloadCSV} 
-              className="glass-panel flex items-center px-4 py-2 text-sm font-bold bg-panel border border-main text-main hover:bg-card transition-all shadow-lg whitespace-nowrap"
+              onClick={() => handleOpenModal()} 
+              className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2"
             >
-              <Download size={16} className="mr-2 text-blue-500" />
-              CSV
+              <Plus size={16} className="mr-2" /> Add Record
             </button>
-            
-            {canEdit && (
-              <button onClick={() => handleOpenModal()} className="glass-panel flex items-center px-4 py-2 text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/30 whitespace-nowrap">
-                <Plus size={16} className="mr-2" />
-                Add
-              </button>
-            )}
-          </div>
+          )}
+        </div>
       </div>
 
-      <div className="glass-panel overflow-hidden border border-main shadow-2xl bg-panel rounded-[2rem]">
+      {/* Query Filter row */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            placeholder="Search billing by Work, Location, Vendor..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
+        </div>
+        <div className="flex items-center space-x-2 bg-panel px-4 py-3 rounded-md border border-main">
+          <Calendar size={16} className="text-slate-400" />
+          <input 
+            type="month" 
+            value={filterFromMonth}
+            onChange={(e) => setFilterFromMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="From Month"
+          />
+          <span className="text-slate-400 text-xs">to</span>
+          <input 
+            type="month" 
+            value={filterToMonth}
+            onChange={(e) => setFilterToMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="To Month"
+          />
+        </div>
+      </div>
+
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
         <div className="overflow-x-auto min-h-[400px]">
           <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
-              <tr className="bg-card border-b border-main text-[10px] font-black text-secondary uppercase tracking-widest">
+              <tr className="bg-panel border-b border-main text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                 <th className="p-4">Work / Location</th>
                 <th className="p-4">Vendor & Amount</th>
                 <th className="p-4">Bill Info</th>
@@ -384,43 +380,43 @@ export default function GeneralBilling() {
                 {canEdit && <th className="p-4 text-right">Actions</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-main text-main">
+            <tbody className="divide-y divide-white/5 text-slate-300">
               {loading ? (
-                <tr><td colSpan="7" className="p-10 text-center text-dim font-bold tracking-widest uppercase text-xs">Loading data...</td></tr>
+                <tr><td colSpan="7" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">Loading data...</td></tr>
               ) : filteredRecords.length === 0 ? (
-                <tr><td colSpan="7" className="p-10 text-center text-dim font-bold tracking-widest uppercase text-xs">No records found.</td></tr>
+                <tr><td colSpan="7" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">No records found.</td></tr>
               ) : (
                 filteredRecords.map(record => (
-                  <tr key={record.id || record._id} className="hover:bg-card transition-colors">
+                  <tr key={record.id || record._id} className="hover:bg-slate-700/30 transition-colors group">
                     <td className="p-4">
-                      <div className="font-bold text-sm text-main max-w-xs truncate" title={record.work}>{record.work}</div>
-                      <div className="text-xs text-secondary mt-1 flex space-x-2">
-                        <span className="font-bold text-blue-500">{record.location || '—'}</span>
-                        <span className="text-dim border-l border-main pl-2">{record.area_budget || '—'}</span>
+                      <div className="font-bold text-sm text-white max-w-xs truncate" title={record.work}>{record.work}</div>
+                      <div className="text-xs text-slate-400 mt-1 flex space-x-2">
+                        <span className="font-bold text-blue-400">{record.location || '—'}</span>
+                        <span className="text-slate-500 border-l border-slate-700 pl-2">{record.area_budget || '—'}</span>
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="font-bold text-xs text-main">{record.vendor_name || '—'}</div>
-                      <div className="text-xs font-mono text-emerald-500 mt-1 font-bold">
+                      <div className="font-bold text-xs text-slate-200">{record.vendor_name || '—'}</div>
+                      <div className="text-xs font-mono text-emerald-400 mt-1 font-bold">
                         {record.amount ? `₹${record.amount}` : '—'}
                       </div>
                     </td>
                     <td className="p-4 text-xs">
                       <div className="flex items-center space-x-2">
-                        <span className="text-dim w-10">No:</span>
-                        <span className="font-bold text-main">{record.bill_no || '—'}</span>
+                        <span className="text-slate-500 w-10">No:</span>
+                        <span className="font-bold text-slate-300">{record.bill_no || '—'}</span>
                       </div>
                       <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-dim w-10">Date:</span>
-                        <span className="font-mono text-secondary">{record.bill_date || '—'}</span>
+                        <span className="text-slate-500 w-10">Date:</span>
+                        <span className="font-mono text-slate-400">{record.bill_date || '—'}</span>
                       </div>
                       <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-dim w-10">Status:</span>
-                        <span className="font-bold text-blue-500 uppercase tracking-widest text-[9px] bg-blue-500/10 px-2 py-0.5 rounded">{record.bill_status || '—'}</span>
+                        <span className="text-slate-500 w-10">Status:</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border border-blue-500/30 text-blue-400 bg-blue-500/10 tracking-wider">{record.bill_status || '—'}</span>
                       </div>
                       {record.bill_document && (
                         <div className="mt-2">
-                          <a href={getFullUrl(record.bill_document)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-emerald-500 hover:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded text-[10px] font-bold" title="View Bill">
+                          <a href={getFullUrl(record.bill_document)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded text-[10px] font-bold" title="View Bill">
                             <File size={12} className="mr-1" /> View Document
                           </a>
                         </div>
@@ -428,40 +424,40 @@ export default function GeneralBilling() {
                     </td>
                     <td className="p-4 text-xs">
                       <div className="flex items-center space-x-2">
-                        <span className="text-dim w-10">PR:</span>
-                        <span className="font-bold text-main">{record.pr_no || '—'}</span>
+                        <span className="text-slate-500 w-10">PR:</span>
+                        <span className="font-bold text-slate-300">{record.pr_no || '—'}</span>
                       </div>
                       <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-dim w-10">PO:</span>
-                        <span className="font-bold text-purple-500">{record.po_no || '—'}</span>
+                        <span className="text-slate-500 w-10">PO:</span>
+                        <span className="font-bold text-purple-400">{record.po_no || '—'}</span>
                       </div>
                       <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-dim w-10">Val:</span>
-                        <span className="font-mono text-secondary">{record.po_value || '—'}</span>
+                        <span className="text-slate-500 w-10">Val:</span>
+                        <span className="font-mono text-slate-400">{record.po_value || '—'}</span>
                       </div>
                     </td>
                     <td className="p-4 text-xs">
                       <div className="flex items-center space-x-2">
-                        <span className="text-dim w-12">OPEX:</span>
-                        <span className="font-bold text-orange-500">{record.opex_no || '—'}</span>
+                        <span className="text-slate-500 w-12">OPEX:</span>
+                        <span className="font-bold text-orange-400">{record.opex_no || '—'}</span>
                       </div>
                       <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-dim w-12">Val:</span>
-                        <span className="font-mono text-secondary">{record.opex_value || '—'}</span>
+                        <span className="text-slate-500 w-12">Val:</span>
+                        <span className="font-mono text-slate-400">{record.opex_value || '—'}</span>
                       </div>
                       <div className="flex items-center space-x-2 mt-1 mb-2">
-                        <span className="text-dim w-12">Status:</span>
-                        <span className="font-bold text-orange-500 uppercase tracking-widest text-[9px] bg-orange-500/10 px-2 py-0.5 rounded">{record.opex_status || '—'}</span>
+                        <span className="text-slate-500 w-12">Status:</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border border-orange-500/30 text-orange-400 bg-orange-500/10 tracking-wider">{record.opex_status || '—'}</span>
                       </div>
                       {record.documents && record.documents.length > 0 && (
-                        <div className="mt-2 flex flex-col space-y-1 border-t border-main/50 pt-2">
-                          <span className="text-[9px] text-dim font-bold uppercase tracking-widest mb-1">Documents</span>
+                        <div className="mt-2 flex flex-col space-y-1 border-t border-slate-700 pt-2">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Documents</span>
                           {record.documents.map(doc => (
                             <div key={doc.id} className="flex items-center space-x-2">
-                              <a href={getFullUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-blue-500 hover:text-blue-400 bg-blue-500/10 px-2 py-1 rounded text-[10px] font-bold truncate max-w-[150px]" title={doc.name}>
+                              <a href={getFullUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-blue-400 hover:text-blue-300 bg-blue-500/10 border border-blue-500/30 px-2 py-1 rounded text-[10px] font-bold truncate max-w-[150px]" title={doc.name}>
                                 <File size={12} className="mr-1 flex-shrink-0" /> {getFileName(doc.file) || doc.name}
                               </a>
-                              <a href={getFullUrl(doc.file)} download target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-400" title="Download">
+                              <a href={getFullUrl(doc.file)} download target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-355" title="Download">
                                 <Download size={14} />
                               </a>
                             </div>
@@ -472,40 +468,42 @@ export default function GeneralBilling() {
                     <td className="p-4 text-xs">
                       <div className="flex flex-col space-y-2">
                         <div>
-                          <span className="text-[9px] text-dim block uppercase tracking-widest mb-0.5">Payment</span>
+                          <span className="text-[9px] text-slate-500 block uppercase tracking-widest mb-0.5">Payment</span>
                           {canEdit ? (
                             <select 
                               value={record.payment_status || ''} 
                               onChange={(e) => handlePaymentStatusChange(record.id || record._id, e.target.value)}
-                              className={`glass-input px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded cursor-pointer border-main
-                                ${record.payment_status?.toLowerCase().includes('settled') ? 'bg-emerald-500/10 text-emerald-500' : 'bg-yellow-500/10 text-yellow-500'}
+                              className={`bg-slate-800 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded px-2.5 py-1 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer
+                                ${record.payment_status?.toLowerCase().includes('settled') ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-amber-400 border-amber-500/30 bg-amber-500/10'}
                               `}
                             >
-                              <option value="" className="bg-panel text-main">PENDING</option>
-                              <option value="WAITING APPROVAL" className="bg-panel text-main">WAITING APPROVAL</option>
-                              <option value="PARTIAL" className="bg-panel text-main">PARTIAL</option>
-                              <option value="SETTLED" className="bg-panel text-main">SETTLED</option>
+                              <option value="" className="bg-slate-900 text-slate-300">PENDING</option>
+                              <option value="WAITING APPROVAL" className="bg-slate-900 text-slate-300">WAITING APPROVAL</option>
+                              <option value="PARTIAL" className="bg-slate-900 text-slate-300">PARTIAL</option>
+                              <option value="SETTLED" className="bg-slate-900 text-slate-300">SETTLED</option>
                             </select>
                           ) : (
-                            <span className={`font-bold uppercase tracking-widest text-[9px] px-2 py-0.5 rounded ${record.payment_status?.toLowerCase().includes('settled') ? 'bg-emerald-500/10 text-emerald-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${record.payment_status?.toLowerCase().includes('settled') ? 'text-emerald-500 border-emerald-500/50 bg-emerald-500/10' : 'text-amber-500 border-amber-500/50 bg-amber-500/10'}`}>
                               {record.payment_status || 'PENDING'}
                             </span>
                           )}
                         </div>
                         <div>
-                          <span className="text-[9px] text-dim block uppercase tracking-widest mb-0.5">Handover To</span>
-                          <span className="font-bold text-main">{record.handover_to || '—'}</span>
+                          <span className="text-[9px] text-slate-500 block uppercase tracking-widest mb-0.5">Handover To</span>
+                          <span className="font-bold text-slate-300">{record.handover_to || '—'}</span>
                         </div>
                       </div>
                     </td>
                     {canEdit && (
-                      <td className="p-4 text-right space-x-2">
-                        <button onClick={() => handleOpenModal(record)} className="p-2 text-dim hover:text-blue-400 hover:bg-blue-500/10 rounded-xl transition-all">
-                          Edit
-                        </button>
-                        <button onClick={() => handleDelete(record.id || record._id)} className="p-2 text-dim hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
-                          Delete
-                        </button>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleOpenModal(record)} className="text-slate-400 hover:text-cyan-400 transition-colors">
+                            Edit
+                          </button>
+                          <button onClick={() => handleDelete(record.id || record._id)} className="text-slate-400 hover:text-red-500 transition-colors">
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -517,117 +515,117 @@ export default function GeneralBilling() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
-          <div className="bg-panel rounded-[2.5rem] w-full max-w-4xl overflow-hidden border border-main shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-main flex justify-between items-center bg-card shrink-0">
-              <h2 className="text-xl font-black text-main tracking-tight uppercase flex items-center">
-                <FileText className="mr-3 text-emerald-500" size={24} />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+          <div className="bg-card rounded-[2.5rem] w-full max-w-4xl overflow-hidden border border-main shadow-2xl relative my-8 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-main bg-panel flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-bold text-main tracking-tight uppercase flex items-center">
+                <FileText className="mr-3 text-cyan-400" size={24} />
                 {editingId ? 'Edit Master Record' : 'Add Master Record'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-card rounded-xl text-dim hover:text-main transition-all"><X size={24} /></button>
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all"><X size={24} /></button>
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
               
               {/* General Info */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
                 <div className="md:col-span-2 space-y-1">
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Work Description <span className="text-red-500">*</span></label>
-                  <input required type="text" name="work" value={formData.work} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main text-main" placeholder="e.g. CAMERA INSTALLATION" />
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Work Description <span className="text-red-500">*</span></label>
+                  <input required type="text" name="work" value={formData.work} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" placeholder="e.g. CAMERA INSTALLATION" />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Location</label>
-                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main text-main" placeholder="e.g. HOSTELS" />
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location</label>
+                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" placeholder="e.g. HOSTELS" />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Area Budget</label>
-                  <input type="text" name="area_budget" value={formData.area_budget} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main text-main" placeholder="e.g. KPM" />
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Area Budget</label>
+                  <input type="text" name="area_budget" value={formData.area_budget} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" placeholder="e.g. KPM" />
                 </div>
               </div>
 
               {/* Bill Details */}
-              <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 space-y-4">
-                <h3 className="text-xs font-black text-blue-500 uppercase tracking-widest">Bill Details</h3>
+              <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-5 space-y-4">
+                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-widest">Bill Details</h3>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="md:col-span-2 space-y-1">
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Vendor Name</label>
-                    <input type="text" name="vendor_name" value={formData.vendor_name} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Vendor Name</label>
+                    <input type="text" name="vendor_name" value={formData.vendor_name} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Bill No</label>
-                    <input type="text" name="bill_no" value={formData.bill_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Bill No</label>
+                    <input type="text" name="bill_no" value={formData.bill_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Bill Date</label>
-                    <input type="date" name="bill_date" value={formData.bill_date} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Bill Date</label>
+                    <input type="date" name="bill_date" value={formData.bill_date} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main cursor-pointer" />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Amount</label>
-                    <input type="text" name="amount" value={formData.amount} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" placeholder="₹" />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Amount</label>
+                    <input type="text" name="amount" value={formData.amount} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" placeholder="₹" />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Bill Status</label>
-                    <input type="text" name="bill_status" value={formData.bill_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" placeholder="e.g. HANDOVERED" />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Bill Status</label>
+                    <input type="text" name="bill_status" value={formData.bill_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" placeholder="e.g. HANDOVERED" />
                   </div>
                   <div className="md:col-span-2 space-y-1">
-                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Upload Bill Document</label>
-                    <input type="file" onChange={(e) => handleFileChange(e, 'bill_document')} className="w-full text-xs text-dim file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-blue-500/20 file:text-blue-500 cursor-pointer" />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Upload Bill Document</label>
+                    <input type="file" onChange={(e) => handleFileChange(e, 'bill_document')} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-cyan-500/20 file:text-cyan-400 cursor-pointer" />
                   </div>
                 </div>
               </div>
 
               {/* PR / PO / OPEX Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-xs font-black text-purple-500 uppercase tracking-widest">PR & PO Info</h3>
+                <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-5 space-y-4">
+                  <h3 className="text-xs font-bold text-purple-400 uppercase tracking-widest">PR & PO Info</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">PR No</label>
-                      <input type="text" name="pr_no" value={formData.pr_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">PR No</label>
+                      <input type="text" name="pr_no" value={formData.pr_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">PO No</label>
-                      <input type="text" name="po_no" value={formData.po_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">PO No</label>
+                      <input type="text" name="po_no" value={formData.po_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">PO Value</label>
-                      <input type="text" name="po_value" value={formData.po_value} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">PO Value</label>
+                      <input type="text" name="po_value" value={formData.po_value} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Upload PO Doc</label>
-                      <input type="file" onChange={(e) => handleFileChange(e, 'po_document')} className="w-full text-xs text-dim file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-purple-500/20 file:text-purple-500 cursor-pointer" />
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Upload PO Doc</label>
+                      <input type="file" onChange={(e) => handleFileChange(e, 'po_document')} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-purple-500/20 file:text-purple-400 cursor-pointer" />
                     </div>
                   </div>
                 </div>
                 
-                <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest">OPEX Info</h3>
+                <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-5 space-y-4">
+                  <h3 className="text-xs font-bold text-orange-400 uppercase tracking-widest">OPEX Info</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">OPEX No</label>
-                      <input type="text" name="opex_no" value={formData.opex_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">OPEX No</label>
+                      <input type="text" name="opex_no" value={formData.opex_no} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">OPEX Value</label>
-                      <input type="text" name="opex_value" value={formData.opex_value} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">OPEX Value</label>
+                      <input type="text" name="opex_value" value={formData.opex_value} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                     </div>
                     <div className="col-span-2 space-y-1">
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">OPEX Status</label>
-                      <input type="text" name="opex_status" value={formData.opex_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main" />
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">OPEX Status</label>
+                      <input type="text" name="opex_status" value={formData.opex_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main text-main" />
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Additional Documents */}
-              <div className="bg-slate-500/5 border border-slate-500/20 rounded-2xl p-5 space-y-4 col-span-1 md:col-span-2">
-                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Additional Documents</h3>
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 space-y-4 col-span-1 md:col-span-2">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Additional Documents</h3>
                 
                 {/* Existing Documents */}
                 {editingId && records.find(r => (r.id || r._id) === editingId)?.documents?.length > 0 && (
                   <div className="space-y-2 mb-4">
                     {records.find(r => (r.id || r._id) === editingId)?.documents?.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between p-2 bg-card rounded-lg border border-main">
+                      <div key={doc.id} className="flex items-center justify-between p-2 bg-panel rounded border border-main">
                         <span className="text-xs font-bold text-main truncate max-w-sm" title={doc.name}>{doc.name}</span>
                         <div className="flex space-x-2">
                           <a href={getFullUrl(doc.file)} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/40" title="View">
@@ -647,17 +645,17 @@ export default function GeneralBilling() {
 
                 {/* Upload New Documents */}
                 <div className="space-y-2">
-                  <label className="block text-[9px] font-black text-secondary uppercase tracking-widest ml-1">Upload New Document</label>
-                  <input type="file" onChange={handleAddDocument} className="w-full text-xs text-dim file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-slate-500/20 file:text-slate-500 cursor-pointer" />
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Upload New Document</label>
+                  <input type="file" onChange={handleAddDocument} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-slate-500/20 file:text-slate-400 cursor-pointer" />
                 </div>
                 
                 {/* List New Documents to be uploaded */}
                 {formData.new_documents?.length > 0 && (
                   <div className="space-y-2 mt-4">
-                    <h4 className="text-[10px] font-bold text-dim uppercase tracking-widest">Files to Upload:</h4>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Files to Upload:</h4>
                     {formData.new_documents.map((doc, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-500/10 rounded-lg border border-slate-500/20">
-                        <span className="text-xs text-secondary truncate max-w-sm">{doc.name}</span>
+                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-800 border border-slate-700/60 rounded">
+                        <span className="text-xs text-slate-300 truncate max-w-sm">{doc.name}</span>
                         <button type="button" onClick={() => handleRemoveNewDocument(idx)} className="p-1 text-red-400 hover:bg-red-500/20 rounded">
                           <X size={14} />
                         </button>
@@ -668,24 +666,24 @@ export default function GeneralBilling() {
               </div>
 
               {/* Handover & Payment */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/20">
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Payment Status</label>
-                  <select name="payment_status" value={formData.payment_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main focus:border-emerald-500">
-                    <option value="">PENDING</option>
-                    <option value="WAITING APPROVAL">WAITING APPROVAL</option>
-                    <option value="PARTIAL">PARTIAL</option>
-                    <option value="SETTLED">SETTLED</option>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Payment Status</label>
+                  <select name="payment_status" value={formData.payment_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main focus:border-cyan-500 text-main">
+                    <option value="" className="bg-slate-950 text-slate-300">PENDING</option>
+                    <option value="WAITING APPROVAL" className="bg-slate-950 text-slate-300">WAITING APPROVAL</option>
+                    <option value="PARTIAL" className="bg-slate-950 text-slate-300">PARTIAL</option>
+                    <option value="SETTLED" className="bg-slate-950 text-slate-300">SETTLED</option>
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-secondary uppercase tracking-widest ml-1">Handover To</label>
-                  <input type="text" name="handover_to" value={formData.handover_to} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-card border-main focus:border-emerald-500" placeholder="e.g. Mrs UMA" />
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Handover To</label>
+                  <input type="text" name="handover_to" value={formData.handover_to} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main focus:border-cyan-500 text-main" placeholder="e.g. Mrs UMA" />
                 </div>
               </div>
               
               <div className="pt-4 flex justify-end shrink-0">
-                <button type="submit" disabled={submitting} className="bg-emerald-500 text-white hover:bg-emerald-600 px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/30 disabled:opacity-50">
+                <button type="submit" disabled={submitting} className="bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 font-bold">
                   {submitting ? 'SAVING...' : 'SAVE RECORD'}
                 </button>
               </div>

@@ -6,7 +6,7 @@ import {
   Plus, Search, Download, Calendar, MapPin, Tag, 
   X, Edit2, Trash2, LayoutGrid, Briefcase, Upload,
   MessageSquare, Send, Info, Clock, User as UserIcon, CheckCircle,
-  Maximize2, Minimize2, Activity, Shield, Camera, Image as ImageIcon, AlertCircle, ChevronLeft, ChevronRight, Printer
+  Maximize2, Minimize2, Activity, Shield, Camera, Image as ImageIcon, AlertCircle, ChevronLeft, ChevronRight, Printer, Settings
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -83,6 +83,7 @@ export default function Tickets() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [filterProject, setFilterProject] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterDevice, setFilterDevice] = useState('');
   const [filterDivision, setFilterDivision] = useState('');
   const [projects, setProjects] = useState([]);
   const [showSidePanel, setShowSidePanel] = useState(false);
@@ -90,6 +91,21 @@ export default function Tickets() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [newRemark, setNewRemark] = useState('');
   const [showVisualAnalytics, setShowVisualAnalytics] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState({
+    sno: true,
+    date: true,
+    receivedAt: true,
+    division: true,
+    blockLocation: true,
+    category: true,
+    project: true,
+    instructionBy: true,
+    timeRET: true,
+    responsibility: true,
+    status: true,
+    actions: true
+  });
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false);
 
   const availableMonths = useMemo(() => {
     if (!Array.isArray(tickets)) return [];
@@ -148,6 +164,7 @@ export default function Tickets() {
       // Advanced Filters
       if (filterProject && String(ticket.projectId?.id || ticket.projectId || ticket.project?.id || '') !== String(filterProject)) return false;
       if (filterCategory && (ticket.category || meta.category) !== filterCategory) return false;
+      if (filterDevice && (ticket.ticketDevice || meta.ticketDevice) !== filterDevice) return false;
       if (filterDivision && ticket.divisionName !== filterDivision) return false;
 
       // Search filter
@@ -156,7 +173,7 @@ export default function Tickets() {
 
       return true;
     }) : [];
-  }, [tickets, startMonth, endMonth, filterProject, filterCategory, filterDivision, searchQuery]);
+  }, [tickets, startMonth, endMonth, filterProject, filterCategory, filterDevice, filterDivision, searchQuery]);
 
   const filteredTickets = useMemo(() => {
     return baseFilteredTickets.filter(ticket => {
@@ -173,14 +190,16 @@ export default function Tickets() {
   }), [baseFilteredTickets]);
 
   const filterCounts = useMemo(() => {
-    const counts = { division: {}, category: {} };
+    const counts = { division: {}, category: {}, device: {} };
     (Array.isArray(tickets) ? tickets : []).forEach(ticket => {
       const meta = parseMetadata(ticket.remarks);
       const division = String(ticket.divisionName || '');
       const category = String(ticket.category || meta.category || '');
+      const device = String(ticket.ticketDevice || meta.ticketDevice || '');
 
       if (division) counts.division[division] = (counts.division[division] || 0) + 1;
       if (category) counts.category[category] = (counts.category[category] || 0) + 1;
+      if (device) counts.device[device] = (counts.device[device] || 0) + 1;
     });
     return counts;
   }, [tickets]);
@@ -224,10 +243,12 @@ export default function Tickets() {
     'NVR': '#8b5cf6',
     'Storage': '#8b5cf6',
     'Biometric': '#ec4899',
+    'Biometrics': '#ec4899',
     'Identity': '#ec4899',
     'Switch': '#f59e0b',
     'Network': '#f59e0b',
     'Upgrade': '#10b981',
+    'Flap Barrier': '#f43f5e',
     'Default': '#64748b'
   };
 
@@ -250,7 +271,8 @@ export default function Tickets() {
     assignedTo: '',
     assignedStaff: [],
     location: '',
-    category: 'Camera',
+    category: 'Issue',
+    ticketDevice: 'Camera',
     issueDescription: '',
     actionTaken: '',
     instructionBy: '',
@@ -553,6 +575,7 @@ export default function Tickets() {
       formDataToSend.append('room', formData.room);
       formDataToSend.append('location', `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}` || formData.location);
       formDataToSend.append('category', formData.category);
+      formDataToSend.append('ticketDevice', formData.ticketDevice || '');
       formDataToSend.append('actionTaken', formData.actionTaken || '');
       formDataToSend.append('instructionBy', formData.instructionBy || '');
       formDataToSend.append('receivedTime', formData.receivedTime || '');
@@ -680,7 +703,8 @@ export default function Tickets() {
       floor: '',
       room: '',
       location: '',
-      category: 'Camera',
+      category: 'Issue',
+      ticketDevice: 'Camera',
       issueDescription: '',
       actionTaken: '',
       instructionBy: '',
@@ -722,7 +746,8 @@ export default function Tickets() {
       floor: ticket.floor || '',
       room: ticket.room || '',
       location: ticket.location || meta.location || '',
-      category: ticket.category || meta.category || 'Camera',
+      category: ticket.category || meta.category || 'Issue',
+      ticketDevice: ticket.ticketDevice || meta.ticketDevice || 'Camera',
       issueDescription: ticket.issueDescription || '',
       actionTaken: ticket.actionTaken || meta.actionTaken || '',
       instructionBy: ticket.instructionBy || meta.instructionBy || '',
@@ -774,7 +799,7 @@ export default function Tickets() {
     }
 
     const headers = [
-      'S.No', 'Date', 'Division', 'Block', 'Floor', 'Room', 'Location String', 'Category', 'Project', 'Issue Description', 
+      'S.No', 'Date', 'Division', 'Block', 'Floor', 'Room', 'Location String', 'Category', 'Device', 'Project', 'Issue Description', 
       'Action Taken', 'Instruction By', 'Received Time', 
       'End Time', 'Total Time', 'Assigned To', 'Status'
     ];
@@ -801,7 +826,8 @@ export default function Tickets() {
         escapeCSV(ticket.floor || ''),
         escapeCSV(ticket.room || ''),
         escapeCSV(ticket.location || meta.location || 'N/A'),
-        escapeCSV(ticket.category || meta.category || 'CCTV'),
+        escapeCSV(ticket.category || meta.category || 'Issue'),
+        escapeCSV(ticket.ticketDevice || meta.ticketDevice || 'None'),
         escapeCSV(ticket.project?.name || 'Independent'),
         escapeCSV(ticket.issueDescription || ''),
         escapeCSV(ticket.actionTaken || meta.actionTaken || ''),
@@ -832,24 +858,29 @@ export default function Tickets() {
   };
 
   const exportExcelReport = () => {
-    const categories = ['Camera', 'Maintenance', 'Service', 'Installation', 'Issue', 'Upgrade', 'Project', 'Other'];
-    
     const dateRangeLabel = startMonth || endMonth 
       ? `(${startMonth ? formatMonthLabel(startMonth) : ''} to ${endMonth ? formatMonthLabel(endMonth) : ''})`
       : '';
 
-    const breakdown = categories.map(cat => {
-      const catTickets = filteredTickets.filter(t => {
-        const meta = parseMetadata(t.remarks);
-        const tCat = t.category || meta.category || 'CCTV';
-        return tCat.toLowerCase() === cat.toLowerCase();
-      });
-      const open = catTickets.filter(t => t.status === 'Open').length;
-      const inProgress = catTickets.filter(t => t.status === 'In Progress').length;
-      const completed = catTickets.filter(t => t.status === 'Completed').length;
-      const total = catTickets.length;
-      return { category: cat, open, inProgress, completed, total };
+    const breakdownMap = {};
+    filteredTickets.forEach(t => {
+      const meta = parseMetadata(t.remarks);
+      const cat = t.category || meta.category || 'Issue';
+      const dev = t.ticketDevice || meta.ticketDevice || 'None';
+      const key = `${cat}||${dev}`;
+      
+      if (!breakdownMap[key]) {
+        breakdownMap[key] = { category: cat, device: dev, open: 0, inProgress: 0, completed: 0, total: 0 };
+      }
+      
+      if (t.status === 'Open') breakdownMap[key].open++;
+      else if (t.status === 'In Progress') breakdownMap[key].inProgress++;
+      else if (t.status === 'Completed') breakdownMap[key].completed++;
+      
+      breakdownMap[key].total++;
     });
+
+    const breakdown = Object.values(breakdownMap).sort((a, b) => a.category.localeCompare(b.category) || a.device.localeCompare(b.device));
 
     let xml = `<?xml version="1.0" encoding="utf-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -878,13 +909,14 @@ export default function Tickets() {
  </Styles>
 `;
 
-    xml += ` <Worksheet ss:Name="Category Summary">
+    xml += ` <Worksheet ss:Name="Report Summary">
   <Table>
    <Row ss:Height="25">
-    <Cell ss:MergeAcross="4" ss:StyleID="Title"><Data ss:Type="String">Category Breakdown Report ${dateRangeLabel}</Data></Cell>
+    <Cell ss:MergeAcross="5" ss:StyleID="Title"><Data ss:Type="String">Report Summary ${dateRangeLabel}</Data></Cell>
    </Row>
    <Row ss:Height="20">
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Category</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Ticket Category</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Ticket Device</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">Open</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">In Progress</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">Completed</Data></Cell>
@@ -894,6 +926,7 @@ export default function Tickets() {
     breakdown.forEach(row => {
       xml += `   <Row>
     <Cell><Data ss:Type="String">${row.category}</Data></Cell>
+    <Cell><Data ss:Type="String">${row.device}</Data></Cell>
     <Cell><Data ss:Type="Number">${row.open}</Data></Cell>
     <Cell><Data ss:Type="Number">${row.inProgress}</Data></Cell>
     <Cell><Data ss:Type="Number">${row.completed}</Data></Cell>
@@ -908,7 +941,7 @@ export default function Tickets() {
     const grandTotal = breakdown.reduce((sum, r) => sum + r.total, 0);
     
     xml += `   <Row>
-    <Cell ss:StyleID="BoldText"><Data ss:Type="String">Grand Total</Data></Cell>
+    <Cell ss:MergeAcross="1" ss:StyleID="BoldText"><Data ss:Type="String">Grand Total</Data></Cell>
     <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandOpen}</Data></Cell>
     <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandInProgress}</Data></Cell>
     <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandCompleted}</Data></Cell>
@@ -931,6 +964,7 @@ export default function Tickets() {
     <Cell ss:StyleID="Header"><Data ss:Type="String">S.No</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">Date</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">Division</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Ticket Device</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">Status</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">Instruction By</Data></Cell>
     <Cell ss:StyleID="Header"><Data ss:Type="String">Nature of Problem</Data></Cell>
@@ -953,11 +987,13 @@ export default function Tickets() {
           const tDesc = t.issueDescription || '';
           const tAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
           const tRemarks = t.actionTaken || meta.actionTaken || '';
+          const tDevice = t.ticketDevice || meta.ticketDevice || 'None';
           
           sheetXml += `   <Row>
     <Cell><Data ss:Type="Number">${idx + 1}</Data></Cell>
     <Cell><Data ss:Type="String">${escapeXml(tDate)}</Data></Cell>
     <Cell><Data ss:Type="String">${escapeXml(tDiv)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDevice)}</Data></Cell>
     <Cell><Data ss:Type="String">${escapeXml(tStatus)}</Data></Cell>
     <Cell><Data ss:Type="String">${escapeXml(tInst)}</Data></Cell>
     <Cell><Data ss:Type="String">${escapeXml(tDesc)}</Data></Cell>
@@ -982,7 +1018,8 @@ export default function Tickets() {
         .replace(/'/g, '&apos;');
     };
 
-    categories.forEach(cat => {
+    const activeCategories = Array.from(new Set(breakdown.map(b => b.category)));
+    activeCategories.forEach(cat => {
       xml += renderCategorySheet(cat);
     });
 
@@ -1068,21 +1105,21 @@ export default function Tickets() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 border-b border-white/10 pb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
         <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <Tag className="mr-3 text-blue-400" size={28} />
+            <Tag className="mr-3 text-cyan-400" size={28} />
             Ticket Management
           </h1>
-          <div className="flex bg-panel border border-white/10 rounded-xl p-0.5 sm:ml-4 self-start">
+          <div className="flex bg-panel border border-main rounded-xl p-0.5 sm:ml-4 self-start">
             <button
               onClick={() => setViewMode('registry')}
               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewMode === 'registry'
-                  ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20'
-                  : 'text-dim hover:text-white'
+                  ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Ticket List
@@ -1092,246 +1129,243 @@ export default function Tickets() {
               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewMode === 'report'
                   ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
-                  : 'text-dim hover:text-white'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Report View
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
-
-          <div className="flex items-center space-x-2 shrink-0 text-main">
-            <Calendar size={14} className="text-dim mr-1" />
-            <select
-              value={startMonth}
-              onChange={(e) => setStartMonth(e.target.value)}
-              className="glass-input px-3 py-1.5 text-xs w-36 cursor-pointer bg-panel border-main outline-none focus:border-teal-500 transition-colors uppercase font-bold text-secondary"
-              title="From Month"
-            >
-              <option value="">From Month</option>
-              {availableMonths.map(m => (
-                <option key={m} value={m}>{formatMonthLabel(m)}</option>
-              ))}
-            </select>
-            <span className="text-secondary text-xs px-1">to</span>
-            <select
-              value={endMonth}
-              onChange={(e) => setEndMonth(e.target.value)}
-              className="glass-input px-3 py-1.5 text-xs w-36 cursor-pointer bg-panel border-main outline-none focus:border-teal-500 transition-colors uppercase font-bold text-secondary"
-              title="To Month"
-            >
-              <option value="">To Month</option>
-              {availableMonths.map(m => (
-                <option key={m} value={m}>{formatMonthLabel(m)}</option>
-              ))}
-            </select>
-          </div>
-          <div className="relative flex-1 min-w-[200px] md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search tickets..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="glass-input w-full !pl-14 pr-4 py-2 text-sm"
-            />
-          </div>
-          <div className="flex space-x-3 shrink-0">
-            <button onClick={handleDownload} className="glass-panel flex items-center px-5 py-2.5 text-sm font-medium bg-teal-500/10 border-teal-500/30 text-teal-600 hover:bg-teal-500/20 transition-all shrink-0 whitespace-nowrap">
-              <Download size={18} className="mr-2" />
-              Export CSV
+        <div className="flex space-x-4 items-center">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+            <Download size={14} className="mr-2" /> Export CSV
+          </button>
+          {canEdit && (
+            <button onClick={() => { resetForm(); setShowModal(true); }} className="flex items-center bg-cyan-400 hover:bg-cyan-500 text-slate-900 px-4 py-2 rounded font-bold text-[13px] transition-colors ml-2">
+              <Plus size={16} className="mr-2" />
+              Raise Ticket
             </button>
-            {canEdit && (
-              <button onClick={() => { resetForm(); setShowModal(true); }} className="glass-button flex items-center px-5 py-2.5 text-sm font-medium shrink-0 whitespace-nowrap">
-                <Plus size={18} className="mr-2" />
-                Raise Ticket
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-
-
-      {viewMode === 'registry' ? (
-        <>
-          {/* Summary Dashboard */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
-        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f43f5e', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-rose-500 tracking-[0.2em] uppercase">[Open Tickets]</h3>
-              <AlertCircle size={18} className="text-rose-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(244, 63, 94, 0.6)' }}>{summaryStats.open}</span>
-                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest pb-1">Pending</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#f59e0b', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-amber-500 tracking-[0.2em] uppercase">[In Progress]</h3>
-              <Activity size={18} className="text-amber-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.6)' }}>{summaryStats.inProgress}</span>
-                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest pb-1">Working</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#10b981', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-emerald-500 tracking-[0.2em] uppercase">[Completed]</h3>
-              <CheckCircle size={18} className="text-emerald-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(16, 185, 129, 0.6)' }}>{summaryStats.completed}</span>
-                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest pb-1">Resolved</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="hud-panel p-6 flex flex-col justify-between overflow-hidden h-36 relative group">
-            <div className="hud-corner-tr"></div>
-            <div className="hud-corner-bl"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full" style={{ background: '#3b82f6', opacity: 0.1, filter: 'blur(20px)' }}></div>
-            <div className="flex justify-between items-start">
-              <h3 className="text-[10px] font-bold text-blue-500 tracking-[0.2em] uppercase">[Total Managed]</h3>
-              <Briefcase size={18} className="text-blue-500 opacity-50 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex flex-col space-y-3 mt-4 text-left">
-              <div className="flex items-end space-x-2 font-mono">
-                <span className="text-4xl font-bold text-text-main" style={{ textShadow: '0 0 10px rgba(59, 130, 246, 0.6)' }}>{summaryStats.total}</span>
-                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest pb-1">Log Entries</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="glass-panel p-6 bg-card border-main shadow-sm flex items-center justify-center min-h-[140px]">
-          {chartData.length > 0 ? (
-            <div className="w-full h-full">
-              <ResponsiveContainer width="100%" height={120}>
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    innerRadius={35}
-                    outerRadius={50}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'var(--bg-secondary)', 
-                      border: '1px solid var(--glass-border)', 
-                      borderRadius: '8px', 
-                      fontSize: '10px',
-                      padding: '8px'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-[10px] text-secondary font-black uppercase tracking-widest text-center">No Data Available</p>
           )}
         </div>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="bg-panel p-4 rounded-2xl border border-main space-y-4">
-        {/* Row 1: Status & Stats */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-          <div className="flex p-0.5 bg-card rounded-xl border border-main self-start">
-            {['ALL', 'Open', 'In Progress', 'Completed'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  statusFilter === status 
-                    ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' 
-                    : 'text-secondary hover:text-main hover:bg-panel'
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center space-x-2 bg-card px-4 py-2 rounded-xl border border-main text-[10px] font-black uppercase tracking-widest self-end sm:self-center">
-            <span className="text-dim">Displaying:</span>
-            <span className="text-teal-400 font-mono text-xs font-bold">{filteredTickets.length} Records</span>
-          </div>
+      {/* Search & Month Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tickets by Description, Location..."
+            className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
+          />
         </div>
-
-        {/* Row 2: Advanced Dropdowns & Export Buttons */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-3 border-t border-white/5">
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <select 
-              value={filterDivision} 
-              onChange={(e) => setFilterDivision(e.target.value)} 
-              className="glass-input px-3 py-2 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-main focus:border-teal-500 transition-colors w-full sm:w-auto min-w-[180px]"
-            >
-              <option value="">All Divisions ({Array.isArray(tickets) ? tickets.length : 0})</option>
-              {Array.isArray(divisions) && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(d => (
-                <option key={d} value={d}>{d} ({filterCounts.division[d] || 0})</option>
-              ))}
-            </select>
-            <select 
-              value={filterCategory} 
-              onChange={(e) => setFilterCategory(e.target.value)} 
-              className="glass-input px-3 py-2 text-[10px] uppercase font-bold text-secondary bg-card cursor-pointer outline-none border-main focus:border-teal-500 transition-colors w-full sm:w-auto min-w-[180px]"
-            >
-              <option value="">All Categories ({Array.isArray(tickets) ? tickets.length : 0})</option>
-              <option value="Issue">Issue ({filterCounts.category['Issue'] || 0})</option>
-              <option value="Service">Service ({filterCounts.category['Service'] || 0})</option>
-              <option value="Maintenance">Maintenance ({filterCounts.category['Maintenance'] || 0})</option>
-              <option value="Installation">Installation ({filterCounts.category['Installation'] || 0})</option>
-              <option value="Other">Other ({filterCounts.category['Other'] || 0})</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-            <button 
-              onClick={handleDownload}
-              className="glass-panel flex items-center justify-center px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all w-full sm:w-auto"
-            >
-              <Download size={12} className="mr-2" />
-              Download CSV
-            </button>
-            <button 
-              onClick={printToPDF}
-              className="glass-panel flex items-center justify-center px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-purple-500/10 border-purple-500/20 text-purple-400 hover:bg-purple-500/20 transition-all w-full sm:w-auto"
-            >
-              <Printer size={12} className="mr-2" />
-              Print PDF
-            </button>
-          </div>
+        <div className="flex items-center space-x-2 bg-panel px-4 py-3 rounded-md border border-main">
+          <Calendar size={16} className="text-slate-400" />
+          <select
+            value={startMonth}
+            onChange={(e) => setStartMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="From Month"
+          >
+            <option value="">From Month</option>
+            {availableMonths.map(m => (
+              <option key={m} value={m}>{formatMonthLabel(m)}</option>
+            ))}
+          </select>
+          <span className="text-slate-400 text-xs">to</span>
+          <select
+            value={endMonth}
+            onChange={(e) => setEndMonth(e.target.value)}
+            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
+            title="To Month"
+          >
+            <option value="">To Month</option>
+            {availableMonths.map(m => (
+              <option key={m} value={m}>{formatMonthLabel(m)}</option>
+            ))}
+          </select>
         </div>
       </div>
 
+      {viewMode === 'registry' ? (
+        <>
+          {/* Summary Dashboard */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-rose-500/30 text-left" onClick={() => setStatusFilter(statusFilter === 'Open' ? 'ALL' : 'Open')}>
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-rose-500 tracking-widest uppercase">[OPEN TICKETS]</h3>
+                <AlertCircle size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-white">{summaryStats.open}</span>
+              </div>
+            </button>
+
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-amber-500/30 text-left" onClick={() => setStatusFilter(statusFilter === 'In Progress' ? 'ALL' : 'In Progress')}>
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-amber-500 tracking-widest uppercase">[IN PROGRESS]</h3>
+                <Activity size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-white">{summaryStats.inProgress}</span>
+              </div>
+            </button>
+
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30 text-left" onClick={() => setStatusFilter(statusFilter === 'Completed' ? 'ALL' : 'Completed')}>
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[COMPLETED]</h3>
+                <CheckCircle size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
+              </div>
+            </button>
+
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50 text-left" onClick={() => setStatusFilter('ALL')}>
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL MANAGED]</h3>
+                <Briefcase size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-cyan-400">{summaryStats.total}</span>
+              </div>
+              <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
+            </button>
+
+            <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
+              <div className="w-24 h-24 relative flex items-center justify-center">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
+                )}
+                <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+                </div>
+              </div>
+              <div className="absolute right-2 flex flex-col space-y-1">
+                {chartData.map(d => (
+                  <div key={d.name} className="flex items-center space-x-1.5">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
+                    <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Toolbar */}
+          <div className="flex flex-wrap items-center gap-4 bg-panel p-4 rounded-md border border-main mt-6 mb-6">
+            <div className="flex p-1 bg-slate-800 rounded-lg border border-slate-700">
+              {['ALL', 'Open', 'In Progress', 'Completed'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${
+                    statusFilter === status 
+                      ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 ml-auto">
+              <select 
+                value={filterDivision} 
+                onChange={(e) => setFilterDivision(e.target.value)} 
+                className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[150px]"
+              >
+                <option value="">All Divisions ({Array.isArray(tickets) ? tickets.length : 0})</option>
+                {Array.isArray(divisions) && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(d => (
+                  <option key={d} value={d}>{d} ({filterCounts.division[d] || 0})</option>
+                ))}
+              </select>
+              <select 
+                value={filterCategory} 
+                onChange={(e) => setFilterCategory(e.target.value)} 
+                className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[150px]"
+              >
+                <option value="">All Categories ({Array.isArray(tickets) ? tickets.length : 0})</option>
+                <option value="Issue">Issue ({filterCounts.category['Issue'] || 0})</option>
+                <option value="Service">Service ({filterCounts.category['Service'] || 0})</option>
+                <option value="Maintenance">Maintenance ({filterCounts.category['Maintenance'] || 0})</option>
+                <option value="Installation">Installation ({filterCounts.category['Installation'] || 0})</option>
+                <option value="Other">Other ({filterCounts.category['Other'] || 0})</option>
+              </select>
+              <select 
+                value={filterDevice} 
+                onChange={(e) => setFilterDevice(e.target.value)} 
+                className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[150px]"
+              >
+                <option value="">All Devices ({Array.isArray(tickets) ? tickets.length : 0})</option>
+                <option value="Camera">Camera ({filterCounts.device['Camera'] || 0})</option>
+                <option value="Biometrics">Biometrics ({filterCounts.device['Biometrics'] || 0})</option>
+                <option value="Flap Barrier">Flap Barrier ({filterCounts.device['Flap Barrier'] || 0})</option>
+              </select>
+              <button 
+                onClick={handleDownload}
+                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              >
+                <Download size={12} className="mr-1.5" />
+                CSV
+              </button>
+              <button 
+                onClick={printToPDF}
+                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              >
+                <Printer size={12} className="mr-1.5" />
+                PDF
+              </button>
+            </div>
+          </div>
+
       {/* Main Content Table */}
-        <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
+        <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4 relative">
           <div className="flex items-center space-x-4">
+            
+            <div className="relative">
+              <button 
+                onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded flex items-center border border-slate-700 transition-colors"
+              >
+                <Settings size={12} className="mr-1.5" /> Columns
+              </button>
+              
+              {showColumnDropdown && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 p-2 animate-fade-in">
+                  <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 px-2">Visible Columns</div>
+                  <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                    {Object.keys(columnVisibility).map(key => (
+                      <label key={key} className="flex items-center p-1.5 hover:bg-slate-700/50 rounded cursor-pointer transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility[key]}
+                          onChange={() => setColumnVisibility(prev => ({...prev, [key]: !prev[key]}))}
+                          className="mr-2 accent-cyan-500"
+                        />
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">
+                          {key.replace(/([A-Z])/g, ' $1').trim()}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center space-x-2 mr-2">
               <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
               <select
@@ -1361,24 +1395,23 @@ export default function Tickets() {
         </div>
 
 
-<div className="glass-panel overflow-hidden border border-main shadow-sm">
+<div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-panel border-b border-main">
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center w-12">S.No</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Date</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Received At</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Division</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Block / Location</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Category</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Project</th>
-                <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest w-1/4">Nature of Problem</th>
-                <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest">Instruction By</th>
-                <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest text-center">Time (R/E/T)</th>
-                <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest">Responsibility</th>
-                <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest">Status</th>
-                {canEdit && <th className="p-4 text-[11px] font-bold text-blue-300 uppercase tracking-widest text-right">Actions</th>}
+                {columnVisibility.sno && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">S.No</th>}
+                {columnVisibility.date && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>}
+                {columnVisibility.receivedAt && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Received At</th>}
+                {columnVisibility.division && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Division</th>}
+                {columnVisibility.blockLocation && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Block / Location</th>}
+                {columnVisibility.category && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</th>}
+                {columnVisibility.project && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project</th>}
+                {columnVisibility.instructionBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>}
+                {columnVisibility.timeRET && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>}
+                {columnVisibility.responsibility && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsibility</th>}
+                {columnVisibility.status && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>}
+                {columnVisibility.actions && canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-main">
@@ -1405,117 +1438,145 @@ export default function Tickets() {
                   return (
                       <tr 
                         key={ticket.id || ticket._id} 
-                        className="hover:bg-white/5 transition-colors group cursor-pointer"
+                        className="hover:bg-slate-700/30 transition-colors group cursor-pointer"
                         onClick={(e) => {
                           if (e.target.closest('button') || e.target.closest('select')) return;
                           navigate(`/tickets/${ticket.id || ticket._id}`);
                         }}
                       >
-                      <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                      <td className="p-4">
-                        <div className="flex items-center text-dim font-mono text-xs">
-                          <Calendar size={12} className="mr-2 text-dim/50" />
-                          {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col text-dim font-mono text-[10px] space-y-0.5">
-                          <div className="flex items-center text-teal-400">
-                            <Calendar size={10} className="mr-1" />
-                            {ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                      {columnVisibility.sno && <td className="p-4 text-center font-mono text-[10px] text-slate-400">{(currentPage - 1) * itemsPerPage + index + 1}</td>}
+                      
+                      {columnVisibility.date && (
+                        <td className="p-4">
+                          <div className="flex items-center text-slate-400 font-mono text-xs">
+                            <Calendar size={12} className="mr-2 text-slate-500" />
+                            {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
                           </div>
-                          <div className="flex items-center text-teal-400/80">
-                            <Clock size={10} className="mr-1" />
-                            {ticket.receivedTime || '--:--'}
+                        </td>
+                      )}
+
+                      {columnVisibility.receivedAt && (
+                        <td className="p-4">
+                          <div className="flex flex-col text-slate-400 font-mono text-[10px] space-y-0.5">
+                            <div className="flex items-center text-cyan-400">
+                              <Calendar size={10} className="mr-1" />
+                              {ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                            </div>
+                            <div className="flex items-center text-cyan-400/80">
+                              <Clock size={10} className="mr-1" />
+                              {ticket.receivedTime || '--:--'}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center text-blue-400 font-semibold text-[10px]">
-                           <MapPin size={10} className="mr-1" />
-                           {ticket.divisionName || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="text-dim font-medium text-[10px]">
-                           {[ticket.block, ticket.floor, ticket.room].filter(Boolean).join(' | ') || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase tracking-wider">
-                          {ticket.category || meta.category || 'Camera'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center text-xs text-dim font-medium">
-                          <Briefcase size={12} className="mr-2 text-blue-400" />
-                          {ticket.project?.name || 'Independent'}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <p className="text-xs text-dim line-clamp-2 leading-relaxed italic">
-                          {ticket.issueDescription}
-                        </p>
-                      </td>
-                      <td className="p-4 text-xs text-main font-medium">
-                        {ticket.instructionBy || meta.instructionBy || 'N/A'}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col items-center space-y-1">
-                          <span className="text-[10px] text-emerald-400 font-mono">{ticket.receivedTime || meta.receivedTime || '--:--'}</span>
-                          <span className="text-[10px] text-red-400 font-mono">{ticket.endTime || meta.endTime || '--:--'}</span>
-                          <div className="h-[1px] w-8 bg-white/10"></div>
-                          <span className="text-[10px] text-main font-bold">{ticket.totalTime || meta.totalTime || '0h 0m'}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col space-y-1">
-                          {Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {ticket.assignedStaff.map(s => (
-                                <span key={s.id || s._id} className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded text-[9px] font-black uppercase tracking-wider">
-                                  {s.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="flex items-center space-x-2">
-                              {(() => {
-                                const displayUser = assignedUser || ticket.raisedBy;
-                                return (
-                                  <>
-                                    <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
-                                      {String(displayUser?.name || 'U').charAt(0)?.toUpperCase() || 'U'}
-                                    </div>
-                                    <span className="text-[11px] text-dim font-medium">
-                                      {displayUser?.name || 'Unassigned'}
-                                    </span>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border ${
-                          ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20' :
-                          ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20' :
-                          'text-red-400 border-red-500/20'
-                        }`}>
-                          {ticket.status}
-                        </span>
-                      </td>
-                      {canEdit && (
+                        </td>
+                      )}
+
+                      {columnVisibility.division && (
+                        <td className="p-4">
+                          <div className="flex items-center text-blue-400 font-semibold text-[10px]">
+                             <MapPin size={10} className="mr-1" />
+                             {ticket.divisionName || 'N/A'}
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.blockLocation && (
+                        <td className="p-4">
+                          <div className="text-slate-400 font-medium text-[10px]">
+                             {[ticket.block, ticket.floor, ticket.room].filter(Boolean).join(' | ') || 'N/A'}
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.category && (
+                        <td className="p-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border border-blue-500/50 text-blue-400 bg-blue-500/10">
+                            {ticket.category || meta.category || 'Issue'}
+                          </span>
+                        </td>
+                      )}
+
+                      {columnVisibility.project && (
+                        <td className="p-4">
+                          <div className="flex items-center text-xs text-slate-400 font-medium">
+                            <Briefcase size={12} className="mr-2 text-cyan-400" />
+                            {ticket.project?.name || 'Independent'}
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.instructionBy && (
+                        <td className="p-4 text-xs text-slate-200 font-medium">
+                          {ticket.instructionBy || meta.instructionBy || 'N/A'}
+                        </td>
+                      )}
+
+                      {columnVisibility.timeRET && (
+                        <td className="p-4">
+                          <div className="flex flex-col items-center space-y-1">
+                            <span className="text-[10px] text-emerald-400 font-mono">{ticket.receivedTime || meta.receivedTime || '--:--'}</span>
+                            <span className="text-[10px] text-red-400 font-mono">{ticket.endTime || meta.endTime || '--:--'}</span>
+                            <div className="h-[1px] w-8 bg-slate-700"></div>
+                            <span className="text-[10px] text-slate-200 font-bold">{ticket.totalTime || meta.totalTime || '0h 0m'}</span>
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.responsibility && (
+                        <td className="p-4">
+                          <div className="flex flex-col space-y-1">
+                            {Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {ticket.assignedStaff.map(s => (
+                                  <span key={s.id || s._id} className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border border-blue-500/30 text-blue-400 bg-blue-500/10">
+                                    {s.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-2">
+                                {(() => {
+                                  const displayUser = assignedUser || ticket.raisedBy;
+                                  return (
+                                    <>
+                                      <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
+                                        {String(displayUser?.name || 'U').charAt(0)?.toUpperCase() || 'U'}
+                                      </div>
+                                      <span className="text-[11px] text-slate-400 font-medium">
+                                        {displayUser?.name || 'Unassigned'}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.status && (
+                        <td className="p-4">
+                          <div className="flex justify-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                              ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                              ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                              'text-red-500 border-red-500/50'
+                            }`}>
+                              {ticket.status}
+                            </span>
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.actions && canEdit && (
                         <td className="p-4 text-right">
-                          <div className="flex justify-end space-x-1">
+                          <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             {(ticket.status !== 'Completed' || user?.role === 'Super Admin') && (
-                              <button onClick={() => handleEdit(ticket)} className="p-1.5 text-dim hover:text-blue-400 hover:bg-blue-500/10 rounded transition-all">
+                              <button onClick={() => handleEdit(ticket)} className="text-slate-400 hover:text-cyan-400 transition-colors">
                                 <Edit2 size={14} />
                               </button>
                             )}
                             {(ticket.status !== 'Completed' || user?.role === 'Super Admin') && (
-                              <button onClick={() => handleDelete(ticket.id || ticket._id)} className="p-1.5 text-dim hover:text-red-400 hover:bg-red-500/10 rounded transition-all">
+                              <button onClick={() => handleDelete(ticket.id || ticket._id)} className="text-slate-400 hover:text-red-500 transition-colors">
                                 <Trash2 size={14} />
                               </button>
                             )}
@@ -1533,22 +1594,20 @@ export default function Tickets() {
       </div>
     </>
   ) : (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in max-w-7xl mx-auto pb-10">
       {/* Detailed Ticket Report View */}
-      <div className="hud-panel p-8 bg-card border-main relative overflow-hidden rounded-[2rem]">
-        <div className="hud-corner-tr"></div>
-        <div className="hud-corner-bl"></div>
+      <div className="bg-panel border border-main rounded-md p-8 flex flex-col justify-between overflow-hidden relative transition-all group shadow-2xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
             <h2 className="text-xl font-bold text-main tracking-wider uppercase mb-1">Ticket Operations & Performance Report</h2>
-            <p className="text-xs text-dim">
+            <p className="text-xs text-dim font-medium">
               Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
             </p>
             <div className="flex flex-wrap gap-2 mt-4">
-              <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-[9px] font-bold uppercase tracking-widest text-dim">
+              <span className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-[9px] font-bold uppercase tracking-widest text-slate-300">
                 Period: {startMonth || 'ALL'} to {endMonth || 'ALL'}
               </span>
-              <span className="px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-bold uppercase tracking-widest text-blue-400">
+              <span className="px-2.5 py-1 rounded bg-cyan-500/10 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-widest text-cyan-400">
                 Division: {filterDivision || 'ALL DIVISIONS'}
               </span>
               <span className="px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-[9px] font-bold uppercase tracking-widest text-purple-400">
@@ -1566,23 +1625,23 @@ export default function Tickets() {
           <div className="flex items-center space-x-3 self-end md:self-center shrink-0">
             <button
               onClick={exportExcelReport}
-              className="glass-panel flex items-center px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-teal-500/10 border-teal-500/30 text-teal-400 hover:bg-teal-500/20 transition-all shadow-lg shadow-teal-500/5"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
-              <Download size={14} className="mr-2" />
+              <Download size={12} className="mr-2" />
               Export Excel Report
             </button>
             <button
               onClick={printToPDF}
-              className="glass-panel flex items-center px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-all shadow-lg shadow-purple-500/5"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
-              <Printer size={14} className="mr-2" />
+              <Printer size={12} className="mr-2" />
               Print PDF Report
             </button>
             <button
               onClick={handleDownload}
-              className="glass-panel flex items-center px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-lg shadow-emerald-500/5"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
-              <Download size={14} className="mr-2" />
+              <Download size={12} className="mr-2" />
               Export CSV Data
             </button>
           </div>
@@ -1590,34 +1649,34 @@ export default function Tickets() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
-          <span className="text-[9px] font-bold text-dim uppercase tracking-widest">Total Tickets</span>
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total Tickets</span>
           <span className="text-3xl font-bold font-mono text-white mt-2">{filteredTickets.length}</span>
           <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
         </div>
-        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
           <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest">Open Queue</span>
           <span className="text-3xl font-bold font-mono text-rose-400 mt-2">{filteredTickets.filter(t => t.status === 'Open').length}</span>
           <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-rose-500 shadow-lg shadow-rose-500/50"></div>
         </div>
-        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
           <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">In Progress</span>
           <span className="text-3xl font-bold font-mono text-amber-400 mt-2">{filteredTickets.filter(t => t.status === 'In Progress').length}</span>
           <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-amber-500 shadow-lg shadow-amber-500/50"></div>
         </div>
-        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
-          <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Completed</span>
-          <span className="text-3xl font-bold font-mono text-emerald-400 mt-2">{filteredTickets.filter(t => t.status === 'Completed').length}</span>
-          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div>
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+          <span className="text-[9px] font-bold text-green-500 uppercase tracking-widest">Completed</span>
+          <span className="text-3xl font-bold font-mono text-green-400 mt-2">{filteredTickets.filter(t => t.status === 'Completed').length}</span>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-green-500 shadow-lg shadow-green-500/50"></div>
         </div>
-        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
-          <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest">Resolution Rate</span>
-          <span className="text-3xl font-bold font-mono text-teal-400 mt-2">
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+          <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-widest">Resolution Rate</span>
+          <span className="text-3xl font-bold font-mono text-cyan-400 mt-2">
             {((filteredTickets.filter(t => t.status === 'Completed').length / (filteredTickets.length || 1)) * 100).toFixed(0)}%
           </span>
-          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-teal-400 shadow-lg shadow-teal-400/50"></div>
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-cyan-400 shadow-lg shadow-cyan-400/50"></div>
         </div>
-        <div className="glass-panel p-6 bg-card border-main rounded-2xl flex flex-col justify-between h-28 relative">
+        <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
           <span className="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Billing Records</span>
           <span className="text-3xl font-bold font-mono text-purple-400 mt-2">
             {filteredTickets.filter(t => t.billing_records?.length > 0).length}
@@ -1627,8 +1686,8 @@ export default function Tickets() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="glass-panel p-6 bg-card border-main rounded-[1.5rem] flex flex-col">
-          <h3 className="text-xs font-bold text-main uppercase tracking-widest mb-6">Category Breakdown</h3>
+        <div className="bg-panel border border-main rounded-md p-6 flex flex-col">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Category Breakdown</h3>
           <div className="h-64 flex items-center justify-center">
             {categoryStats.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -1652,13 +1711,13 @@ export default function Tickets() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-dim font-bold uppercase tracking-widest">No Category Data</p>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">No Category Data</p>
             )}
           </div>
         </div>
 
-        <div className="glass-panel p-6 bg-card border-main rounded-[1.5rem] flex flex-col lg:col-span-2">
-          <h3 className="text-xs font-bold text-main uppercase tracking-widest mb-6">Tickets by Division</h3>
+        <div className="bg-panel border border-main rounded-md p-6 flex flex-col lg:col-span-2">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Tickets by Division</h3>
           <div className="h-64 flex items-center justify-center">
             {(() => {
               const divDataMap = {};
@@ -1667,7 +1726,7 @@ export default function Tickets() {
                 divDataMap[name] = (divDataMap[name] || 0) + 1;
               });
               const data = Object.entries(divDataMap).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count).slice(0, 10);
-              if (data.length === 0) return <p className="text-xs text-dim font-bold uppercase tracking-widest">No Division Data</p>;
+              if (data.length === 0) return <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">No Division Data</p>;
               return (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data} margin={{ left: 0, right: 10, top: 10, bottom: 20 }}>
@@ -1691,21 +1750,21 @@ export default function Tickets() {
         </div>
       </div>
 
-      <div className="glass-panel p-6 bg-card border-main rounded-[1.5rem]">
-        <h3 className="text-xs font-bold text-main uppercase tracking-widest mb-6">Technician Load & Productivity Matrix</h3>
+      <div className="bg-panel border border-main rounded-md p-6">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Technician Load & Productivity Matrix</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-panel border-b border-main">
-                <th className="p-4 text-[10px] font-bold text-main uppercase tracking-widest">Technician</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician</th>
                 <th className="p-4 text-[10px] font-bold text-rose-500 uppercase tracking-widest text-center">Open</th>
                 <th className="p-4 text-[10px] font-bold text-amber-500 uppercase tracking-widest text-center">In Progress</th>
-                <th className="p-4 text-[10px] font-bold text-emerald-500 uppercase tracking-widest text-center">Completed</th>
-                <th className="p-4 text-[10px] font-bold text-main uppercase tracking-widest text-center">Total Assigned</th>
-                <th className="p-4 text-[10px] font-bold text-teal-400 uppercase tracking-widest text-center">Completion Rate</th>
+                <th className="p-4 text-[10px] font-bold text-green-500 uppercase tracking-widest text-center">Completed</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Total Assigned</th>
+                <th className="p-4 text-[10px] font-bold text-cyan-400 uppercase tracking-widest text-center">Completion Rate</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5 text-dim">
+            <tbody className="divide-y divide-white/5 text-slate-400">
               {(() => {
                 const techReportMap = {};
                 filteredTickets.forEach(t => {
@@ -1731,7 +1790,7 @@ export default function Tickets() {
                   const total = counts.Open + counts['In Progress'] + counts.Completed;
                   const rate = total > 0 ? ((counts.Completed / total) * 100).toFixed(0) : 0;
                   return (
-                    <tr key={name} className="hover:bg-white/5 transition-colors">
+                    <tr key={name} className="hover:bg-slate-700/30 transition-colors">
                       <td className="p-4 text-xs font-bold text-white flex items-center space-x-2">
                         <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
                           {name.charAt(0).toUpperCase()}
@@ -1740,10 +1799,10 @@ export default function Tickets() {
                       </td>
                       <td className="p-4 font-mono text-center text-rose-400 font-bold">{counts.Open}</td>
                       <td className="p-4 font-mono text-center text-amber-400 font-bold">{counts['In Progress']}</td>
-                      <td className="p-4 font-mono text-center text-emerald-400 font-bold">{counts.Completed}</td>
+                      <td className="p-4 font-mono text-center text-green-400 font-bold">{counts.Completed}</td>
                       <td className="p-4 font-mono text-center text-white font-bold">{total}</td>
                       <td className="p-4 text-center">
-                        <span className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] font-bold text-teal-400 font-mono">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-cyan-500/30 text-cyan-400 bg-cyan-500/10 font-mono">
                           {rate}%
                         </span>
                       </td>
@@ -1756,20 +1815,19 @@ export default function Tickets() {
         </div>
       </div>
 
-      <div className="glass-panel overflow-hidden border border-main shadow-sm rounded-[1.5rem]">
+      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
         <div className="p-4 bg-panel border-b border-main flex justify-between items-center">
-          <span className="text-[10px] font-black text-main uppercase tracking-widest">Report Registry ({filteredTickets.length} Records)</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Report Registry ({filteredTickets.length} Records)</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-panel border-b border-main text-dim">
+              <tr className="bg-panel border-b border-main text-slate-400">
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest text-center w-12">S.No</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Date</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Division</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Category</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Instruction By</th>
-                <th className="p-4 text-[9px] font-bold uppercase tracking-widest w-1/3">Nature of Problem</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Status</th>
               </tr>
             </thead>
@@ -1777,30 +1835,27 @@ export default function Tickets() {
               {filteredTickets.map((ticket, idx) => {
                 const meta = parseMetadata(ticket.remarks);
                 return (
-                  <tr key={ticket.id || ticket._id} className="hover:bg-white/5 transition-colors">
-                    <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
-                    <td className="p-4 font-mono text-[10px] text-dim">
+                  <tr key={ticket.id || ticket._id} className="hover:bg-slate-700/30 transition-colors">
+                    <td className="p-4 text-center font-mono text-[10px] text-slate-500">{idx + 1}</td>
+                    <td className="p-4 font-mono text-[10px] text-slate-400">
                       {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
                     </td>
                     <td className="p-4 text-xs font-bold text-blue-400">
                       {ticket.divisionName || 'N/A'}
                     </td>
                     <td className="p-4">
-                      <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-bold uppercase tracking-wider">
-                        {ticket.category || meta.category || 'CCTV'}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border border-blue-500/50 text-blue-400 bg-blue-500/10">
+                        {ticket.category || meta.category || 'Issue'}
                       </span>
                     </td>
-                    <td className="p-4 text-xs text-dim">
+                    <td className="p-4 text-xs text-slate-400">
                       {ticket.instructionBy || meta.instructionBy || 'N/A'}
                     </td>
-                    <td className="p-4 text-xs text-dim italic line-clamp-2">
-                      {ticket.issueDescription}
-                    </td>
                     <td className="p-4">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${
-                        ticket.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' :
-                        ticket.status === 'In Progress' ? 'text-orange-400 border-orange-500/20 bg-orange-500/5' :
-                        'text-red-400 border-red-500/20 bg-red-500/5'
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                        ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                        ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                        'text-red-500 border-red-500/50'
                       }`}>
                         {ticket.status}
                       </span>
@@ -1892,6 +1947,15 @@ export default function Tickets() {
                         <option value="Maintenance">Maintenance</option>
                         <option value="Installation">Installation</option>
                         <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Ticket Device</label>
+                      <select name="ticketDevice" value={formData.ticketDevice} onChange={handleInputChange} className="glass-input w-full p-3 text-xs cursor-pointer bg-panel border-main">
+                        <option value="">None</option>
+                        <option value="Camera">Camera</option>
+                        <option value="Biometrics">Biometrics</option>
+                        <option value="Flap Barrier">Flap Barrier</option>
                       </select>
                     </div>
                     <div>
