@@ -8,6 +8,7 @@ import {
 // charts removed
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { exportMonthlyPPT } from '../utils/pptExport';
 
 const getImageUrl = (path) => {
   if (!path) return '';
