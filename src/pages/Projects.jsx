@@ -233,7 +233,7 @@ export default function Projects() {
           </h1>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
           {canEdit && (
@@ -253,7 +253,7 @@ export default function Projects() {
             <Activity size={18} className="text-slate-500" />
           </div>
           <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.active}</span>
+            <span className="text-4xl font-bold text-main">{summaryStats.active}</span>
           </div>
         </button>
 
@@ -263,7 +263,7 @@ export default function Projects() {
             <AlertCircle size={18} className="text-slate-500" />
           </div>
           <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.onHold}</span>
+            <span className="text-4xl font-bold text-main">{summaryStats.onHold}</span>
           </div>
         </button>
 
@@ -273,7 +273,7 @@ export default function Projects() {
             <CheckCircle size={18} className="text-slate-500" />
           </div>
           <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
+            <span className="text-4xl font-bold text-main">{summaryStats.completed}</span>
           </div>
         </button>
 
@@ -335,10 +335,10 @@ export default function Projects() {
             {filteredProjects.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredProjects.length)}-${Math.min(currentPage * itemsPerPage, filteredProjects.length)} of ${filteredProjects.length}`}
           </span>
           <div className="flex space-x-1">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-slate-400 hover:text-main disabled:opacity-30 transition-colors bg-slate-800 rounded">
               <ChevronLeft size={14} />
             </button>
-            <button disabled={currentPage >= Math.ceil(filteredProjects.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors bg-slate-800 rounded">
+            <button disabled={currentPage >= Math.ceil(filteredProjects.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-slate-400 hover:text-main disabled:opacity-30 transition-colors bg-slate-800 rounded">
               <ChevronRight size={14} />
             </button>
           </div>

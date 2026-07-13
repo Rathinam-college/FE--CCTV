@@ -425,10 +425,10 @@ export default function Billing() {
           </h1>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={handleDownloadPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={handleDownloadPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <FileText size={14} className="mr-2" /> Export PDF
           </button>
         </div>
@@ -480,7 +480,7 @@ export default function Billing() {
             className={`flex items-center space-x-2 px-6 py-2.5 rounded-md font-bold text-xs uppercase tracking-widest transition-all ${
               activeTab === tab.id
                 ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                : 'text-slate-400 hover:text-main hover:bg-slate-800/50'
             }`}
           >
             <tab.icon size={14} />
@@ -498,7 +498,7 @@ export default function Billing() {
               className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition-all ${
                 billingFilter === filter
                   ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50'
-                  : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+                  : 'bg-slate-800 text-slate-400 hover:text-main border border-slate-700'
               }`}
             >
               {filter}
@@ -788,7 +788,7 @@ export default function Billing() {
                       type="button" 
                       onClick={() => handleAddBillingRecord('Bill')}
                       disabled={submitting || (!formData.new_bill.number && !formData.new_bill.file)}
-                      className="bg-emerald-500 text-white hover:bg-emerald-400 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/30 disabled:opacity-50"
+                      className="bg-emerald-500 text-main hover:bg-emerald-400 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/30 disabled:opacity-50"
                     >
                       {submitting ? 'Saving...' : 'Save New Bill'}
                     </button>
@@ -879,7 +879,7 @@ export default function Billing() {
                       type="button" 
                       onClick={() => handleAddBillingRecord('PO')}
                       disabled={submitting || (!formData.new_po.number && !formData.new_po.file)}
-                      className="bg-purple-500 text-white hover:bg-purple-400 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-purple-500/30 disabled:opacity-50"
+                      className="bg-purple-500 text-main hover:bg-purple-400 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-purple-500/30 disabled:opacity-50"
                     >
                       {submitting ? 'Saving...' : 'Save New PO'}
                     </button>
@@ -891,7 +891,7 @@ export default function Billing() {
                 <button 
                   type="button" 
                   onClick={() => setShowModal(false)}
-                  className="bg-slate-700 text-white hover:bg-slate-600 px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg"
+                  className="bg-slate-700 text-main hover:bg-slate-600 px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg"
                 >
                   CLOSE
                 </button>
@@ -989,7 +989,7 @@ export default function Billing() {
                       type="button" 
                       onClick={handleAddDocument}
                       disabled={submitting || !docFormData.name || !docFormData.file}
-                      className="bg-blue-500 text-white hover:bg-blue-400 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50"
+                      className="bg-blue-500 text-main hover:bg-blue-400 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50"
                     >
                       {submitting ? 'Uploading...' : 'Upload Document'}
                     </button>
@@ -1001,7 +1001,7 @@ export default function Billing() {
                 <button 
                   type="button" 
                   onClick={() => setShowDocModal(false)}
-                  className="bg-slate-700 text-white hover:bg-slate-600 px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg"
+                  className="bg-slate-700 text-main hover:bg-slate-600 px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg"
                 >
                   CLOSE
                 </button>

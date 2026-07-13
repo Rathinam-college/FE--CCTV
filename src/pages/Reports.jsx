@@ -555,7 +555,7 @@ export default function Reports() {
           .shadow-sm, .shadow-2xl, .shadow-lg { box-shadow: none !important; }
           .border-slate-100, .border-white\\/10 { border-color: #eee !important; }
           
-          .text-white, .text-slate-900, .text-slate-500, .text-dim { 
+          .text-main, .text-slate-900, .text-slate-500, .text-dim { 
             color: #000 !important; 
           }
 

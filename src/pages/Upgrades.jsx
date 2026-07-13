@@ -393,10 +393,10 @@ export default function Upgrades() {
           </h1>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Printer size={14} className="mr-2" /> Print PDF
           </button>
           {canEdit && (
@@ -416,7 +416,7 @@ export default function Upgrades() {
             <Clock size={18} className="text-slate-500" />
           </div>
           <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.open}</span>
+            <span className="text-4xl font-bold text-main">{summaryStats.open}</span>
           </div>
         </button>
 
@@ -426,7 +426,7 @@ export default function Upgrades() {
             <Shield size={18} className="text-slate-500" />
           </div>
           <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.inProgress}</span>
+            <span className="text-4xl font-bold text-main">{summaryStats.inProgress}</span>
           </div>
         </button>
 
@@ -436,7 +436,7 @@ export default function Upgrades() {
             <CheckCircle size={18} className="text-slate-500" />
           </div>
           <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
+            <span className="text-4xl font-bold text-main">{summaryStats.completed}</span>
           </div>
         </button>
 
@@ -467,7 +467,7 @@ export default function Upgrades() {
               <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
             )}
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+              <span className="text-[12px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
             </div>
           </div>
           <div className="absolute right-2 flex flex-col space-y-1">
@@ -522,7 +522,7 @@ export default function Upgrades() {
               className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${
                 statusFilter === status 
                   ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' 
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-main'
               }`}
             >
               {status}
@@ -548,13 +548,13 @@ export default function Upgrades() {
             </select>
           </div>
           <div className="flex items-center space-x-1">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
               <ChevronLeft size={14} />
             </button>
             <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
               {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
             </span>
-            <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+            <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
               <ChevronRight size={14} />
             </button>
           </div>

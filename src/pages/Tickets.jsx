@@ -1664,7 +1664,7 @@ export default function Tickets() {
               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewMode === 'registry'
                   ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-main'
               }`}
             >
               Ticket List
@@ -1673,8 +1673,8 @@ export default function Tickets() {
               onClick={() => setViewMode('report')}
               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewMode === 'report'
-                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
               }`}
             >
               Report View
@@ -1682,7 +1682,7 @@ export default function Tickets() {
           </div>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
           {canEdit && (
@@ -1744,7 +1744,7 @@ export default function Tickets() {
                 <AlertCircle size={18} className="text-slate-500" />
               </div>
               <div className="flex items-end mt-4">
-                <span className="text-4xl font-bold text-white">{summaryStats.open}</span>
+                <span className="text-4xl font-bold text-main">{summaryStats.open}</span>
               </div>
             </button>
 
@@ -1754,7 +1754,7 @@ export default function Tickets() {
                 <Activity size={18} className="text-slate-500" />
               </div>
               <div className="flex items-end mt-4">
-                <span className="text-4xl font-bold text-white">{summaryStats.inProgress}</span>
+                <span className="text-4xl font-bold text-main">{summaryStats.inProgress}</span>
               </div>
             </button>
 
@@ -1764,7 +1764,7 @@ export default function Tickets() {
                 <CheckCircle size={18} className="text-slate-500" />
               </div>
               <div className="flex items-end mt-4">
-                <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
+                <span className="text-4xl font-bold text-main">{summaryStats.completed}</span>
               </div>
             </button>
 
@@ -1795,7 +1795,7 @@ export default function Tickets() {
                   <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
                 )}
                 <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+                  <span className="text-[12px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
                 </div>
               </div>
               <div className="absolute right-2 flex flex-col space-y-1">
@@ -1819,7 +1819,7 @@ export default function Tickets() {
                   className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${
                     statusFilter === status 
                       ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' 
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-slate-400 hover:text-main'
                   }`}
                 >
                   {status}
@@ -1862,14 +1862,14 @@ export default function Tickets() {
               </select>
               <button 
                 onClick={handleDownload}
-                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
               >
                 <Download size={12} className="mr-1.5" />
                 CSV
               </button>
               <button 
                 onClick={printToPDF}
-                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
               >
                 <Printer size={12} className="mr-1.5" />
                 PDF
@@ -1926,13 +1926,13 @@ export default function Tickets() {
               </select>
             </div>
             <div className="flex items-center space-x-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
                 <ChevronLeft size={14} />
               </button>
               <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
                 {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
               </span>
-              <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -2180,28 +2180,28 @@ export default function Tickets() {
                   showNotification('Failed to generate PPT: ' + (e.message || 'Unknown error'), 'error');
                 }
               }}
-              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-indigo-700 px-3 py-2 bg-indigo-900/50 hover:bg-indigo-800/80 rounded transition-colors"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-indigo-700 px-3 py-2 bg-indigo-900/50 hover:bg-indigo-800/80 rounded transition-colors"
             >
               <Download size={12} className="mr-2 text-indigo-400" />
               Download PPT
             </button>
             <button
               onClick={exportExcelReport}
-              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
               <Download size={12} className="mr-2" />
               Export Excel Report
             </button>
             <button
               onClick={printToPDF}
-              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
               <Printer size={12} className="mr-2" />
               Print PDF Report
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
               <Download size={12} className="mr-2" />
               Export CSV Data
@@ -2213,7 +2213,7 @@ export default function Tickets() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total Tickets</span>
-          <span className="text-3xl font-bold font-mono text-white mt-2">{filteredTickets.length}</span>
+          <span className="text-3xl font-bold font-mono text-main mt-2">{filteredTickets.length}</span>
           <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
         </div>
         <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
@@ -2409,7 +2409,7 @@ export default function Tickets() {
                   
                   return (
                     <tr key={name} className="hover:bg-slate-700/30 transition-colors">
-                      <td className="p-4 text-xs font-bold text-white flex items-center space-x-2">
+                      <td className="p-4 text-xs font-bold text-main flex items-center space-x-2">
                         <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
                           {name.charAt(0).toUpperCase()}
                         </div>
@@ -2418,7 +2418,7 @@ export default function Tickets() {
                       <td className="p-4 font-mono text-center text-rose-400 font-bold">{counts.Open}</td>
                       <td className="p-4 font-mono text-center text-amber-400 font-bold">{counts['In Progress']}</td>
                       <td className="p-4 font-mono text-center text-green-400 font-bold">{counts.Completed}</td>
-                      <td className="p-4 font-mono text-center text-white font-bold">{total}</td>
+                      <td className="p-4 font-mono text-center text-main font-bold">{total}</td>
                       <td className="p-4 text-center">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-cyan-500/30 text-cyan-400 bg-cyan-500/10 font-mono">
                           {rate}%
@@ -2553,15 +2553,15 @@ export default function Tickets() {
                   <div className="bg-panel p-6 rounded-3xl border border-main space-y-4">
                     <div className="flex items-center space-x-3 mb-2">
                       <Clock size={16} className="text-blue-500" />
-                      <h3 className="text-[10px] font-black text-white uppercase tracking-[0.4em]">Timeline & Status</h3>
+                      <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Timeline & Status</h3>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div>
-                        <label className="block text-[9px] font-black text-white uppercase tracking-widest mb-2">Date Received</label>
+                        <label className="block text-[9px] font-black text-main uppercase tracking-widest mb-2">Date Received</label>
                         <input required type="date" name="date" value={formData.date} onChange={handleInputChange} className="glass-input w-full p-3 text-sm font-bold bg-[#0f172a] border-[#1e293b] rounded-2xl cursor-pointer" />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-black text-white uppercase tracking-widest mb-2">Time Received / Logged</label>
+                        <label className="block text-[9px] font-black text-main uppercase tracking-widest mb-2">Time Received / Logged</label>
                         <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-sm font-bold bg-[#0f172a] border-[#1e293b] rounded-2xl cursor-pointer" />
                       </div>
                       <div>
@@ -2606,7 +2606,7 @@ export default function Tickets() {
                            <button 
                              type="button" 
                              onClick={() => setFormData(prev => ({ ...prev, createdImage: null }))}
-                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                            >
                              <Trash2 size={12} />
                            </button>
@@ -2674,7 +2674,7 @@ export default function Tickets() {
                            <button 
                              type="button" 
                              onClick={() => setFormData(prev => ({ ...prev, createdVideo: null }))}
-                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                            >
                              <Trash2 size={12} />
                            </button>
@@ -2778,7 +2778,7 @@ export default function Tickets() {
                           className="glass-input flex-1 p-2 text-xs bg-panel border-main"
                           placeholder="Email (Optional)..."
                         />
-                        <button type="button" onClick={handleAddQuickStaff} className="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-700 transition-colors">Save</button>
+                        <button type="button" onClick={handleAddQuickStaff} className="px-4 py-2 bg-teal-600 text-main rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-700 transition-colors">Save</button>
                       </div>
                     </div>
                   )}
@@ -2791,7 +2791,7 @@ export default function Tickets() {
                         formData.assignedStaff.map(id => {
                           const member = staff.find(s => (s.id || s._id) === id);
                           return (
-                            <div key={id} className="flex items-center bg-teal-500 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-lg shadow-teal-500/20">
+                            <div key={id} className="flex items-center bg-teal-500 text-main px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-lg shadow-teal-500/20">
                               {member?.name || 'Staff'}
                               <button type="button" onClick={() => toggleStaffSelection(id)} className="ml-2 hover:opacity-70"><X size={12} /></button>
                             </div>
@@ -2808,7 +2808,7 @@ export default function Tickets() {
                             onClick={() => toggleStaffSelection(s.id || s._id)}
                             className={`w-full px-4 py-2.5 rounded-xl text-left text-[9px] font-black uppercase tracking-widest transition-all border ${
                               formData.assignedStaff.includes(s.id || s._id)
-                                ? 'bg-teal-600 text-white border-teal-500'
+                                ? 'bg-teal-600 text-main border-teal-500'
                                 : 'bg-panel text-secondary border-main hover:border-teal-500/30'
                             }`}
                           >
@@ -2888,7 +2888,7 @@ export default function Tickets() {
                           }}
                           className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
                             formData.status === status 
-                              ? 'bg-teal-600 text-white border-teal-500 shadow-lg shadow-teal-500/20' 
+                              ? 'bg-teal-600 text-main border-teal-500 shadow-lg shadow-teal-500/20' 
                               : 'bg-panel text-secondary border-main hover:bg-card'
                           }`}
                         >
@@ -2928,7 +2928,7 @@ export default function Tickets() {
                               <button 
                                 type="button" 
                                 onClick={() => setFormData(prev => ({ ...prev, inProgressImage: null }))}
-                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -3021,7 +3021,7 @@ export default function Tickets() {
                               <button 
                                 type="button" 
                                 onClick={() => setFormData(prev => ({ ...prev, completedImage: null }))}
-                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -3286,7 +3286,7 @@ export default function Tickets() {
                       setSubmitting(false);
                     }
                   }}
-                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-main py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
                 >
                   {submitting ? 'PROCESSING...' : 'START WORK'}
                 </button>
@@ -3496,7 +3496,7 @@ export default function Tickets() {
                       setSubmitting(false);
                     }
                   }}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-main py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
                 >
                   {submitting ? 'PROCESSING...' : 'COMPLETE TICKET'}
                 </button>

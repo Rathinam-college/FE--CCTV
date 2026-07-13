@@ -66,14 +66,25 @@ const generateTicketCanvas = async (ticket, getImageUrl) => {
   ctx.fillStyle = '#94a3b8';
   ctx.font = 'bold 13px Arial';
   ctx.fillText('CATEGORY', 40, 160);
-  ctx.fillText('RAISED BY', 240, 160);
+  ctx.fillText('WORKED BY', 240, 160);
   ctx.fillText('LOGGED DATE', 40, 230);
   ctx.fillText('LOCATION', 40, 300);
 
   ctx.fillStyle = '#f8fafc';
   ctx.font = 'bold 15px Arial';
   ctx.fillText(ticket.category || 'N/A', 40, 185);
-  ctx.fillText(ticket.raisedByName || 'Authorized Staff', 240, 185);
+  
+  let workedByText = 'Not Assigned';
+  if (ticket.assignedStaff && Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0) {
+    workedByText = ticket.assignedStaff.map(s => typeof s === 'object' ? (s.name || s.username || s) : s).join(', ');
+  } else if (ticket.assignedStaff && typeof ticket.assignedStaff === 'string') {
+    const rawAssign = ticket.assignedStaff.trim();
+    if (rawAssign && rawAssign.toLowerCase() !== 'unassigned') {
+      workedByText = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean).join(', ');
+    }
+  }
+  ctx.fillText(workedByText, 240, 185);
+  
   ctx.fillText(ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A', 40, 255);
   
   const locText = ticket.location || 'N/A';
