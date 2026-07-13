@@ -159,9 +159,9 @@ export default function TicketDetail() {
 
   const addRemark = async (e) => {
     e.preventDefault();
-    if (!newRemark.trim() || !ticket) return;
+    if ((!newRemark.trim() && !newRemarkImage) || !ticket) return;
 
-    const formattedRemark = `[${newRemarkDate} ${newRemarkTime}] ${newRemark}`;
+    const formattedRemark = `[${newRemarkDate} ${newRemarkTime}] ${newRemark || 'Uploaded an image'}`;
     
     const formData = new FormData();
     formData.append('remark', formattedRemark);
@@ -505,14 +505,24 @@ export default function TicketDetail() {
     ctx.fillStyle = '#94a3b8';
     ctx.font = 'bold 13px Arial';
     ctx.fillText('CATEGORY', 40, 160);
-    ctx.fillText('RAISED BY', 240, 160);
+    ctx.fillText('WORK BY', 240, 160);
     ctx.fillText('LOGGED DATE', 40, 230);
     ctx.fillText('LOCATION', 40, 300);
 
     ctx.fillStyle = '#f8fafc';
     ctx.font = 'bold 15px Arial';
     ctx.fillText(ticket.category || meta.category || 'N/A', 40, 185);
-    ctx.fillText(ticket.raisedByName || 'Authorized Staff', 240, 185);
+    
+    // Determine worker name
+    let workerName = 'Unassigned';
+    if (ticket.assignedTo && ticket.assignedTo.name) {
+      workerName = ticket.assignedTo.name;
+    } else if (ticket.assignedStaff && ticket.assignedStaff.length > 0 && ticket.assignedStaff[0].name) {
+      workerName = ticket.assignedStaff[0].name;
+    } else if (ticket.raisedByName) {
+      workerName = ticket.raisedByName; // Fallback to raisedBy if no worker
+    }
+    ctx.fillText(workerName, 240, 185);
     ctx.fillText(ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A', 40, 255);
     
     const locText = ticket.location || meta.location || 'N/A';
@@ -700,208 +710,296 @@ export default function TicketDetail() {
         </div>
       </div>
 
-      {/* Bento Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-auto">
+      {/* 2-Column Premium Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-auto">
         
-        {/* Cell 1: Ticket Header & Status (Spans 3 cols) */}
-        <div className="col-span-1 md:col-span-3 bg-card border border-main rounded-2xl p-5 flex items-center justify-between">
-          <div>
-            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.25em] mb-1">Ticket #{ticket.id || ticket._id}</p>
-            <h2 className="text-lg md:text-xl font-black text-main tracking-tight uppercase">
-              {ticket.category === 'Upgrade' || meta.category === 'Upgrade' ? 'Upgrade details' : (ticket.projectId || ticket.project ? 'Log details' : 'Ticket details')}
-            </h2>
-          </div>
-          <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider ${
-            ticket.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
-            ticket.status === 'In Progress' ? 'bg-orange-500/10 text-orange-500 animate-pulse border border-orange-500/20' :
-            'bg-red-500/10 text-red-500 border border-red-500/20'
-          }`}>
-            {ticket.status}
-          </span>
-        </div>
-
-        {/* Cell 2: Reaction Metric (Spans 1 col) */}
-        <div className="col-span-1 bg-orange-500/10 border border-orange-500/20 rounded-2xl p-5 flex flex-col justify-center items-center text-center">
-          <Clock size={20} className="text-orange-400 mb-1.5" />
-          <p className="text-lg font-black text-orange-400">
-            {calculateAdvancedTimeDiff(
-              ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
-              ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
-              ticket.inProgressDate || meta.workStartDate, 
-              ticket.inProgressTime || meta.workStartTime
-            )}
-          </p>
-          <p className="text-[10px] font-black uppercase tracking-wider text-orange-500/80">Reaction</p>
-        </div>
-
-        {/* Cell 3: Issue Description (Spans 2 cols, spans 2 rows) */}
-        <div className="col-span-1 md:col-span-2 md:row-span-2 bg-card border border-main rounded-2xl p-5 flex flex-col justify-between">
-          <div>
-            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em] mb-3">Issue description</p>
-            <p className="margin-0 text-sm leading-relaxed text-main font-bold italic opacity-95">"{ticket.issueDescription}"</p>
-          </div>
-          {ticket.status === 'Completed' && ticket.actionTaken && (
-            <div className="mt-4 pt-4 border-t border-main/10">
-              <p className="margin-0 text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-1">Resolution / Action Taken</p>
-              <p className="margin-0 text-xs leading-relaxed text-emerald-400 font-bold italic">"{ticket.actionTaken}"</p>
-            </div>
-          )}
-        </div>
-
-        {/* Cell 4: Horizontal Status Dots Timeline (Spans 2 cols) */}
-        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 w-full text-dim font-bold text-[10px] uppercase tracking-wider">
-            <div className={`w-2 h-2 rounded-full ${ticket.status === 'Open' || ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-blue-500 shadow shadow-blue-500' : 'bg-dim/20'}`}></div>
-            <div className="flex-1 h-[1px] bg-main opacity-20"></div>
-            <div className={`w-2 h-2 rounded-full ${ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-orange-500 shadow shadow-orange-500 animate-pulse' : 'bg-dim/20'}`}></div>
-            <div className="flex-1 h-[1px] bg-main opacity-20"></div>
-            <div className={`w-2 h-2 rounded-full ${ticket.status === 'Completed' ? 'bg-emerald-500 shadow shadow-emerald-500' : 'bg-dim/20'}`}></div>
-            <p className="ml-2 font-mono whitespace-nowrap text-secondary">Open &rarr; Active &rarr; Done</p>
-          </div>
-        </div>
-
-        {/* Cell 5: Location Card (Spans 2 cols) */}
-        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 space-y-1">
-          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Location</p>
-          <p className="margin-0 text-sm font-bold text-main flex items-center gap-1.5 uppercase tracking-wide">
-            <MapPin size={14} className="text-dim" />
-            {ticket.location || meta.location || 'N/A'}
-          </p>
-        </div>
-
-        {/* Cell 6: Raised By Card (Spans 2 cols) */}
-        <div className="col-span-1 md:col-span-2 bg-card border border-main rounded-2xl p-4 space-y-1">
-          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Raised by</p>
-          <p className="margin-0 text-sm font-bold text-main flex items-center gap-1.5">
-            <User size={14} className="text-dim" />
-            <span>{ticket.raisedByName || 'Authorized Staff'} &middot; {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A'}</span>
-          </p>
-        </div>
-
-        {/* Cell 7: Evidence Gallery Card (Spans 2 cols, spans 2 rows) */}
-        <div className="col-span-1 md:col-span-2 md:row-span-2 bg-card border border-main rounded-2xl p-5 space-y-3">
-          <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Evidence</p>
-          <div className="grid grid-cols-3 gap-3">
-            {/* Open Image */}
-            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
-              {ticket.createdImage ? (
-                <>
-                  <img src={getImageUrl(ticket.createdImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Open" />
-                  <a href={getImageUrl(ticket.createdImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Eye size={12} className="text-white" />
-                  </a>
-                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Open</span>
-                </>
-              ) : (
-                <ImageIcon size={16} className="text-dim opacity-30" />
-              )}
+        {/* Left Column: Core Info & Evidence (Spans 2 cols on lg) */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Main Issue Card */}
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+              <Activity size={120} />
             </div>
             
-            {/* In Progress Image */}
-            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
-              {ticket.inProgressImage || ticket.workImage ? (
-                <>
-                  <img src={getImageUrl(ticket.inProgressImage || ticket.workImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="In Progress" />
-                  <a href={getImageUrl(ticket.inProgressImage || ticket.workImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Eye size={12} className="text-white" />
-                  </a>
-                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Active</span>
-                </>
-              ) : (
-                <ImageIcon size={16} className="text-dim opacity-30" />
-              )}
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <p className="margin-0 text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Ticket #{ticket.id || ticket._id}</p>
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight uppercase max-w-xl leading-tight">
+                  {ticket.category === 'Upgrade' || meta.category === 'Upgrade' ? 'Upgrade details' : (ticket.projectId || ticket.project ? 'Log details' : 'Ticket details')}
+                </h2>
+              </div>
+              <span className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg ${
+                ticket.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-emerald-500/20' :
+                ticket.status === 'In Progress' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-orange-500/20 animate-pulse' :
+                'bg-red-500/20 text-red-400 border border-red-500/30 shadow-red-500/20'
+              }`}>
+                {ticket.status}
+              </span>
             </div>
 
-            {/* Completed Image */}
-            <div className="group relative aspect-square rounded-xl overflow-hidden border border-main bg-panel shadow-inner flex items-center justify-center">
-              {ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image) || ticket.serviceImage ? (
-                <>
-                  <img src={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="Completed" />
-                  <a href={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Eye size={12} className="text-white" />
-                  </a>
-                  <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-white/10 tracking-wider">Done</span>
-                </>
-              ) : (
-                <ImageIcon size={16} className="text-dim opacity-30" />
-              )}
+            <div className="bg-black/20 rounded-2xl p-6 border border-white/5 mb-6 relative z-10">
+              <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em] mb-3 flex items-center gap-2"><Info size={14} className="text-blue-400"/> Issue description</p>
+              <p className="margin-0 text-base leading-relaxed text-slate-200 font-medium">"{ticket.issueDescription}"</p>
             </div>
-          </div>
-        </div>
 
-        {/* Cell 8: Activity List Card (Spans 4 cols) */}
-        <div className="col-span-1 md:col-span-4 bg-card border border-main rounded-2xl p-5 space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em]">Activity</p>
-            <span className="bg-panel border border-main font-bold text-[9px] px-2 py-0.5 rounded-lg text-secondary">{(ticket.message_history || []).length} entries</span>
-          </div>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-main/5 pb-3">
-            {(ticket.message_history || []).slice(0, 3).map((msg, idx) => (
-              <p key={idx} className="margin-0 text-xs text-secondary leading-relaxed font-medium">
-                <span className="font-bold text-main">{msg.user_name || 'Protocol'}</span>{' '}
-                {cleanRemarkText(msg.remark)}{' '}
-                <span className="text-dim font-mono text-[9px] ml-1">&middot; {msg.time}</span>
-              </p>
-            ))}
-          </div>
-
-          {!(ticket.status === 'Completed' && user?.role !== 'Super Admin') && (
-            <form onSubmit={addRemark} className="flex gap-2">
-              <input 
-                type="text"
-                value={newRemark}
-                onChange={(e) => setNewRemark(e.target.value)}
-                placeholder="Add an update..." 
-                className="glass-input flex-1 px-3 py-2 text-xs bg-panel border-main rounded-xl font-bold"
-              />
-              <button 
-                type="submit"
-                disabled={!newRemark.trim()}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-20 flex items-center gap-1.5"
-              >
-                Post
-              </button>
-            </form>
-          )}
-        </div>
-
-        {/* Cell 9: Complete Work Action Button (Spans 4 cols) */}
-        {ticket.status !== 'Completed' && (
-          <div className="col-span-1 md:col-span-4">
-            {ticket.status === 'Open' ? (
-              <button
-                onClick={() => {
-                  setInProgressData({
-                    date: new Date().toISOString().split('T')[0],
-                    time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                    image: null
-                  });
-                  setShowInProgressModal(true);
-                }}
-                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-md flex items-center justify-center gap-1.5 uppercase"
-              >
-                <Clock size={14} /> Start work
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setCompletionData({
-                    remark: '',
-                    endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                    date: new Date().toISOString().split('T')[0],
-                    image: null
-                  });
-                  setShowCompletionModal(true);
-                }}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-md flex items-center justify-center gap-1.5 uppercase"
-              >
-                <CheckCircle size={14} /> Complete work
-              </button>
+            {ticket.status === 'Completed' && ticket.actionTaken && (
+              <div className="bg-emerald-900/20 rounded-2xl p-6 border border-emerald-500/20 relative z-10">
+                <p className="margin-0 text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2"><CheckCircle size={14} /> Resolution / Action Taken</p>
+                <p className="margin-0 text-sm leading-relaxed text-emerald-200 font-medium">"{ticket.actionTaken}"</p>
+              </div>
             )}
           </div>
-        )}
 
+          {/* Details Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors">
+              <p className="margin-0 text-[9px] font-black text-dim uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5"><MapPin size={12}/> Location</p>
+              <p className="margin-0 text-sm font-bold text-white truncate" title={ticket.location || meta.location || 'N/A'}>{ticket.location || meta.location || 'N/A'}</p>
+            </div>
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors">
+              <p className="margin-0 text-[9px] font-black text-dim uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5"><Shield size={12}/> Category</p>
+              <p className="margin-0 text-sm font-bold text-white truncate">{ticket.category || meta.category || 'N/A'}</p>
+            </div>
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors">
+              <p className="margin-0 text-[9px] font-black text-dim uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5"><User size={12}/> Work By</p>
+              <p className="margin-0 text-sm font-bold text-white truncate">
+                {ticket.assignedTo?.name || (ticket.assignedStaff?.[0]?.name) || ticket.raisedByName || 'Authorized Staff'}
+              </p>
+            </div>
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors">
+              <p className="margin-0 text-[9px] font-black text-dim uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5"><Clock size={12}/> Time Elapsed</p>
+              <p className="margin-0 text-sm font-black text-orange-400">
+                {calculateAdvancedTimeDiff(
+                  ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
+                  ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
+                  ticket.inProgressDate || meta.workStartDate, 
+                  ticket.inProgressTime || meta.workStartTime
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Evidence Gallery */}
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-5 px-2">
+              <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em] flex items-center gap-2"><ImageIcon size={14} className="text-blue-400"/> Evidence Gallery</p>
+              {/* Horizontal Status Timeline */}
+              <div className="hidden sm:flex items-center gap-2 text-dim font-bold text-[9px] uppercase tracking-wider">
+                <div className={`w-2 h-2 rounded-full ${ticket.status === 'Open' || ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]' : 'bg-white/10'}`}></div>
+                <div className="w-8 h-[1px] bg-white/20"></div>
+                <div className={`w-2 h-2 rounded-full ${ticket.status === 'In Progress' || ticket.status === 'Completed' ? 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.8)] animate-pulse' : 'bg-white/10'}`}></div>
+                <div className="w-8 h-[1px] bg-white/20"></div>
+                <div className={`w-2 h-2 rounded-full ${ticket.status === 'Completed' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-white/10'}`}></div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Open Image */}
+              <div className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex flex-col items-center justify-center cursor-pointer">
+                {ticket.createdImage ? (
+                  <>
+                    <img src={getImageUrl(ticket.createdImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Open" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+                    <a href={getImageUrl(ticket.createdImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="bg-white/10 backdrop-blur-md p-3 rounded-full"><Eye size={20} className="text-white" /></div>
+                    </a>
+                  </>
+                ) : (
+                  <ImageIcon size={24} className="text-white/10 mb-2" />
+                )}
+                <span className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border border-white/10 tracking-widest">1. Logged</span>
+              </div>
+              
+              {/* In Progress Image */}
+              <div className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex flex-col items-center justify-center cursor-pointer">
+                {ticket.inProgressImage || ticket.workImage ? (
+                  <>
+                    <img src={getImageUrl(ticket.inProgressImage || ticket.workImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="In Progress" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+                    <a href={getImageUrl(ticket.inProgressImage || ticket.workImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="bg-white/10 backdrop-blur-md p-3 rounded-full"><Eye size={20} className="text-white" /></div>
+                    </a>
+                  </>
+                ) : (
+                  <ImageIcon size={24} className="text-white/10 mb-2" />
+                )}
+                <span className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border border-white/10 tracking-widest">2. Active</span>
+              </div>
+
+              {/* Completed Image */}
+              <div className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex flex-col items-center justify-center cursor-pointer">
+                {ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image) || ticket.serviceImage ? (
+                  <>
+                    <img src={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Completed" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+                    <a href={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="bg-white/10 backdrop-blur-md p-3 rounded-full"><Eye size={20} className="text-white" /></div>
+                    </a>
+                  </>
+                ) : (
+                  <ImageIcon size={24} className="text-white/10 mb-2" />
+                )}
+                <span className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border border-white/10 tracking-widest">3. Completed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Activity & Actions */}
+        <div className="space-y-6">
+          
+          {/* Action Buttons Container */}
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 shadow-xl flex flex-col gap-3">
+            <p className="margin-0 text-[10px] font-black text-dim uppercase tracking-[0.2em] flex items-center gap-2 mb-1"><Hash size={14}/> Ticket Actions</p>
+            
+            {ticket.status !== 'Completed' && (
+              <>
+                {ticket.status === 'Open' ? (
+                  <button
+                    onClick={() => {
+                      setInProgressData({
+                        date: new Date().toISOString().split('T')[0],
+                        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                        image: null
+                      });
+                      setShowInProgressModal(true);
+                    }}
+                    className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white py-4 rounded-2xl text-xs font-black tracking-widest transition-all shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_30px_rgba(234,88,12,0.5)] flex items-center justify-center gap-2 uppercase"
+                  >
+                    <Clock size={16} /> Start Work Protocol
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setCompletionData({
+                        remark: '',
+                        endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                        date: new Date().toISOString().split('T')[0],
+                        image: null
+                      });
+                      setShowCompletionModal(true);
+                    }}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white py-4 rounded-2xl text-xs font-black tracking-widest transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2 uppercase"
+                  >
+                    <CheckCircle size={16} /> Mark as Completed
+                  </button>
+                )}
+              </>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <button 
+                onClick={() => setShowDocModal(true)}
+                className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-1.5 uppercase"
+              >
+                <File size={14} /> Vault Docs
+              </button>
+              <button 
+                onClick={() => setShowBillingModal(true)}
+                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-1.5 uppercase"
+              >
+                <FileText size={14} /> Bills & POs
+              </button>
+            </div>
+          </div>
+
+          {/* Activity / Remarks Feed */}
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] shadow-xl flex flex-col h-[500px]">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20 rounded-t-[2rem]">
+              <p className="margin-0 text-[10px] font-black text-white uppercase tracking-[0.2em] flex items-center gap-2"><MessageSquare size={14} className="text-blue-400"/> Activity Feed</p>
+              <span className="bg-blue-500/20 border border-blue-500/30 text-blue-300 font-bold text-[9px] px-2.5 py-1 rounded-lg tracking-wider">{(ticket.message_history || []).length} updates</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+              {ticket.message_history && ticket.message_history.length > 0 ? (
+                ticket.message_history.map((msg, idx) => (
+                  <div key={idx} className="flex gap-4">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 text-white font-black text-xs shadow-lg">
+                      {(msg.user_name || 'P')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 bg-black/30 border border-white/5 rounded-2xl rounded-tl-none p-4 relative group">
+                      <div className="flex items-baseline justify-between mb-2">
+                        <span className="font-black text-white text-xs">{msg.user_name || 'Protocol System'}</span>
+                        <span className="text-[9px] text-dim font-mono tracking-wider">{msg.time}</span>
+                      </div>
+                      <p className="margin-0 text-sm text-slate-300 leading-relaxed">{cleanRemarkText(msg.remark)}</p>
+                      {msg.image && (
+                        <div className="mt-3 rounded-xl overflow-hidden border border-white/10 max-w-[200px]">
+                          <a href={getImageUrl(msg.image)} target="_blank" rel="noopener noreferrer">
+                            <img src={getImageUrl(msg.image)} alt="attached" className="w-full h-auto object-cover hover:scale-105 transition-transform" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-dim opacity-50">
+                  <MessageSquare size={32} className="mb-3" />
+                  <p className="text-xs font-bold uppercase tracking-widest">No activity yet</p>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input */}
+            {!(ticket.status === 'Completed' && user?.role !== 'Super Admin') && (
+              <div className="p-4 border-t border-white/10 bg-black/20 rounded-b-[2rem]">
+                <form onSubmit={addRemark} className="flex flex-col gap-2">
+                  {newRemarkImage && (
+                    <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/20 bg-black/50 ml-2 mt-1">
+                       <img src={URL.createObjectURL(newRemarkImage)} alt="preview" className="w-full h-full object-cover" />
+                       <button 
+                         type="button" 
+                         onClick={() => setNewRemarkImage(null)}
+                         className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 text-white"
+                       >
+                         <X size={12} />
+                       </button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 relative">
+                      <input 
+                        type="text"
+                        value={newRemark}
+                        onChange={(e) => setNewRemark(e.target.value)}
+                        placeholder="Type an update..." 
+                        className="w-full bg-white/5 border border-white/10 text-white placeholder-dim rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                      />
+                      <label className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white transition-colors cursor-pointer">
+                        <ImageIcon size={16} />
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/*"
+                          onChange={async (e) => {
+                            if (e.target.files[0]) {
+                               try {
+                                 const compressed = await compressImage(e.target.files[0], 50);
+                                 setNewRemarkImage(compressed);
+                               } catch (err) {
+                                 setNewRemarkImage(e.target.files[0]);
+                               }
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <button 
+                      type="submit"
+                      disabled={!newRemark.trim() && !newRemarkImage}
+                      className="w-12 h-12 rounded-xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-blue-600 flex-shrink-0 shadow-lg"
+                    >
+                      <Send size={18} className="ml-1" />
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
 
       {/* Modals & Dialogs */}
