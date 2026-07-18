@@ -101,6 +101,7 @@ export default function Tickets() {
     category: true,
     project: true,
     instructionBy: true,
+    raisedBy: true,
     timeRET: true,
     responsibility: true,
     status: true,
@@ -329,6 +330,7 @@ export default function Tickets() {
     floor: '',
     room: '',
     raisedBy: '',
+    raisedByName: '',
     assignedTo: '',
     assignedStaff: [],
     location: '',
@@ -367,9 +369,16 @@ export default function Tickets() {
     const targetDivision = String(formData.divisionName || '').trim().toUpperCase();
     allAvailableLocations.forEach(l => {
       const div = String(l.divisionName || '').trim().toUpperCase();
-      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchDiv = !targetDivision || div === targetDivision;
       if (matchDiv && l.block) blocks.add(String(l.block).toUpperCase().trim());
     });
+    
+    if (blocks.size === 0) {
+      allAvailableLocations.forEach(l => {
+        if (l.block) blocks.add(String(l.block).toUpperCase().trim());
+      });
+    }
+    
     return Array.from(blocks).filter(Boolean).sort();
   }, [allAvailableLocations, formData.divisionName]);
 
@@ -380,10 +389,19 @@ export default function Tickets() {
     allAvailableLocations.forEach(l => {
       const div = String(l.divisionName || '').trim().toUpperCase();
       const blk = String(l.block || '').trim().toUpperCase();
-      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchDiv = !targetDivision || div === targetDivision;
       const matchBlk = !targetBlock || blk === targetBlock;
       if (matchDiv && matchBlk && l.floor) floors.add(String(l.floor).toUpperCase().trim());
     });
+    
+    if (floors.size === 0) {
+      allAvailableLocations.forEach(l => {
+        const blk = String(l.block || '').trim().toUpperCase();
+        const matchBlk = !targetBlock || blk === targetBlock;
+        if (matchBlk && l.floor) floors.add(String(l.floor).toUpperCase().trim());
+      });
+    }
+    
     return Array.from(floors).filter(Boolean).sort();
   }, [allAvailableLocations, formData.divisionName, formData.block]);
 
@@ -396,11 +414,22 @@ export default function Tickets() {
       const div = String(l.divisionName || '').trim().toUpperCase();
       const blk = String(l.block || '').trim().toUpperCase();
       const flr = String(l.floor || '').trim().toUpperCase();
-      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchDiv = !targetDivision || div === targetDivision;
       const matchBlk = !targetBlock || blk === targetBlock;
       const matchFlr = !targetFloor || flr === targetFloor;
       if (matchDiv && matchBlk && matchFlr && l.room) rooms.add(String(l.room).toUpperCase().trim());
     });
+    
+    if (rooms.size === 0) {
+      allAvailableLocations.forEach(l => {
+        const blk = String(l.block || '').trim().toUpperCase();
+        const flr = String(l.floor || '').trim().toUpperCase();
+        const matchBlk = !targetBlock || blk === targetBlock;
+        const matchFlr = !targetFloor || flr === targetFloor;
+        if (matchBlk && matchFlr && l.room) rooms.add(String(l.room).toUpperCase().trim());
+      });
+    }
+    
     return Array.from(rooms).filter(Boolean).sort();
   }, [allAvailableLocations, formData.divisionName, formData.block, formData.floor]);
 
@@ -607,7 +636,12 @@ export default function Tickets() {
         );
 
         if (matchingLoc && matchingLoc.assignedTo) {
-          newData.assignedTo = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          const respId = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          newData.assignedTo = respId;
+          // Auto-select site responsibility in assignedStaff
+          if (respId && !newData.assignedStaff.includes(respId)) {
+            newData.assignedStaff = [...newData.assignedStaff, respId];
+          }
         }
       }
 
@@ -710,11 +744,14 @@ export default function Tickets() {
         
         const raisedId = currentTicket?.raisedBy?._id || currentTicket?.raisedBy?.id || (typeof currentTicket?.raisedBy !== 'object' ? currentTicket?.raisedBy : null) || user?._id || user?.id;
         if (raisedId) formDataToSend.append('raisedBy', raisedId);
+        formDataToSend.append('raisedByName', formData.raisedByName || '');
         
         await api.put(`/tickets/${editingId}/`, formDataToSend);
         showNotification('Ticket updated successfully');
       } else {
-        if (user._id || user.id) formDataToSend.append('raisedBy', user._id || user.id);
+        const raisedId = user?._id || user?.id;
+        if (raisedId) formDataToSend.append('raisedBy', raisedId);
+        formDataToSend.append('raisedByName', formData.raisedByName || '');
         
         await api.post('/tickets/', formDataToSend);
         showNotification('New ticket created successfully');
@@ -776,6 +813,8 @@ export default function Tickets() {
       assignedStaff: [],
       projectId: '',
       status: 'Open',
+      raisedBy: user?._id || user?.id || '',
+      raisedByName: '',
       
       createdImage: null,
       createdVideo: null,
@@ -816,7 +855,16 @@ export default function Tickets() {
       receivedTime: ticket.receivedTime || meta.receivedTime || '',
       endTime: ticket.endTime || meta.endTime || '',
       assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
-      assignedStaff: ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id) : [],
+      raisedBy: ticket.raisedBy?.id || ticket.raisedBy?._id || (typeof ticket.raisedBy !== 'object' ? ticket.raisedBy : '') || '',
+      raisedByName: ticket.raisedByName || '',
+      assignedStaff: (() => {
+        const respId = ticket.assignedTo?.id || ticket.assignedTo || '';
+        const staffIds = ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id) : [];
+        if (respId && !staffIds.includes(respId)) {
+          staffIds.push(respId);
+        }
+        return staffIds;
+      })(),
       projectId: ticket.projectId?.id || ticket.projectId || '',
       status: ticket.status || 'Open',
       
@@ -1779,12 +1827,12 @@ export default function Tickets() {
               <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
             </button>
 
-            <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
-              <div className="w-24 h-24 relative flex items-center justify-center">
+            <div className="bg-panel rounded-md p-4 flex items-center justify-between gap-3 w-full">
+              <div className="w-20 h-20 relative flex items-center justify-center flex-shrink-0">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={28} outerRadius={38} paddingAngle={2} dataKey="value" stroke="none" label={false} labelLine={false}>
                         {chartData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -1795,14 +1843,14 @@ export default function Tickets() {
                   <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
                 )}
                 <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[12px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+                  <span className="text-[11px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[6px] text-slate-400">DIST.</span></span>
                 </div>
               </div>
-              <div className="absolute right-2 flex flex-col space-y-1">
+              <div className="flex flex-col space-y-1.5 flex-1 min-w-[70px] justify-center">
                 {chartData.map(d => (
                   <div key={d.name} className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
-                    <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }}></div>
+                    <span className="text-[9px] text-slate-300 font-bold uppercase truncate">{d.name}</span>
                   </div>
                 ))}
               </div>
@@ -1953,6 +2001,7 @@ export default function Tickets() {
                 {columnVisibility.category && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</th>}
                 {columnVisibility.project && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project</th>}
                 {columnVisibility.instructionBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>}
+                {columnVisibility.raisedBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Raised By</th>}
                 {columnVisibility.timeRET && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>}
                 {columnVisibility.responsibility && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsibility</th>}
                 {columnVisibility.status && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>}
@@ -2052,6 +2101,12 @@ export default function Tickets() {
                       {columnVisibility.instructionBy && (
                         <td className="p-4 text-xs text-slate-200 font-medium">
                           {ticket.instructionBy || meta.instructionBy || 'N/A'}
+                        </td>
+                      )}
+
+                      {columnVisibility.raisedBy && (
+                        <td className="p-4">
+                          <span className="text-slate-300 text-xs font-bold">{ticket.raisedByName || (ticket.raisedBy && (ticket.raisedBy.name || ticket.raisedBy.username)) || 'N/A'}</span>
                         </td>
                       )}
 
@@ -2456,6 +2511,7 @@ export default function Tickets() {
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Division</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Category</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Instruction By</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Raised By</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Status</th>
               </tr>
             </thead>
@@ -2478,6 +2534,9 @@ export default function Tickets() {
                     </td>
                     <td className="p-4 text-xs text-slate-400">
                       {ticket.instructionBy || meta.instructionBy || 'N/A'}
+                    </td>
+                    <td className="p-4 text-xs text-slate-400">
+                      {ticket.raisedByName || (ticket.raisedBy && (ticket.raisedBy.name || ticket.raisedBy.username)) || 'N/A'}
                     </td>
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
@@ -2571,7 +2630,7 @@ export default function Tickets() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                       <div>
                         <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Ticket Category</label>
                         <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-xs cursor-pointer bg-panel border-main">
@@ -2590,6 +2649,10 @@ export default function Tickets() {
                         <option value="Biometrics">Biometrics</option>
                         <option value="Flap Barrier">Flap Barrier</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Raised By</label>
+                      <input type="text" name="raisedByName" value={formData.raisedByName} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Name of person raising ticket" />
                     </div>
                     <div>
                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Instruction By</label>
@@ -2760,6 +2823,15 @@ export default function Tickets() {
                     </button>
                   </div>
 
+                  {formData.assignedTo && (
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-xl max-w-max animate-fade-in">
+                      <span className="text-[8px] font-black text-teal-400 uppercase tracking-widest">Site Responsibility:</span>
+                      <span className="text-[10px] font-bold text-main">
+                        {staff.find(s => (s.id || s._id) === formData.assignedTo)?.name || 'Loading...'}
+                      </span>
+                    </div>
+                  )}
+
                   {isAddingStaff && (
                     <div className="flex flex-col space-y-2 animate-slide-down bg-panel p-4 rounded-2xl border border-teal-500/30">
                       <input 
@@ -2813,6 +2885,11 @@ export default function Tickets() {
                             }`}
                           >
                             {s.name}
+                            {(s.id || s._id) === formData.assignedTo && (
+                              <span className="ml-1.5 text-[8px] font-bold text-teal-300 uppercase tracking-wider">
+                                (Responsibility)
+                              </span>
+                            )}
                           </button>
                           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1 opacity-0 group-hover/staff:opacity-100 transition-opacity">
                             <button 

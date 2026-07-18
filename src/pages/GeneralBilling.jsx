@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { 
   FileText, Search, Plus, X, Upload, CheckCircle, Trash2, Eye, File, Download, Calendar
@@ -17,6 +17,16 @@ export default function GeneralBilling() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterFromMonth, setFilterFromMonth] = useState('');
   const [filterToMonth, setFilterToMonth] = useState('');
+  const [filterVendor, setFilterVendor] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
+
+  const uniqueVendors = useMemo(() => {
+    return [...new Set(records.map(r => r.vendor_name).filter(Boolean))].sort();
+  }, [records]);
+
+  const uniqueLocations = useMemo(() => {
+    return [...new Set(records.map(r => r.location).filter(Boolean))].sort();
+  }, [records]);
   
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -69,6 +79,16 @@ export default function GeneralBilling() {
       }
     }
     
+    // Vendor filter
+    if (filterVendor && r.vendor_name !== filterVendor) {
+      return false;
+    }
+
+    // Location filter
+    if (filterLocation && r.location !== filterLocation) {
+      return false;
+    }
+    
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -83,11 +103,12 @@ export default function GeneralBilling() {
   });
 
   const handleDownloadCSV = () => {
-    const headers = ['Work', 'Location', 'Area Budget', 'Vendor Name', 'Bill No', 'Bill Date', 'Amount', 'Bill Status', 'PR No', 'PO No', 'PO Value', 'OPEX No', 'OPEX Value', 'OPEX Status', 'Payment Status', 'Handover To', 'Date Added'];
+    const headers = ['S.No', 'Work', 'Location', 'Area Budget', 'Vendor Name', 'Bill No', 'Bill Date', 'Amount', 'Bill Status', 'PR No', 'PO No', 'PO Value', 'OPEX No', 'OPEX Value', 'OPEX Status', 'Payment Status', 'Handover To', 'Date Added'];
     
     const csvRows = [
       headers.join(','),
-      ...filteredRecords.map(r => [
+      ...filteredRecords.map((r, index) => [
+        index + 1,
         `"${(r.work || '').replace(/"/g, '""')}"`,
         `"${(r.location || '').replace(/"/g, '""')}"`,
         `"${(r.area_budget || '').replace(/"/g, '""')}"`,
@@ -307,6 +328,16 @@ export default function GeneralBilling() {
     return name.length > 20 ? name.substring(0, 10) + '...' + name.substring(name.length - 7) : name;
   };
 
+  const stats = {
+    total: filteredRecords.length,
+    pending: filteredRecords.filter(r => !r.payment_status || r.payment_status === '').length,
+    waitingApproval: filteredRecords.filter(r => r.payment_status === 'WAITING APPROVAL').length,
+    advance: filteredRecords.filter(r => r.payment_status === 'PARTIAL' || r.payment_status === 'ADVANCE').length,
+    settled: filteredRecords.filter(r => r.payment_status === 'SETTLED').length,
+    totalAmount: filteredRecords.reduce((sum, r) => sum + (parseFloat(String(r.amount).replace(/[^0-9.]/g, '')) || 0), 0),
+    settledAmount: filteredRecords.filter(r => r.payment_status === 'SETTLED').reduce((sum, r) => sum + (parseFloat(String(r.amount).replace(/[^0-9.]/g, '')) || 0), 0),
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
@@ -334,8 +365,61 @@ export default function GeneralBilling() {
         </div>
       </div>
 
+      {/* Premium Dashboard Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 animate-slide-up">
+        {/* Total Payments Card */}
+        <div className="bg-panel border border-main rounded-xl p-5 hover:bg-white/[0.02] transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-cyan-500"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Total Payments</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <span className="text-2xl font-black text-white">{stats.total}</span>
+            <span className="text-xs font-mono text-cyan-400 font-bold">₹{stats.totalAmount.toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+
+        {/* Pending Card */}
+        <div className="bg-panel border border-main rounded-xl p-5 hover:bg-white/[0.02] transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-red-500 to-pink-500"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Pending</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <span className="text-2xl font-black text-red-400">{stats.pending}</span>
+            <span className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider">Unpaid</span>
+          </div>
+        </div>
+
+        {/* Waiting Approval Card */}
+        <div className="bg-panel border border-main rounded-xl p-5 hover:bg-white/[0.02] transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 to-orange-500"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Waiting Approval</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <span className="text-2xl font-black text-amber-400">{stats.waitingApproval}</span>
+            <span className="text-[10px] text-amber-500/80 font-bold uppercase tracking-wider">In Review</span>
+          </div>
+        </div>
+
+        {/* Advance Payments Card */}
+        <div className="bg-panel border border-main rounded-xl p-5 hover:bg-white/[0.02] transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-purple-500 to-indigo-500"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Advance</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <span className="text-2xl font-black text-purple-400">{stats.advance}</span>
+            <span className="text-[10px] text-purple-500/80 font-bold uppercase tracking-wider">Partial</span>
+          </div>
+        </div>
+
+        {/* Settled Payments Card */}
+        <div className="bg-panel border border-main rounded-xl p-5 hover:bg-white/[0.02] transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Settled</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <span className="text-2xl font-black text-emerald-400">{stats.settled}</span>
+            <span className="text-xs font-mono text-emerald-400 font-bold">₹{stats.settledAmount.toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Query Filter row */}
-      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+      <div className="flex flex-col lg:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
         <div className="relative flex-1 group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
@@ -346,23 +430,77 @@ export default function GeneralBilling() {
             className="bg-panel text-sm text-slate-200 border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-slate-500"
           />
         </div>
-        <div className="flex items-center space-x-2 bg-panel px-4 py-3 rounded-md border border-main">
-          <Calendar size={16} className="text-slate-400" />
-          <input 
-            type="month" 
-            value={filterFromMonth}
-            onChange={(e) => setFilterFromMonth(e.target.value)}
-            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
-            title="From Month"
-          />
-          <span className="text-slate-400 text-xs">to</span>
-          <input 
-            type="month" 
-            value={filterToMonth}
-            onChange={(e) => setFilterToMonth(e.target.value)}
-            className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-36 cursor-pointer"
-            title="To Month"
-          />
+        
+        {/* Advanced Filters */}
+        <div className="flex flex-wrap items-center gap-4 bg-panel px-4 py-3 rounded-md border border-main">
+          {/* Month Range */}
+          <div className="flex items-center space-x-2">
+            <Calendar size={16} className="text-slate-400" />
+            <input 
+              type="month" 
+              value={filterFromMonth}
+              onChange={(e) => setFilterFromMonth(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-32 cursor-pointer"
+              title="From Month"
+            />
+            <span className="text-slate-400 text-xs">to</span>
+            <input 
+              type="month" 
+              value={filterToMonth}
+              onChange={(e) => setFilterToMonth(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 w-32 cursor-pointer"
+              title="To Month"
+            />
+          </div>
+
+          <div className="h-6 w-[1px] bg-slate-700/60 hidden md:block"></div>
+
+          {/* Vendor Dropdown */}
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Vendor:</span>
+            <select
+              value={filterVendor}
+              onChange={(e) => setFilterVendor(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 min-w-[120px] max-w-[200px] cursor-pointer"
+            >
+              <option value="">All Vendors</option>
+              {uniqueVendors.map(vendor => (
+                <option key={vendor} value={vendor}>{vendor}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="h-6 w-[1px] bg-slate-700/60 hidden md:block"></div>
+
+          {/* Location Dropdown */}
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Location:</span>
+            <select
+              value={filterLocation}
+              onChange={(e) => setFilterLocation(e.target.value)}
+              className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-1.5 outline-none border border-slate-700 focus:border-cyan-500 min-w-[120px] max-w-[200px] cursor-pointer"
+            >
+              <option value="">All Locations</option>
+              {uniqueLocations.map(loc => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+          
+          {(filterFromMonth || filterToMonth || filterVendor || filterLocation || searchQuery) && (
+            <button
+              onClick={() => {
+                setFilterFromMonth('');
+                setFilterToMonth('');
+                setFilterVendor('');
+                setFilterLocation('');
+                setSearchQuery('');
+              }}
+              className="text-xs text-red-400 hover:text-red-300 font-bold transition-colors ml-auto lg:ml-2"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -371,6 +509,7 @@ export default function GeneralBilling() {
           <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
               <tr className="bg-panel border-b border-main text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <th className="p-4 text-center w-12">S.No</th>
                 <th className="p-4">Work / Location</th>
                 <th className="p-4">Vendor & Amount</th>
                 <th className="p-4">Bill Info</th>
@@ -382,12 +521,15 @@ export default function GeneralBilling() {
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-300">
               {loading ? (
-                <tr><td colSpan="7" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">Loading data...</td></tr>
+                <tr><td colSpan="8" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">Loading data...</td></tr>
               ) : filteredRecords.length === 0 ? (
-                <tr><td colSpan="7" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">No records found.</td></tr>
+                <tr><td colSpan="8" className="p-10 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">No records found.</td></tr>
               ) : (
-                filteredRecords.map(record => (
+                filteredRecords.map((record, index) => (
                   <tr key={record.id || record._id} className="hover:bg-slate-700/30 transition-colors group">
+                    <td className="p-4 text-center text-xs font-mono text-slate-400">
+                      {index + 1}
+                    </td>
                     <td className="p-4">
                       <div className="font-bold text-sm text-white max-w-xs truncate" title={record.work}>{record.work}</div>
                       <div className="text-xs text-slate-400 mt-1 flex space-x-2">
@@ -471,7 +613,7 @@ export default function GeneralBilling() {
                           <span className="text-[9px] text-slate-500 block uppercase tracking-widest mb-0.5">Payment</span>
                           {canEdit ? (
                             <select 
-                              value={record.payment_status || ''} 
+                              value={record.payment_status === 'PARTIAL' ? 'ADVANCE' : (record.payment_status || '')} 
                               onChange={(e) => handlePaymentStatusChange(record.id || record._id, e.target.value)}
                               className={`bg-slate-800 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded px-2.5 py-1 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer
                                 ${record.payment_status?.toLowerCase().includes('settled') ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-amber-400 border-amber-500/30 bg-amber-500/10'}
@@ -479,12 +621,12 @@ export default function GeneralBilling() {
                             >
                               <option value="" className="bg-slate-900 text-slate-300">PENDING</option>
                               <option value="WAITING APPROVAL" className="bg-slate-900 text-slate-300">WAITING APPROVAL</option>
-                              <option value="PARTIAL" className="bg-slate-900 text-slate-300">PARTIAL</option>
+                              <option value="ADVANCE" className="bg-slate-900 text-slate-300">ADVANCE</option>
                               <option value="SETTLED" className="bg-slate-900 text-slate-300">SETTLED</option>
                             </select>
                           ) : (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${record.payment_status?.toLowerCase().includes('settled') ? 'text-emerald-500 border-emerald-500/50 bg-emerald-500/10' : 'text-amber-500 border-amber-500/50 bg-amber-500/10'}`}>
-                              {record.payment_status || 'PENDING'}
+                              {record.payment_status === 'PARTIAL' ? 'ADVANCE' : (record.payment_status || 'PENDING')}
                             </span>
                           )}
                         </div>
@@ -669,10 +811,10 @@ export default function GeneralBilling() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/20">
                 <div className="space-y-1">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Payment Status</label>
-                  <select name="payment_status" value={formData.payment_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main focus:border-cyan-500 text-main">
+                  <select name="payment_status" value={formData.payment_status === 'PARTIAL' ? 'ADVANCE' : formData.payment_status} onChange={handleInputChange} className="glass-input w-full p-2 text-xs bg-panel border-main focus:border-cyan-500 text-main">
                     <option value="" className="bg-slate-950 text-slate-300">PENDING</option>
                     <option value="WAITING APPROVAL" className="bg-slate-950 text-slate-300">WAITING APPROVAL</option>
-                    <option value="PARTIAL" className="bg-slate-950 text-slate-300">PARTIAL</option>
+                    <option value="ADVANCE" className="bg-slate-950 text-slate-300">ADVANCE</option>
                     <option value="SETTLED" className="bg-slate-950 text-slate-300">SETTLED</option>
                   </select>
                 </div>

@@ -974,28 +974,28 @@ export default function Cameras() {
           </button>
         </div>
 
-        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
-          <div className="w-24 h-24 relative flex items-center justify-center">
+        <div className="bg-panel rounded-md p-4 flex items-center justify-between gap-3 w-full">
+          <div className="w-20 h-20 relative flex items-center justify-center flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={28} outerRadius={38} paddingAngle={2} dataKey="value" stroke="none" label={false} labelLine={false}>
                   <Cell key="cell-0" fill="#475569" />
                   <Cell key="cell-1" fill="#22d3ee" />
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[12px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[7px] text-dim">DIST.</span></span>
+              <span className="text-[11px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[6px] text-dim">DIST.</span></span>
             </div>
           </div>
-          <div className="absolute right-6 flex flex-col space-y-2">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 rounded-full bg-slate-600"></div>
-              <span className="text-[10px] text-secondary font-bold uppercase">Inside</span>
+          <div className="flex flex-col space-y-1.5 flex-1 min-w-[70px] justify-center">
+            <div className="flex items-center space-x-1.5">
+              <div className="w-2 h-2 rounded-full bg-slate-600 flex-shrink-0"></div>
+              <span className="text-[9px] text-secondary font-bold uppercase truncate">Inside</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
-              <span className="text-[10px] text-secondary font-bold uppercase">Outside</span>
+            <div className="flex items-center space-x-1.5">
+              <div className="w-2 h-2 rounded-full bg-cyan-400 flex-shrink-0"></div>
+              <span className="text-[9px] text-secondary font-bold uppercase truncate">Outside</span>
             </div>
           </div>
         </div>

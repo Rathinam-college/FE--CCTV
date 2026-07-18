@@ -752,7 +752,7 @@ export default function TicketDetail() {
           </div>
 
           {/* Details Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors">
               <p className="margin-0 text-[9px] font-black text-dim uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5"><MapPin size={12}/> Location</p>
               <p className="margin-0 text-sm font-bold text-white truncate" title={ticket.location || meta.location || 'N/A'}>{ticket.location || meta.location || 'N/A'}</p>
@@ -763,19 +763,14 @@ export default function TicketDetail() {
             </div>
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors">
               <p className="margin-0 text-[9px] font-black text-dim uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5"><User size={12}/> Work By</p>
-              <p className="margin-0 text-sm font-bold text-white truncate">
-                {ticket.assignedTo?.name || (ticket.assignedStaff?.[0]?.name) || ticket.raisedByName || 'Authorized Staff'}
-              </p>
-            </div>
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors">
-              <p className="margin-0 text-[9px] font-black text-dim uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5"><Clock size={12}/> Time Elapsed</p>
-              <p className="margin-0 text-sm font-black text-orange-400">
-                {calculateAdvancedTimeDiff(
-                  ticket.createdDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : null), 
-                  ticket.createdTime || (ticket.createdAt ? new Date(ticket.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null), 
-                  ticket.inProgressDate || meta.workStartDate, 
-                  ticket.inProgressTime || meta.workStartTime
-                )}
+              <p className="margin-0 text-sm font-bold text-white truncate" title={
+                (ticket.assignedStaff && ticket.assignedStaff.length > 0)
+                  ? ticket.assignedStaff.map(s => s.name).join(', ')
+                  : (ticket.assignedTo?.name || ticket.raisedByName || 'Authorized Staff')
+              }>
+                {(ticket.assignedStaff && ticket.assignedStaff.length > 0)
+                  ? ticket.assignedStaff.map(s => s.name).join(', ')
+                  : (ticket.assignedTo?.name || ticket.raisedByName || 'Authorized Staff')}
               </p>
             </div>
           </div>
@@ -967,24 +962,26 @@ export default function TicketDetail() {
                         placeholder="Type an update..." 
                         className="w-full bg-white/5 border border-white/10 text-white placeholder-dim rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
                       />
-                      <label className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white transition-colors cursor-pointer">
+                      <label htmlFor="chat-image-upload" className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-white transition-colors cursor-pointer z-10">
                         <ImageIcon size={16} />
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/*"
-                          onChange={async (e) => {
-                            if (e.target.files[0]) {
-                               try {
-                                 const compressed = await compressImage(e.target.files[0], 50);
-                                 setNewRemarkImage(compressed);
-                               } catch (err) {
-                                 setNewRemarkImage(e.target.files[0]);
-                               }
-                            }
-                          }}
-                        />
                       </label>
+                      <input 
+                        id="chat-image-upload"
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={async (e) => {
+                          if (e.target.files[0]) {
+                             try {
+                               const compressed = await compressImage(e.target.files[0], 50);
+                               setNewRemarkImage(compressed);
+                             } catch (err) {
+                               setNewRemarkImage(e.target.files[0]);
+                             }
+                          }
+                          e.target.value = null;
+                        }}
+                      />
                     </div>
                     <button 
                       type="submit"

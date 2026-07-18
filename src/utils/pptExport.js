@@ -14,7 +14,7 @@ const loadImage = (url) => {
   });
 };
 
-const generateTicketCanvas = async (ticket, getImageUrl) => {
+const generateTicketCanvas = async (ticket, getImageUrl, titlePrefix = 'TICKET') => {
   const getAbsoluteUrl = (path) => {
     if (!path) return '';
     const rel = getImageUrl(path);
@@ -51,7 +51,7 @@ const generateTicketCanvas = async (ticket, getImageUrl) => {
 
   ctx.fillStyle = '#f8fafc';
   ctx.font = 'bold 24px Arial';
-  ctx.fillText(`TICKET #${ticket.id || ticket._id}`, 40, 60);
+  ctx.fillText(`${titlePrefix.toUpperCase()} #${ticket.id || ticket._id}`, 40, 60);
 
   const isCompleted = ticket.status === 'Completed';
   const badgeColor = isCompleted ? '#10b981' : (ticket.status === 'In Progress' ? '#f97316' : '#ef4444');
@@ -74,14 +74,35 @@ const generateTicketCanvas = async (ticket, getImageUrl) => {
   ctx.font = 'bold 15px Arial';
   ctx.fillText(ticket.category || 'N/A', 40, 185);
   
-  let workedByText = 'Not Assigned';
+  let workedByText = 'Unassigned';
+  const staffList = [];
+  
   if (ticket.assignedStaff && Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0) {
-    workedByText = ticket.assignedStaff.map(s => typeof s === 'object' ? (s.name || s.username || s) : s).join(', ');
-  } else if (ticket.assignedStaff && typeof ticket.assignedStaff === 'string') {
-    const rawAssign = ticket.assignedStaff.trim();
-    if (rawAssign && rawAssign.toLowerCase() !== 'unassigned') {
-      workedByText = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean).join(', ');
+    ticket.assignedStaff.forEach(s => {
+      const name = typeof s === 'object' ? (s.name || s.username) : s;
+      if (name && !staffList.includes(name)) staffList.push(name);
+    });
+  }
+  
+  if (ticket.assignedTo) {
+    const name = typeof ticket.assignedTo === 'object' ? (ticket.assignedTo.name || ticket.assignedTo.username) : ticket.assignedTo;
+    if (name && !staffList.includes(name)) {
+      staffList.push(name);
     }
+  }
+  
+  if (staffList.length > 0) {
+    workedByText = staffList.join(', ');
+  } else if (ticket.raisedByName) {
+    workedByText = ticket.raisedByName;
+  }
+
+  // Set worked by font size dynamically to fit within 210px width
+  let fontSize = 15;
+  ctx.font = `bold ${fontSize}px Arial`;
+  while (ctx.measureText(workedByText).width > 210 && fontSize > 9) {
+    fontSize -= 1;
+    ctx.font = `bold ${fontSize}px Arial`;
   }
   ctx.fillText(workedByText, 240, 185);
   
@@ -180,7 +201,7 @@ const generateTicketCanvas = async (ticket, getImageUrl) => {
   return canvas;
 };
 
-export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthly') => {
+export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthly', titlePrefix = 'Ticket') => {
   if (!tickets || tickets.length === 0) {
     throw new Error('No tickets available to generate PPT.');
   }
@@ -191,7 +212,7 @@ export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthl
   // Create a title slide
   const titleSlide = pptx.addSlide();
   titleSlide.background = { color: '0F172A' };
-  titleSlide.addText(`${monthName} Ticket Report`, {
+  titleSlide.addText(`${monthName} ${titlePrefix} Report`, {
     x: 0,
     y: 3,
     w: '100%',
@@ -201,7 +222,7 @@ export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthl
     color: 'FFFFFF',
     bold: true
   });
-  titleSlide.addText(`${tickets.length} Tickets Processed`, {
+  titleSlide.addText(`${tickets.length} ${titlePrefix}s Processed`, {
     x: 0,
     y: 4,
     w: '100%',
@@ -214,7 +235,7 @@ export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthl
   // Create a slide for each ticket
   for (const ticket of tickets) {
     try {
-      const canvas = await generateTicketCanvas(ticket, getImageUrl);
+      const canvas = await generateTicketCanvas(ticket, getImageUrl, titlePrefix);
       const imgDataUrl = canvas.toDataURL('image/png');
 
       const slide = pptx.addSlide();
@@ -233,5 +254,125 @@ export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthl
   }
 
   const sanitizedMonthName = monthName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  await pptx.writeFile({ fileName: `${sanitizedMonthName}_ticket_report.pptx` });
+  await pptx.writeFile({ fileName: `${sanitizedMonthName}_${titlePrefix.toLowerCase()}_report.pptx` });
+};
+
+export const exportProjectsPPT = async (projects, monthName = 'Monthly') => {
+  if (!projects || projects.length === 0) {
+    throw new Error('No projects available to generate PPT.');
+  }
+
+  const pptx = new pptxgen();
+  pptx.layout = 'LAYOUT_16x9';
+
+  // Title Slide
+  const titleSlide = pptx.addSlide();
+  titleSlide.background = { color: '0F172A' };
+  titleSlide.addText(`${monthName} Projects Report`, {
+    x: 0,
+    y: 3,
+    w: '100%',
+    h: 1,
+    align: 'center',
+    fontSize: 44,
+    color: 'FFFFFF',
+    bold: true
+  });
+  titleSlide.addText(`${projects.length} Projects Tracked`, {
+    x: 0,
+    y: 4,
+    w: '100%',
+    h: 1,
+    align: 'center',
+    fontSize: 24,
+    color: '94A3B8'
+  });
+
+  // Slide for each project
+  for (const project of projects) {
+    const slide = pptx.addSlide();
+    slide.background = { color: '0F172A' };
+
+    // Project header
+    slide.addText(project.name.toUpperCase(), {
+      x: 0.5,
+      y: 0.6,
+      w: 8.5,
+      h: 0.8,
+      fontSize: 28,
+      color: 'FFFFFF',
+      bold: true
+    });
+
+    // Status Badge
+    const status = project.status || 'Active';
+    const statusColor = status === 'Completed' ? '10B981' : (status === 'On Hold' ? 'F59E0B' : '3B82F6');
+    slide.addText(status.toUpperCase(), {
+      x: 9.5,
+      y: 0.7,
+      w: 3.3,
+      h: 0.5,
+      fontSize: 16,
+      color: 'FFFFFF',
+      bold: true,
+      align: 'center',
+      fill: { color: statusColor }
+    });
+
+    // Details Grid (Client, Dates, Ticket Count)
+    slide.addText('CLIENT ENTITY', { x: 0.5, y: 1.8, w: 3.5, h: 0.3, fontSize: 12, color: '94A3B8', bold: true });
+    slide.addText(project.client_name || 'N/A', { x: 0.5, y: 2.1, w: 3.5, h: 0.5, fontSize: 16, color: 'FFFFFF', bold: true });
+
+    slide.addText('DATE RANGE', { x: 0.5, y: 3.0, w: 3.5, h: 0.3, fontSize: 12, color: '94A3B8', bold: true });
+    slide.addText(`${project.start_date || 'N/A'} to ${project.end_date || 'Open Ended'}`, { x: 0.5, y: 3.3, w: 3.5, h: 0.5, fontSize: 14, color: 'FFFFFF', bold: true });
+
+    slide.addText('TICKETS MAPPED', { x: 0.5, y: 4.2, w: 3.5, h: 0.3, fontSize: 12, color: '94A3B8', bold: true });
+    slide.addText(String(project.ticket_count || 0), { x: 0.5, y: 4.5, w: 3.5, h: 0.5, fontSize: 24, color: '22D3EE', bold: true });
+
+    // Scope / Description Card
+    slide.addShape(pptx.shapes.RECTANGLE, {
+      x: 4.5,
+      y: 1.8,
+      w: 8.3,
+      h: 4.5,
+      fill: { color: '1E293B' },
+      line: { color: '334155', width: 1 }
+    });
+
+    slide.addText('SCOPE & OPERATIONS DESCRIPTION', {
+      x: 4.8,
+      y: 2.1,
+      w: 7.7,
+      h: 0.4,
+      fontSize: 12,
+      color: '94A3B8',
+      bold: true
+    });
+
+    slide.addText(project.description || 'No detailed scope of operations registered.', {
+      x: 4.8,
+      y: 2.6,
+      w: 7.7,
+      h: 3.4,
+      fontSize: 14,
+      color: 'F8FAFC',
+      italic: true,
+      align: 'left',
+      valign: 'top'
+    });
+
+    // Footer
+    slide.addText('GENERATED FROM CCTV MANAGEMENT SYSTEM', {
+      x: 0.5,
+      y: 6.8,
+      w: 12.3,
+      h: 0.3,
+      fontSize: 10,
+      color: '64748B',
+      bold: true
+    });
+  }
+
+  const sanitizedMonthName = monthName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  await pptx.writeFile({ fileName: `${sanitizedMonthName}_projects_report.pptx` });
 };

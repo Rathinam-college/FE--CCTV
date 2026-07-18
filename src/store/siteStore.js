@@ -54,8 +54,9 @@ export const useSiteStore = create((set, get) => ({
       // Extract legacy locations directly from cameras to ensure nothing is missing
       try {
         const camRes = await api.get('/cameras/');
+        const camData = Array.isArray(camRes.data) ? camRes.data : (camRes.data?.results || []);
         const legacyLocs = [];
-        camRes.data.forEach(c => {
+        camData.forEach(c => {
           if (c.divisionName || c.block || c.floor || c.room) {
             legacyLocs.push({
               id: `legacy-${c.id || Math.random()}`,
