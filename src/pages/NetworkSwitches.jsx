@@ -627,11 +627,11 @@ export default function NetworkSwitches() {
           <div className="absolute bottom-0 left-0 h-1 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" style={{ width: '30%' }}></div>
         </button>
 
-        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
-          <div className="w-24 h-24 relative flex items-center justify-center">
+        <div className="bg-panel rounded-md p-4 flex items-center justify-between gap-3 w-full">
+          <div className="w-20 h-20 relative flex items-center justify-center flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                <Pie data={chartData} cx="50%" cy="50%" innerRadius={28} outerRadius={38} paddingAngle={2} dataKey="value" stroke="none" label={false} labelLine={false}>
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
@@ -639,14 +639,14 @@ export default function NetworkSwitches() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+              <span className="text-[11px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[6px] text-slate-400">DIST.</span></span>
             </div>
           </div>
-          <div className="absolute right-2 flex flex-col space-y-2">
+          <div className="flex flex-col space-y-1.5 flex-1 min-w-[70px] justify-center">
             {chartData.map(d => (
-              <div key={d.name} className="flex items-center space-x-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
-                <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+              <div key={d.name} className="flex items-center space-x-1.5">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }}></div>
+                <span className="text-[9px] text-slate-300 font-bold uppercase truncate">{d.name}</span>
               </div>
             ))}
           </div>

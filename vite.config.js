@@ -9,6 +9,7 @@ export default defineConfig({
   base: '/cctv/',
   server: {
     host: true,
+    port: 1573,
     proxy: {
       '/cctv/api': {
         target: backendTarget,

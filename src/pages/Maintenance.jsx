@@ -49,7 +49,9 @@ export default function Maintenance() {
     receivedTime: '',
     endTime: '',
     assignedTo: '',
-    status: 'Open'
+    status: 'Open',
+    raisedBy: '',
+    raisedByName: ''
   });
 
   useEffect(() => {
@@ -125,7 +127,9 @@ export default function Maintenance() {
       receivedTime: ticket.receivedTime || meta.receivedTime || '',
       endTime: ticket.endTime || meta.endTime || '',
       assignedTo: ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo || '',
-      status: ticket.status || 'Open'
+      status: ticket.status || 'Open',
+      raisedBy: ticket.raisedBy?.id || ticket.raisedBy?._id || (typeof ticket.raisedBy !== 'object' ? ticket.raisedBy : '') || '',
+      raisedByName: ticket.raisedByName || ''
     });
     setEditingId(ticket.id || ticket._id);
     setCurrentTicket(ticket);
@@ -150,11 +154,13 @@ export default function Maintenance() {
         totalTime: calculateTotalTime(formData.receivedTime, formData.endTime),
         remarks: formData.remarks || '', // Keep remarks for any other notes
         raisedBy: user._id || user.id,
+        raisedByName: formData.raisedByName || '',
       };
 
       if (editingId) {
         payload.cameraId = currentTicket?.cameraId?.id || currentTicket?.cameraId;
         payload.raisedBy = currentTicket?.raisedBy?.id || currentTicket?.raisedBy || user._id || user.id;
+        payload.raisedByName = formData.raisedByName || '';
         await api.put(`/tickets/${editingId}/`, payload);
         showNotification('Ticket updated successfully');
       } else {
@@ -192,7 +198,9 @@ export default function Maintenance() {
       receivedTime: '',
       endTime: '',
       assignedTo: '',
-      status: 'Open'
+      status: 'Open',
+      raisedBy: user?._id || user?.id || '',
+      raisedByName: ''
     });
     setEditingId(null);
     setCurrentTicket(null);
@@ -468,7 +476,11 @@ export default function Maintenance() {
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                   <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Raised By</label>
+                      <input type="text" name="raisedByName" value={formData.raisedByName} onChange={handleInputChange} className="glass-input w-full p-3 text-sm" placeholder="Name of person raising ticket" />
+                    </div>
                     <div>
                       <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Instruction By</label>
                       <input type="text" name="instructionBy" value={formData.instructionBy} onChange={handleInputChange} className="glass-input w-full p-3 text-sm" placeholder="Name of authorize officer" />
@@ -478,7 +490,7 @@ export default function Maintenance() {
                       <select name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} className="glass-input w-full p-3 text-sm cursor-pointer">
                         <option value="">Select Technician</option>
                         {users.map(u => (
-                          <option key={u.id || u._id} value={u.id || u._id}>{u.name}</option>
+                          <option key={u.id || u._id} value={u.id || u._id}>{u.name || u.username}</option>
                         ))}
                       </select>
                     </div>

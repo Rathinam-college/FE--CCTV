@@ -13,6 +13,7 @@ import { useNotificationStore } from '../store/notificationStore';
 import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import { useNavigate } from 'react-router-dom';
+import { exportMonthlyPPT } from '../utils/pptExport';
 const getImageUrl = (path) => {
   if (!path) return '';
   try {
@@ -100,6 +101,7 @@ export default function Tickets() {
     category: true,
     project: true,
     instructionBy: true,
+    raisedBy: true,
     timeRET: true,
     responsibility: true,
     status: true,
@@ -237,6 +239,66 @@ export default function Tickets() {
     }));
   }, [baseFilteredTickets]);
 
+  const summaryReportData = useMemo(() => {
+    const data = {
+      projects: { completed: 0, inProgress: 0, total: 0 },
+      complaints: { cctv: 0, biometric: 0, flapbarrier: 0, total: 0, repeated: 0, timeTaken: 0, tat: 0 },
+      serviceRequest: { cctv: 0, biometric: 0, flapbarrier: 0, general: 0, total: 0, repeated: 0, timeTaken: 0, tat: 0 }
+    };
+    
+    baseFilteredTickets.forEach(t => {
+      let meta = {};
+      try {
+        meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+      } catch (e) {}
+      
+      const cat = String(t.category || meta.category || '').toLowerCase();
+      const dev = String(t.device || meta.device || '').toLowerCase();
+      const desc = String(t.issueDescription || '').toLowerCase();
+      
+      const isProject = !!t.project || cat.includes('project') || desc.includes('project');
+      const isComplaint = cat.includes('issue') || cat.includes('complaint') || (!isProject && !cat.includes('service'));
+      
+      const systemType = 
+        (cat.includes('bio') || dev.includes('bio')) ? 'biometric' :
+        (cat.includes('flap') || dev.includes('flap')) ? 'flapbarrier' :
+        (cat.includes('gen') || dev.includes('gen')) ? 'general' : 'cctv';
+
+      let hrs = 0;
+      if (t.status === 'Completed' && t.createdAt && t.updatedAt) {
+         hrs = (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
+      }
+      
+      const isRepeated = desc.includes('repeat') || !!meta.repeated;
+
+      if (isProject) {
+        data.projects.total++;
+        if (t.status === 'Completed') data.projects.completed++;
+        else data.projects.inProgress++;
+      } else if (isComplaint) {
+        data.complaints.total++;
+        if (systemType === 'biometric') data.complaints.biometric++;
+        else if (systemType === 'flapbarrier') data.complaints.flapbarrier++;
+        else data.complaints.cctv++;
+        data.complaints.timeTaken += hrs;
+        if (isRepeated) data.complaints.repeated++;
+      } else {
+        data.serviceRequest.total++;
+        if (systemType === 'biometric') data.serviceRequest.biometric++;
+        else if (systemType === 'flapbarrier') data.serviceRequest.flapbarrier++;
+        else if (systemType === 'general') data.serviceRequest.general++;
+        else data.serviceRequest.cctv++;
+        data.serviceRequest.timeTaken += hrs;
+        if (isRepeated) data.serviceRequest.repeated++;
+      }
+    });
+
+    if (data.complaints.total > 0) data.complaints.tat = (data.complaints.timeTaken / data.complaints.total).toFixed(2);
+    if (data.serviceRequest.total > 0) data.serviceRequest.tat = (data.serviceRequest.timeTaken / data.serviceRequest.total).toFixed(2);
+    
+    return data;
+  }, [baseFilteredTickets]);
+
   const CATEGORY_COLORS = {
     'Camera': '#3b82f6',
     'CCTV': '#3b82f6',
@@ -268,6 +330,7 @@ export default function Tickets() {
     floor: '',
     room: '',
     raisedBy: '',
+    raisedByName: '',
     assignedTo: '',
     assignedStaff: [],
     location: '',
@@ -306,9 +369,16 @@ export default function Tickets() {
     const targetDivision = String(formData.divisionName || '').trim().toUpperCase();
     allAvailableLocations.forEach(l => {
       const div = String(l.divisionName || '').trim().toUpperCase();
-      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchDiv = !targetDivision || div === targetDivision;
       if (matchDiv && l.block) blocks.add(String(l.block).toUpperCase().trim());
     });
+    
+    if (blocks.size === 0) {
+      allAvailableLocations.forEach(l => {
+        if (l.block) blocks.add(String(l.block).toUpperCase().trim());
+      });
+    }
+    
     return Array.from(blocks).filter(Boolean).sort();
   }, [allAvailableLocations, formData.divisionName]);
 
@@ -319,10 +389,19 @@ export default function Tickets() {
     allAvailableLocations.forEach(l => {
       const div = String(l.divisionName || '').trim().toUpperCase();
       const blk = String(l.block || '').trim().toUpperCase();
-      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchDiv = !targetDivision || div === targetDivision;
       const matchBlk = !targetBlock || blk === targetBlock;
       if (matchDiv && matchBlk && l.floor) floors.add(String(l.floor).toUpperCase().trim());
     });
+    
+    if (floors.size === 0) {
+      allAvailableLocations.forEach(l => {
+        const blk = String(l.block || '').trim().toUpperCase();
+        const matchBlk = !targetBlock || blk === targetBlock;
+        if (matchBlk && l.floor) floors.add(String(l.floor).toUpperCase().trim());
+      });
+    }
+    
     return Array.from(floors).filter(Boolean).sort();
   }, [allAvailableLocations, formData.divisionName, formData.block]);
 
@@ -335,11 +414,22 @@ export default function Tickets() {
       const div = String(l.divisionName || '').trim().toUpperCase();
       const blk = String(l.block || '').trim().toUpperCase();
       const flr = String(l.floor || '').trim().toUpperCase();
-      const matchDiv = !targetDivision || div === targetDivision || !div;
+      const matchDiv = !targetDivision || div === targetDivision;
       const matchBlk = !targetBlock || blk === targetBlock;
       const matchFlr = !targetFloor || flr === targetFloor;
       if (matchDiv && matchBlk && matchFlr && l.room) rooms.add(String(l.room).toUpperCase().trim());
     });
+    
+    if (rooms.size === 0) {
+      allAvailableLocations.forEach(l => {
+        const blk = String(l.block || '').trim().toUpperCase();
+        const flr = String(l.floor || '').trim().toUpperCase();
+        const matchBlk = !targetBlock || blk === targetBlock;
+        const matchFlr = !targetFloor || flr === targetFloor;
+        if (matchBlk && matchFlr && l.room) rooms.add(String(l.room).toUpperCase().trim());
+      });
+    }
+    
     return Array.from(rooms).filter(Boolean).sort();
   }, [allAvailableLocations, formData.divisionName, formData.block, formData.floor]);
 
@@ -546,7 +636,12 @@ export default function Tickets() {
         );
 
         if (matchingLoc && matchingLoc.assignedTo) {
-          newData.assignedTo = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          const respId = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          newData.assignedTo = respId;
+          // Auto-select site responsibility in assignedStaff
+          if (respId && !newData.assignedStaff.includes(respId)) {
+            newData.assignedStaff = [...newData.assignedStaff, respId];
+          }
         }
       }
 
@@ -649,11 +744,14 @@ export default function Tickets() {
         
         const raisedId = currentTicket?.raisedBy?._id || currentTicket?.raisedBy?.id || (typeof currentTicket?.raisedBy !== 'object' ? currentTicket?.raisedBy : null) || user?._id || user?.id;
         if (raisedId) formDataToSend.append('raisedBy', raisedId);
+        formDataToSend.append('raisedByName', formData.raisedByName || '');
         
         await api.put(`/tickets/${editingId}/`, formDataToSend);
         showNotification('Ticket updated successfully');
       } else {
-        if (user._id || user.id) formDataToSend.append('raisedBy', user._id || user.id);
+        const raisedId = user?._id || user?.id;
+        if (raisedId) formDataToSend.append('raisedBy', raisedId);
+        formDataToSend.append('raisedByName', formData.raisedByName || '');
         
         await api.post('/tickets/', formDataToSend);
         showNotification('New ticket created successfully');
@@ -715,6 +813,8 @@ export default function Tickets() {
       assignedStaff: [],
       projectId: '',
       status: 'Open',
+      raisedBy: user?._id || user?.id || '',
+      raisedByName: '',
       
       createdImage: null,
       createdVideo: null,
@@ -755,7 +855,16 @@ export default function Tickets() {
       receivedTime: ticket.receivedTime || meta.receivedTime || '',
       endTime: ticket.endTime || meta.endTime || '',
       assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
-      assignedStaff: ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id) : [],
+      raisedBy: ticket.raisedBy?.id || ticket.raisedBy?._id || (typeof ticket.raisedBy !== 'object' ? ticket.raisedBy : '') || '',
+      raisedByName: ticket.raisedByName || '',
+      assignedStaff: (() => {
+        const respId = ticket.assignedTo?.id || ticket.assignedTo || '';
+        const staffIds = ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id) : [];
+        if (respId && !staffIds.includes(respId)) {
+          staffIds.push(respId);
+        }
+        return staffIds;
+      })(),
       projectId: ticket.projectId?.id || ticket.projectId || '',
       status: ticket.status || 'Open',
       
@@ -906,108 +1015,179 @@ export default function Tickets() {
   <Style ss:ID="BoldText">
    <Font ss:Bold="1"/>
   </Style>
+  <Style ss:ID="HeaderCCTV">
+   <Font ss:Bold="1" ss:Size="14" ss:Color="#000000"/>
+   <Interior ss:Color="#00FF00" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="HeaderProject">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#8FAADC" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="HeaderComplaint">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#FFE699" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="HeaderService">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#99FFFF" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="CellProject">
+   <Interior ss:Color="#B4C6E7" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="CellComplaint">
+   <Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="CellService">
+   <Interior ss:Color="#CCFFFF" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="CalTitle">
+   <Font ss:Bold="1" ss:Size="12" ss:Color="#FF0000"/>
+   <Interior ss:Color="#E7E6E6" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="CalDate">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#FFFF00" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="CalComplains">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#B4C6E7" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="CalCompleted">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#C6E0B4" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="CalPending">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#FF7C80" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="SumTitle">
+   <Font ss:Bold="1" ss:Size="14" ss:Color="#000000"/>
+   <Interior ss:Color="#FFC000" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="SumMonths">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#9BC2E6" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="SumRowLabel">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#FCE4D6" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="SumTotalCol">
+   <Font ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#A9D08E" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="SumData">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
  </Styles>
 `;
 
-    xml += ` <Worksheet ss:Name="Report Summary">
+    xml += ` <Worksheet ss:Name="Summary">
   <Table>
+   <Column ss:Width="250"/>
+   <Column ss:Width="100"/>
    <Row ss:Height="25">
-    <Cell ss:MergeAcross="5" ss:StyleID="Title"><Data ss:Type="String">Report Summary ${dateRangeLabel}</Data></Cell>
+    <Cell ss:MergeAcross="1" ss:StyleID="HeaderCCTV"><Data ss:Type="String">CCTV Summary Report</Data></Cell>
    </Row>
    <Row ss:Height="20">
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Ticket Category</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Ticket Device</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Open</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">In Progress</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Completed</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Total</Data></Cell>
+    <Cell ss:StyleID="HeaderProject"><Data ss:Type="String">Projects</Data></Cell>
+    <Cell ss:StyleID="HeaderProject"><Data ss:Type="String">${startMonth || "Month"}</Data></Cell>
    </Row>
-`;
-    breakdown.forEach(row => {
-      xml += `   <Row>
-    <Cell><Data ss:Type="String">${row.category}</Data></Cell>
-    <Cell><Data ss:Type="String">${row.device}</Data></Cell>
-    <Cell><Data ss:Type="Number">${row.open}</Data></Cell>
-    <Cell><Data ss:Type="Number">${row.inProgress}</Data></Cell>
-    <Cell><Data ss:Type="Number">${row.completed}</Data></Cell>
-    <Cell><Data ss:Type="Number">${row.total}</Data></Cell>
+   <Row>
+    <Cell ss:StyleID="CellProject"><Data ss:Type="String">Completed</Data></Cell>
+    <Cell ss:StyleID="CellProject"><Data ss:Type="Number">${summaryReportData.projects.completed}</Data></Cell>
    </Row>
-`;
-    });
-    
-    const grandOpen = breakdown.reduce((sum, r) => sum + r.open, 0);
-    const grandInProgress = breakdown.reduce((sum, r) => sum + r.inProgress, 0);
-    const grandCompleted = breakdown.reduce((sum, r) => sum + r.completed, 0);
-    const grandTotal = breakdown.reduce((sum, r) => sum + r.total, 0);
-    
-    xml += `   <Row>
-    <Cell ss:MergeAcross="1" ss:StyleID="BoldText"><Data ss:Type="String">Grand Total</Data></Cell>
-    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandOpen}</Data></Cell>
-    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandInProgress}</Data></Cell>
-    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandCompleted}</Data></Cell>
-    <Cell ss:StyleID="BoldText"><Data ss:Type="Number">${grandTotal}</Data></Cell>
+   <Row>
+    <Cell ss:StyleID="CellProject"><Data ss:Type="String">In Progress</Data></Cell>
+    <Cell ss:StyleID="CellProject"><Data ss:Type="Number">${summaryReportData.projects.inProgress}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="HeaderProject"><Data ss:Type="String">Total</Data></Cell>
+    <Cell ss:StyleID="HeaderProject"><Data ss:Type="Number">${summaryReportData.projects.total}</Data></Cell>
+   </Row>
+   <Row ss:Height="15"></Row>
+   <Row ss:Height="20">
+    <Cell ss:StyleID="HeaderComplaint"><Data ss:Type="String">Complaints</Data></Cell>
+    <Cell ss:StyleID="HeaderComplaint"><Data ss:Type="String">${startMonth || "Month"}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="String">CCTV</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${summaryReportData.complaints.cctv}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="String">Biometric</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${summaryReportData.complaints.biometric}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="String">Flapbarrier</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${summaryReportData.complaints.flapbarrier}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="HeaderComplaint"><Data ss:Type="String">Total</Data></Cell>
+    <Cell ss:StyleID="HeaderComplaint"><Data ss:Type="Number">${summaryReportData.complaints.total}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="String">Repeated complaints</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${summaryReportData.complaints.repeated}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="String">Time taken all complaints (Hrs)</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${summaryReportData.complaints.timeTaken.toFixed(2)}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="String">TAT (Turn Around Time) Hrs</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${summaryReportData.complaints.tat}</Data></Cell>
+   </Row>
+   <Row ss:Height="15"></Row>
+   <Row ss:Height="20">
+    <Cell ss:StyleID="HeaderService"><Data ss:Type="String">Service request</Data></Cell>
+    <Cell ss:StyleID="HeaderService"><Data ss:Type="String">${startMonth || "Month"}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellService"><Data ss:Type="String">CCTV</Data></Cell>
+    <Cell ss:StyleID="CellService"><Data ss:Type="Number">${summaryReportData.serviceRequest.cctv}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellService"><Data ss:Type="String">Biometric</Data></Cell>
+    <Cell ss:StyleID="CellService"><Data ss:Type="Number">${summaryReportData.serviceRequest.biometric}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellService"><Data ss:Type="String">Flapbarrier</Data></Cell>
+    <Cell ss:StyleID="CellService"><Data ss:Type="Number">${summaryReportData.serviceRequest.flapbarrier}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellService"><Data ss:Type="String">General</Data></Cell>
+    <Cell ss:StyleID="CellService"><Data ss:Type="Number">${summaryReportData.serviceRequest.general}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="HeaderService"><Data ss:Type="String">Total</Data></Cell>
+    <Cell ss:StyleID="HeaderService"><Data ss:Type="Number">${summaryReportData.serviceRequest.total}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellService"><Data ss:Type="String">Repeated work</Data></Cell>
+    <Cell ss:StyleID="CellService"><Data ss:Type="Number">${summaryReportData.serviceRequest.repeated}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellService"><Data ss:Type="String">Time taken all service request (Hrs)</Data></Cell>
+    <Cell ss:StyleID="CellService"><Data ss:Type="Number">${summaryReportData.serviceRequest.timeTaken.toFixed(2)}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellService"><Data ss:Type="String">TAT (Turn Around Time) Hrs</Data></Cell>
+    <Cell ss:StyleID="CellService"><Data ss:Type="Number">${summaryReportData.serviceRequest.tat}</Data></Cell>
    </Row>
   </Table>
  </Worksheet>
 `;
-
-    const renderCategorySheet = (catName) => {
-      const list = filteredTickets.filter(t => {
-        const meta = parseMetadata(t.remarks);
-        const tCat = t.category || meta.category || 'CCTV';
-        return tCat.toLowerCase() === catName.toLowerCase();
-      });
-
-      let sheetXml = ` <Worksheet ss:Name="${catName}">
-  <Table ss:DefaultColumnWidth="120">
-   <Row ss:Height="20">
-    <Cell ss:StyleID="Header"><Data ss:Type="String">S.No</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Date</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Division</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Ticket Device</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Status</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Instruction By</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Nature of Problem</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Assigned To</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Remarks</Data></Cell>
-   </Row>
-`;
-      if (list.length === 0) {
-        sheetXml += `   <Row>
-    <Cell ss:MergeAcross="7"><Data ss:Type="String">No tickets for category ${catName}.</Data></Cell>
-   </Row>
-`;
-      } else {
-        list.forEach((t, idx) => {
-          const meta = parseMetadata(t.remarks);
-          const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
-          const tDiv = t.divisionName || 'N/A';
-          const tStatus = t.status || 'Open';
-          const tInst = t.instructionBy || meta.instructionBy || 'N/A';
-          const tDesc = t.issueDescription || '';
-          const tAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
-          const tRemarks = t.actionTaken || meta.actionTaken || '';
-          const tDevice = t.ticketDevice || meta.ticketDevice || 'None';
-          
-          sheetXml += `   <Row>
-    <Cell><Data ss:Type="Number">${idx + 1}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tDate)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tDiv)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tDevice)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tStatus)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tInst)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tDesc)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tAssign)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(tRemarks)}</Data></Cell>
-   </Row>
-`;
-        });
-      }
-      sheetXml += `  </Table>
- </Worksheet>
-`;
-      return sheetXml;
-    };
 
     const escapeXml = (unsafe) => {
       return String(unsafe)
@@ -1018,10 +1198,423 @@ export default function Tickets() {
         .replace(/'/g, '&apos;');
     };
 
-    const activeCategories = Array.from(new Set(breakdown.map(b => b.category)));
-    activeCategories.forEach(cat => {
-      xml += renderCategorySheet(cat);
+    const renderSheet = (sheetName, list) => {
+      let sheetXml = ` <Worksheet ss:Name="${escapeXml(sheetName)}">
+  <Table ss:DefaultColumnWidth="120">
+   <Row ss:Height="20">
+    <Cell ss:StyleID="Header"><Data ss:Type="String">S.No</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Date</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Activity</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Requested/ Instructed/ Informed by</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Responsibility</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Action Plan</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Status</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Remarks</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Category (Project /Upgrade/Service)</Data></Cell>
+   </Row>
+`;
+      if (list.length === 0) {
+        sheetXml += `   <Row>
+    <Cell ss:MergeAcross="8"><Data ss:Type="String">No tickets found.</Data></Cell>
+   </Row>
+`;
+      } else {
+        let pCount = 0, uCount = 0, sCount = 0;
+        
+        list.forEach((t, idx) => {
+          let meta = {};
+          try {
+            meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+          } catch(e) {}
+          const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
+          
+          const catRaw = String(t.category || meta.category || '').toLowerCase();
+          const descRaw = String(t.issueDescription || '').toLowerCase();
+          let resolvedCat = 'Service';
+          if (!!t.project || catRaw.includes('project') || descRaw.includes('project')) {
+            resolvedCat = 'Project';
+            pCount++;
+          }
+          else if (catRaw.includes('upgrade') || descRaw.includes('upgrade')) {
+            resolvedCat = 'Upgrade';
+            uCount++;
+          }
+          else {
+            resolvedCat = 'Service';
+            sCount++;
+          }
+
+          const tStatus = t.status || 'Open';
+          const tInst = t.instructionBy || meta.instructionBy || 'N/A';
+          const tDesc = t.issueDescription || '';
+          const tAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+          const tRemarks = t.actionTaken || meta.actionTaken || '';
+          // Original t.remarks was used as action plan, if you want status in remarks we use tStatus
+          const tRemarksStatus = t.status || '';
+
+          sheetXml += `   <Row>
+    <Cell><Data ss:Type="Number">${idx + 1}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDate)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDesc)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tInst)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tAssign)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tRemarks)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tStatus)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tRemarksStatus)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(resolvedCat)}</Data></Cell>
+   </Row>
+`;
+        });
+        
+        sheetXml += `   <Row ss:Height="15"></Row>
+   <Row ss:Height="15"></Row>
+   <Row>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">S.NO</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Project</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Upgrade</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Service</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="BoldText"><Data ss:Type="String">TOTAL</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${pCount}</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${uCount}</Data></Cell>
+    <Cell ss:StyleID="CellComplaint"><Data ss:Type="Number">${sCount}</Data></Cell>
+   </Row>
+`;
+      }
+      sheetXml += `  </Table>
+ </Worksheet>
+`;
+      return sheetXml;
+    };
+
+    const formatTime = (dateStr) => {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    };
+
+    const calcDiffMins = (start, end) => {
+      if (!start || !end) return 0;
+      const s = new Date(start);
+      const e = new Date(end);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+      return Math.max(0, Math.floor((e - s) / 60000));
+    };
+
+    const renderTimeSheet = (sheetName, list) => {
+      let sheetXml = ` <Worksheet ss:Name="${escapeXml(sheetName)}">
+  <Table ss:DefaultColumnWidth="120">
+   <Row ss:Height="20">
+    <Cell ss:StyleID="Header"><Data ss:Type="String">S.NO</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">DATE</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">LOCATION</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">CATEGORY</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">NATURE OF PROBLEM</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">ACTION TAKEN</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">INSTRUCTION BY</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">RECEIVED TIME</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">END TIME</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">TOTAL TIME</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">RESPONSIBILITY</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">STATUS</Data></Cell>
+   </Row>
+`;
+      if (list.length === 0) {
+        sheetXml += `   <Row>
+    <Cell ss:MergeAcross="11"><Data ss:Type="String">No tickets found.</Data></Cell>
+   </Row>
+`;
+      } else {
+        let totalMins = 0;
+        
+        list.forEach((t, idx) => {
+          let meta = {};
+          try {
+            meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+          } catch(e) {}
+          const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
+          
+          const tLoc = t.divisionName || 'N/A';
+          const tCat = String(t.category || meta.category || '').toUpperCase() || 'CCTV';
+          const tDesc = t.issueDescription || '';
+          const tAction = t.actionTaken || meta.actionTaken || '';
+          const tInst = t.instructionBy || meta.instructionBy || 'N/A';
+          
+          let recvTime = '', endTime = '', totalTime = 0;
+          if (t.createdAt) {
+             recvTime = formatTime(t.createdAt);
+          }
+          if (t.status === 'Completed' || t.status === 'FINISHED' || String(t.status).toLowerCase().includes('completed')) {
+             endTime = t.updatedAt ? formatTime(t.updatedAt) : '';
+             if (t.createdAt && t.updatedAt) {
+                totalTime = calcDiffMins(t.createdAt, t.updatedAt);
+             }
+          }
+          
+          totalMins += totalTime;
+
+          const tAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+          const tStatus = t.status || 'Open';
+
+          sheetXml += `   <Row>
+    <Cell><Data ss:Type="Number">${idx + 1}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDate)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tLoc)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tCat)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tDesc)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tAction)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tInst)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(recvTime)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(endTime)}</Data></Cell>
+    <Cell><Data ss:Type="Number">${totalTime}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tAssign)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(tStatus)}</Data></Cell>
+   </Row>
+`;
+        });
+        
+        const totalHrs = Math.floor(totalMins / 60);
+
+        sheetXml += `   <Row ss:Height="15"></Row>
+   <Row ss:Height="15"></Row>
+   <Row>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Total minutes</Data></Cell>
+    <Cell><Data ss:Type="Number">${totalMins}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Total hours</Data></Cell>
+    <Cell><Data ss:Type="Number">${totalHrs}</Data></Cell>
+   </Row>
+`;
+      }
+      sheetXml += `  </Table>
+ </Worksheet>
+`;
+      return sheetXml;
+    };
+
+    const renderMonthlySummarySheet = (sheetName, list) => {
+      let targetDate = new Date();
+      if (startMonth) {
+        targetDate = new Date(startMonth + '-01');
+      } else if (list.length > 0) {
+        const t0 = list[0].operationDate || (list[0].createdAt ? String(list[0].createdAt).split('T')[0] : null);
+        if (t0) targetDate = new Date(t0);
+      }
+      
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const monthName = targetDate.toLocaleString('default', { month: 'long' }).toUpperCase();
+      const titleText = `${monthName} MONTH ${year}`;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      const complainsByDay = new Array(daysInMonth + 1).fill(0);
+      const completedByDay = new Array(daysInMonth + 1).fill(0);
+      
+      list.forEach(t => {
+        let meta = {};
+        try { meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {}; } catch(e){}
+        const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : null);
+        
+        if (tDate) {
+           const d = new Date(tDate);
+           if (d.getFullYear() === year && d.getMonth() === month) {
+              complainsByDay[d.getDate()]++;
+           }
+        }
+        
+        if (t.status === 'Completed' || t.status === 'FINISHED' || String(t.status).toLowerCase().includes('completed')) {
+           const eDate = t.updatedAt ? String(t.updatedAt).split('T')[0] : tDate;
+           if (eDate) {
+              const d = new Date(eDate);
+              if (d.getFullYear() === year && d.getMonth() === month) {
+                 completedByDay[d.getDate()]++;
+              }
+           }
+        }
+      });
+      
+      const pendingByDay = new Array(daysInMonth + 1).fill(0);
+      let runningPending = 0;
+      let totalComplains = 0;
+      let totalCompleted = 0;
+      
+      for (let d = 1; d <= daysInMonth; d++) {
+         runningPending += complainsByDay[d];
+         runningPending -= completedByDay[d];
+         if (runningPending < 0) runningPending = 0;
+         pendingByDay[d] = runningPending;
+         
+         const curD = new Date(year, month, d);
+         if (curD.getDay() !== 0) {
+            totalComplains += complainsByDay[d];
+            totalCompleted += completedByDay[d];
+         }
+      }
+      
+      let sheetXml = ` <Worksheet ss:Name="${escapeXml(sheetName)}">
+  <Table ss:DefaultColumnWidth="30">
+   <Column ss:Index="1" ss:Width="160"/>
+   <Row ss:Height="25">
+    <Cell ss:MergeAcross="${daysInMonth + 1}" ss:StyleID="CalTitle"><Data ss:Type="String">${escapeXml(titleText)}</Data></Cell>
+   </Row>
+   <Row ss:Height="20">
+    <Cell ss:Index="1" ss:StyleID="CalDate"><Data ss:Type="String">DATE</Data></Cell>
+`;
+      for (let d = 1; d <= daysInMonth; d++) {
+         const curD = new Date(year, month, d);
+         if (curD.getDay() === 0) {
+            sheetXml += `    <Cell ss:Index="${d + 1}" ss:StyleID="CalDate"><Data ss:Type="Number">${d}</Data></Cell>\n`;
+         } else {
+            sheetXml += `    <Cell ss:Index="${d + 1}" ss:StyleID="CalDate"><Data ss:Type="Number">${d}</Data></Cell>\n`;
+         }
+      }
+      sheetXml += `    <Cell ss:Index="${daysInMonth + 2}" ss:StyleID="CalDate"><Data ss:Type="String">total</Data></Cell>\n   </Row>\n`;
+      
+      // Row 1 (Complains)
+      sheetXml += `   <Row ss:Height="20">\n    <Cell ss:Index="1" ss:StyleID="CalComplains"><Data ss:Type="String">COMPLAINS</Data></Cell>\n`;
+      for (let d = 1; d <= daysInMonth; d++) {
+         const curD = new Date(year, month, d);
+         if (curD.getDay() === 0) {
+            sheetXml += `    <Cell ss:Index="${d + 1}" ss:MergeDown="2"><Data ss:Type="String">SUNDAY</Data></Cell>\n`;
+         } else {
+            sheetXml += `    <Cell ss:Index="${d + 1}" ss:StyleID="CalComplains"><Data ss:Type="Number">${complainsByDay[d]}</Data></Cell>\n`;
+         }
+      }
+      sheetXml += `    <Cell ss:Index="${daysInMonth + 2}" ss:StyleID="CalDate"><Data ss:Type="Number">${totalComplains}</Data></Cell>\n   </Row>\n`;
+      
+      // Row 2 (Completed)
+      sheetXml += `   <Row ss:Height="20">\n    <Cell ss:Index="1" ss:StyleID="CalCompleted"><Data ss:Type="String">COMPLETED COMPLAINS</Data></Cell>\n`;
+      for (let d = 1; d <= daysInMonth; d++) {
+         const curD = new Date(year, month, d);
+         if (curD.getDay() !== 0) {
+            sheetXml += `    <Cell ss:Index="${d + 1}" ss:StyleID="CalCompleted"><Data ss:Type="Number">${completedByDay[d]}</Data></Cell>\n`;
+         }
+      }
+      sheetXml += `    <Cell ss:Index="${daysInMonth + 2}" ss:StyleID="CalDate"><Data ss:Type="Number">${totalCompleted}</Data></Cell>\n   </Row>\n`;
+
+      // Row 3 (Pending)
+      sheetXml += `   <Row ss:Height="20">\n    <Cell ss:Index="1" ss:StyleID="CalPending"><Data ss:Type="String">PENDING COMPLAINS</Data></Cell>\n`;
+      for (let d = 1; d <= daysInMonth; d++) {
+         const curD = new Date(year, month, d);
+         if (curD.getDay() !== 0) {
+            sheetXml += `    <Cell ss:Index="${d + 1}" ss:StyleID="CalPending"><Data ss:Type="Number">${pendingByDay[d]}</Data></Cell>\n`;
+         }
+      }
+      sheetXml += `    <Cell ss:Index="${daysInMonth + 2}" ss:StyleID="CalDate"><Data ss:Type="Number">${runningPending}</Data></Cell>\n   </Row>\n`;
+
+      sheetXml += `  </Table>\n </Worksheet>\n`;
+      return sheetXml;
+    };
+
+    const inProgressList = filteredTickets.filter(t => t.status === 'In Progress' || t.status === 'Open');
+    const completedList = filteredTickets.filter(t => t.status === 'Completed');
+
+    const cctvComplaintsList = filteredTickets.filter(t => {
+      let meta = {};
+      try {
+        meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+      } catch(e) {}
+      const cat = String(t.category || meta.category || '').toLowerCase();
+      const desc = String(t.issueDescription || '').toLowerCase();
+      const isProject = !!t.project || cat.includes('project') || desc.includes('project');
+      return !isProject && (cat.includes('issue') || cat.includes('complaint') || cat === '');
     });
+
+    const cctvServicesList = filteredTickets.filter(t => {
+      let meta = {};
+      try {
+        meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+      } catch(e) {}
+      const cat = String(t.category || meta.category || '').toLowerCase();
+      const desc = String(t.issueDescription || '').toLowerCase();
+      const isProject = !!t.project || cat.includes('project') || desc.includes('project');
+      const isComplaint = cat.includes('issue') || cat.includes('complaint') || (!isProject && !cat.includes('service') && cat === '');
+      return cat.includes('service') || (!isProject && !isComplaint && !cat.includes('upgrade'));
+    });
+
+    const cctvUpgradesList = filteredTickets.filter(t => {
+      let meta = {};
+      try {
+        meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+      } catch(e) {}
+      const cat = String(t.category || meta.category || '').toLowerCase();
+      const desc = String(t.issueDescription || '').toLowerCase();
+      return cat.includes('upgrade') || desc.includes('upgrade');
+    });
+
+    xml += renderSheet('in progress', inProgressList);
+    xml += renderSheet('work completed', completedList);
+    xml += renderTimeSheet('CCTV complaints', cctvComplaintsList);
+    xml += renderTimeSheet('CCTV services', cctvServicesList);
+    xml += renderTimeSheet('CCTV upgrades', cctvUpgradesList);
+    xml += renderMonthlySummarySheet('Total work count', filteredTickets);
+
+    const monthNames = ['APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER', 'JANUARY', 'FEBRUARY', 'MARCH'];
+    const monthComplains = new Array(12).fill(0);
+    const monthClosed = new Array(12).fill(0);
+    
+    filteredTickets.forEach(t => {
+      let meta = {};
+      try { meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {}; } catch(e){}
+      
+      const getFinMonthIdx = (dateStr) => {
+        if (!dateStr) return -1;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return -1;
+        let m = d.getMonth();
+        return m >= 3 ? m - 3 : m + 9;
+      };
+      
+      const cDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : null);
+      const cIdx = getFinMonthIdx(cDate);
+      if (cIdx >= 0) monthComplains[cIdx]++;
+      
+      if (t.status === 'Completed' || t.status === 'FINISHED' || String(t.status).toLowerCase().includes('completed')) {
+         const eDate = t.updatedAt ? String(t.updatedAt).split('T')[0] : cDate;
+         const eIdx = getFinMonthIdx(eDate);
+         if (eIdx >= 0) monthClosed[eIdx]++;
+      }
+    });
+    
+    const totalComplains = monthComplains.reduce((a,b)=>a+b, 0);
+    const totalClosed = monthClosed.reduce((a,b)=>a+b, 0);
+
+    xml += ` <Worksheet ss:Name="Over all month counts">
+  <Table ss:DefaultColumnWidth="80">
+   <Column ss:Index="1" ss:Width="160"/>
+   <Row ss:Height="30">
+    <Cell ss:MergeAcross="13" ss:StyleID="SumTitle"><Data ss:Type="String">TOTAL NUMBER OF COMPLAINS REPORT</Data></Cell>
+   </Row>
+   <Row ss:Height="20">
+    <Cell ss:Index="1" ss:StyleID="SumMonths"><Data ss:Type="String">MONTHS</Data></Cell>
+`;
+    monthNames.forEach((m, i) => {
+       xml += `    <Cell ss:Index="${i + 2}" ss:StyleID="SumMonths"><Data ss:Type="String">${m}</Data></Cell>\n`;
+    });
+    xml += `    <Cell ss:Index="14" ss:StyleID="SumTotalCol"><Data ss:Type="String">TOTAL</Data></Cell>
+   </Row>
+   <Row ss:Height="20">
+    <Cell ss:Index="1" ss:StyleID="SumRowLabel"><Data ss:Type="String">NUMBER OF COMPLAINS</Data></Cell>
+`;
+    monthNames.forEach((m, i) => {
+       xml += `    <Cell ss:Index="${i + 2}" ss:StyleID="SumData"><Data ss:Type="${monthComplains[i] === 0 ? 'String' : 'Number'}">${monthComplains[i] === 0 ? '' : monthComplains[i]}</Data></Cell>\n`;
+    });
+    xml += `    <Cell ss:Index="14" ss:StyleID="SumTotalCol"><Data ss:Type="Number">${totalComplains}</Data></Cell>
+   </Row>
+   <Row ss:Height="20">
+    <Cell ss:Index="1" ss:StyleID="SumRowLabel"><Data ss:Type="String">CLOSED</Data></Cell>
+`;
+    monthNames.forEach((m, i) => {
+       xml += `    <Cell ss:Index="${i + 2}" ss:StyleID="SumData"><Data ss:Type="${monthClosed[i] === 0 ? 'String' : 'Number'}">${monthClosed[i] === 0 ? '' : monthClosed[i]}</Data></Cell>\n`;
+    });
+    xml += `    <Cell ss:Index="14" ss:StyleID="SumTotalCol"><Data ss:Type="Number">${totalClosed}</Data></Cell>
+   </Row>
+  </Table>
+ </Worksheet>
+`;
 
     xml += `</Workbook>`;
 
@@ -1119,7 +1712,7 @@ export default function Tickets() {
               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewMode === 'registry'
                   ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-main'
               }`}
             >
               Ticket List
@@ -1128,8 +1721,8 @@ export default function Tickets() {
               onClick={() => setViewMode('report')}
               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewMode === 'report'
-                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
               }`}
             >
               Report View
@@ -1137,7 +1730,7 @@ export default function Tickets() {
           </div>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
           {canEdit && (
@@ -1199,7 +1792,7 @@ export default function Tickets() {
                 <AlertCircle size={18} className="text-slate-500" />
               </div>
               <div className="flex items-end mt-4">
-                <span className="text-4xl font-bold text-white">{summaryStats.open}</span>
+                <span className="text-4xl font-bold text-main">{summaryStats.open}</span>
               </div>
             </button>
 
@@ -1209,7 +1802,7 @@ export default function Tickets() {
                 <Activity size={18} className="text-slate-500" />
               </div>
               <div className="flex items-end mt-4">
-                <span className="text-4xl font-bold text-white">{summaryStats.inProgress}</span>
+                <span className="text-4xl font-bold text-main">{summaryStats.inProgress}</span>
               </div>
             </button>
 
@@ -1219,7 +1812,7 @@ export default function Tickets() {
                 <CheckCircle size={18} className="text-slate-500" />
               </div>
               <div className="flex items-end mt-4">
-                <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
+                <span className="text-4xl font-bold text-main">{summaryStats.completed}</span>
               </div>
             </button>
 
@@ -1234,12 +1827,12 @@ export default function Tickets() {
               <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
             </button>
 
-            <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
-              <div className="w-24 h-24 relative flex items-center justify-center">
+            <div className="bg-panel rounded-md p-4 flex items-center justify-between gap-3 w-full">
+              <div className="w-20 h-20 relative flex items-center justify-center flex-shrink-0">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={28} outerRadius={38} paddingAngle={2} dataKey="value" stroke="none" label={false} labelLine={false}>
                         {chartData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -1250,14 +1843,14 @@ export default function Tickets() {
                   <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
                 )}
                 <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
+                  <span className="text-[11px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[6px] text-slate-400">DIST.</span></span>
                 </div>
               </div>
-              <div className="absolute right-2 flex flex-col space-y-1">
+              <div className="flex flex-col space-y-1.5 flex-1 min-w-[70px] justify-center">
                 {chartData.map(d => (
                   <div key={d.name} className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
-                    <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }}></div>
+                    <span className="text-[9px] text-slate-300 font-bold uppercase truncate">{d.name}</span>
                   </div>
                 ))}
               </div>
@@ -1274,7 +1867,7 @@ export default function Tickets() {
                   className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${
                     statusFilter === status 
                       ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' 
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-slate-400 hover:text-main'
                   }`}
                 >
                   {status}
@@ -1317,14 +1910,14 @@ export default function Tickets() {
               </select>
               <button 
                 onClick={handleDownload}
-                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
               >
                 <Download size={12} className="mr-1.5" />
                 CSV
               </button>
               <button 
                 onClick={printToPDF}
-                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
               >
                 <Printer size={12} className="mr-1.5" />
                 PDF
@@ -1381,13 +1974,13 @@ export default function Tickets() {
               </select>
             </div>
             <div className="flex items-center space-x-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
                 <ChevronLeft size={14} />
               </button>
               <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
                 {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
               </span>
-              <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
+              <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -1408,6 +2001,7 @@ export default function Tickets() {
                 {columnVisibility.category && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</th>}
                 {columnVisibility.project && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project</th>}
                 {columnVisibility.instructionBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>}
+                {columnVisibility.raisedBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Raised By</th>}
                 {columnVisibility.timeRET && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>}
                 {columnVisibility.responsibility && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsibility</th>}
                 {columnVisibility.status && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>}
@@ -1507,6 +2101,12 @@ export default function Tickets() {
                       {columnVisibility.instructionBy && (
                         <td className="p-4 text-xs text-slate-200 font-medium">
                           {ticket.instructionBy || meta.instructionBy || 'N/A'}
+                        </td>
+                      )}
+
+                      {columnVisibility.raisedBy && (
+                        <td className="p-4">
+                          <span className="text-slate-300 text-xs font-bold">{ticket.raisedByName || (ticket.raisedBy && (ticket.raisedBy.name || ticket.raisedBy.username)) || 'N/A'}</span>
                         </td>
                       )}
 
@@ -1624,22 +2224,39 @@ export default function Tickets() {
 
           <div className="flex items-center space-x-3 self-end md:self-center shrink-0">
             <button
+              onClick={async () => {
+                showNotification('Generating PPT, this may take a moment...', 'info');
+                try {
+                  const monthName = startMonth || endMonth ? `${startMonth || 'All'}_to_${endMonth || 'All'}` : 'All_Time';
+                  await exportMonthlyPPT(filteredTickets, getImageUrl, monthName);
+                  showNotification('PPT generated successfully!', 'success');
+                } catch (e) {
+                  console.error('PPT Error:', e);
+                  showNotification('Failed to generate PPT: ' + (e.message || 'Unknown error'), 'error');
+                }
+              }}
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-indigo-700 px-3 py-2 bg-indigo-900/50 hover:bg-indigo-800/80 rounded transition-colors"
+            >
+              <Download size={12} className="mr-2 text-indigo-400" />
+              Download PPT
+            </button>
+            <button
               onClick={exportExcelReport}
-              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
               <Download size={12} className="mr-2" />
               Export Excel Report
             </button>
             <button
               onClick={printToPDF}
-              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
               <Printer size={12} className="mr-2" />
               Print PDF Report
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-white border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+              className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
             >
               <Download size={12} className="mr-2" />
               Export CSV Data
@@ -1651,7 +2268,7 @@ export default function Tickets() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total Tickets</span>
-          <span className="text-3xl font-bold font-mono text-white mt-2">{filteredTickets.length}</span>
+          <span className="text-3xl font-bold font-mono text-main mt-2">{filteredTickets.length}</span>
           <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
         </div>
         <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
@@ -1762,36 +2379,92 @@ export default function Tickets() {
                 <th className="p-4 text-[10px] font-bold text-green-500 uppercase tracking-widest text-center">Completed</th>
                 <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Total Assigned</th>
                 <th className="p-4 text-[10px] font-bold text-cyan-400 uppercase tracking-widest text-center">Completion Rate</th>
+                <th className="p-4 text-[10px] font-bold text-indigo-400 uppercase tracking-widest text-center">Avg Time</th>
+                <th className="p-4 text-[10px] font-bold text-purple-400 uppercase tracking-widest text-center">Total Time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-400">
               {(() => {
+                const formatTime = (totalMins) => {
+                  if (!totalMins || totalMins <= 0) return '0m';
+                  const t = Math.floor(totalMins);
+                  if (t < 60) return `${t}m`;
+                  const h = Math.floor(t / 60);
+                  const m = t % 60;
+                  return `${h}h ${m}m`;
+                };
+
                 const techReportMap = {};
                 filteredTickets.forEach(t => {
-                  const name = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
-                  if (!techReportMap[name]) techReportMap[name] = { Open: 0, 'In Progress': 0, Completed: 0 };
-                  if (techReportMap[name][t.status] !== undefined) {
-                    techReportMap[name][t.status]++;
+                  let assignees = [];
+                  
+                  if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
+                     assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
                   }
+                  
+                  if (assignees.length === 0) {
+                     const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+                     if (typeof rawAssign === 'string') {
+                        assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+                     } else {
+                        assignees = ['Unassigned'];
+                     }
+                  }
+                  
+                  if (assignees.length === 0) assignees = ['Unassigned'];
+
+                  let timeTaken = 0;
+                  let normalizedStatus = 'Open';
+                  const sLow = String(t.status || 'Open').toLowerCase();
+                  
+                  if (sLow.includes('completed') || sLow.includes('finished')) {
+                     normalizedStatus = 'Completed';
+                     if (t.createdAt && t.updatedAt) {
+                        const s = new Date(t.createdAt);
+                        const e = new Date(t.updatedAt);
+                        if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+                           timeTaken = Math.max(0, Math.floor((e - s) / 60000));
+                        }
+                     }
+                  } else if (sLow.includes('progress')) {
+                     normalizedStatus = 'In Progress';
+                  }
+
+                  assignees.forEach(name => {
+                    if (!techReportMap[name]) {
+                       techReportMap[name] = { Open: 0, 'In Progress': 0, Completed: 0, totalTime: 0 };
+                    }
+                    techReportMap[name][normalizedStatus]++;
+                    if (timeTaken > 0) {
+                       techReportMap[name].totalTime += (timeTaken / assignees.length);
+                    }
+                  });
                 });
+
                 const data = Object.entries(techReportMap).sort((a,b) => {
                   const sumA = a[1].Open + a[1]['In Progress'] + a[1].Completed;
                   const sumB = b[1].Open + b[1]['In Progress'] + b[1].Completed;
                   return sumB - sumA;
                 });
+                
                 if (data.length === 0) {
                   return (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-xs">No technician load data found.</td>
+                      <td colSpan={8} className="p-8 text-center text-xs">No technician load data found.</td>
                     </tr>
                   );
                 }
+                
                 return data.map(([name, counts]) => {
                   const total = counts.Open + counts['In Progress'] + counts.Completed;
                   const rate = total > 0 ? ((counts.Completed / total) * 100).toFixed(0) : 0;
+                  const avgMins = counts.Completed > 0 ? counts.totalTime / counts.Completed : 0;
+                  const avgTimeStr = formatTime(avgMins);
+                  const totalTimeStr = formatTime(counts.totalTime);
+                  
                   return (
                     <tr key={name} className="hover:bg-slate-700/30 transition-colors">
-                      <td className="p-4 text-xs font-bold text-white flex items-center space-x-2">
+                      <td className="p-4 text-xs font-bold text-main flex items-center space-x-2">
                         <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
                           {name.charAt(0).toUpperCase()}
                         </div>
@@ -1800,10 +2473,20 @@ export default function Tickets() {
                       <td className="p-4 font-mono text-center text-rose-400 font-bold">{counts.Open}</td>
                       <td className="p-4 font-mono text-center text-amber-400 font-bold">{counts['In Progress']}</td>
                       <td className="p-4 font-mono text-center text-green-400 font-bold">{counts.Completed}</td>
-                      <td className="p-4 font-mono text-center text-white font-bold">{total}</td>
+                      <td className="p-4 font-mono text-center text-main font-bold">{total}</td>
                       <td className="p-4 text-center">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-cyan-500/30 text-cyan-400 bg-cyan-500/10 font-mono">
                           {rate}%
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-indigo-500/30 text-indigo-400 bg-indigo-500/10 font-mono">
+                          {avgTimeStr}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-purple-500/30 text-purple-400 bg-purple-500/10 font-mono">
+                          {totalTimeStr}
                         </span>
                       </td>
                     </tr>
@@ -1828,6 +2511,7 @@ export default function Tickets() {
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Division</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Category</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Instruction By</th>
+                <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Raised By</th>
                 <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Status</th>
               </tr>
             </thead>
@@ -1850,6 +2534,9 @@ export default function Tickets() {
                     </td>
                     <td className="p-4 text-xs text-slate-400">
                       {ticket.instructionBy || meta.instructionBy || 'N/A'}
+                    </td>
+                    <td className="p-4 text-xs text-slate-400">
+                      {ticket.raisedByName || (ticket.raisedBy && (ticket.raisedBy.name || ticket.raisedBy.username)) || 'N/A'}
                     </td>
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
@@ -1921,34 +2608,39 @@ export default function Tickets() {
               </div>
 
               {/* Section 2: Logistical Metadata */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="space-y-6">
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Operation Date</label>
-                      <input required type="date" name="date" value={formData.date} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" />
+              <div className="space-y-8 pt-4 pb-8">
+                  <div className="bg-panel p-6 rounded-3xl border border-main space-y-4">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <Clock size={16} className="text-blue-500" />
+                      <h3 className="text-[10px] font-black text-main uppercase tracking-[0.4em]">Timeline & Status</h3>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div>
-                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Start Time</label>
-                        <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" />
+                        <label className="block text-[9px] font-black text-main uppercase tracking-widest mb-2">Date Received</label>
+                        <input required type="date" name="date" value={formData.date} onChange={handleInputChange} className="glass-input w-full p-3 text-sm font-bold bg-[#0f172a] border-[#1e293b] rounded-2xl cursor-pointer" />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-main uppercase tracking-widest mb-2">Time Received / Logged</label>
+                        <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-sm font-bold bg-[#0f172a] border-[#1e293b] rounded-2xl cursor-pointer" />
                       </div>
                       <div>
                         <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">End Time</label>
                         <input type="time" name="endTime" value={formData.endTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Ticket Category</label>
-                      <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-xs cursor-pointer bg-panel border-main">
-                        <option value="Issue">Issue</option>
-                        <option value="Service">Service</option>
-                        <option value="Maintenance">Maintenance</option>
-                        <option value="Installation">Installation</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                      <div>
+                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Ticket Category</label>
+                        <select name="category" value={formData.category} onChange={handleInputChange} className="glass-input w-full p-3 text-xs cursor-pointer bg-panel border-main">
+                          <option value="Issue">Issue</option>
+                          <option value="Service">Service</option>
+                          <option value="Maintenance">Maintenance</option>
+                          <option value="Installation">Installation</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Ticket Device</label>
                       <select name="ticketDevice" value={formData.ticketDevice} onChange={handleInputChange} className="glass-input w-full p-3 text-xs cursor-pointer bg-panel border-main">
@@ -1959,9 +2651,16 @@ export default function Tickets() {
                       </select>
                     </div>
                     <div>
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Raised By</label>
+                      <input type="text" name="raisedByName" value={formData.raisedByName} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Name of person raising ticket" />
+                    </div>
+                    <div>
                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Instruction By</label>
                        <input type="text" name="instructionBy" value={formData.instructionBy} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Name of authorize officer" />
                      </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div>
                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Initial Issue Image (Optional)</label>
                        {formData.createdImage && typeof formData.createdImage === 'string' ? (
@@ -1970,7 +2669,7 @@ export default function Tickets() {
                            <button 
                              type="button" 
                              onClick={() => setFormData(prev => ({ ...prev, createdImage: null }))}
-                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                            >
                              <Trash2 size={12} />
                            </button>
@@ -2038,7 +2737,7 @@ export default function Tickets() {
                            <button 
                              type="button" 
                              onClick={() => setFormData(prev => ({ ...prev, createdVideo: null }))}
-                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                             className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                            >
                              <Trash2 size={12} />
                            </button>
@@ -2093,22 +2792,17 @@ export default function Tickets() {
                        )}
                      </div>
                   </div>
-                </div>
 
-                <div className="md:col-span-2 space-y-6">
-
-                  <div className="space-y-4">
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Nature of Problem</label>
-                      <textarea required name="issueDescription" value={formData.issueDescription} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[90px] resize-none bg-panel border-main" placeholder="Describe the technical failure..." />
+                      <textarea required name="issueDescription" value={formData.issueDescription} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[120px] resize-none bg-panel border-main" placeholder="Describe the technical failure..." />
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Action Taken</label>
-                      <textarea name="actionTaken" value={formData.actionTaken} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[90px] resize-none bg-panel border-main" placeholder="Repair steps..." />
+                      <textarea name="actionTaken" value={formData.actionTaken} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[120px] resize-none bg-panel border-main" placeholder="Repair steps..." />
                     </div>
                   </div>
-                </div>
               </div>
 
               {/* Section 3: Personnel & Execution */}
@@ -2129,6 +2823,15 @@ export default function Tickets() {
                     </button>
                   </div>
 
+                  {formData.assignedTo && (
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-xl max-w-max animate-fade-in">
+                      <span className="text-[8px] font-black text-teal-400 uppercase tracking-widest">Site Responsibility:</span>
+                      <span className="text-[10px] font-bold text-main">
+                        {staff.find(s => (s.id || s._id) === formData.assignedTo)?.name || 'Loading...'}
+                      </span>
+                    </div>
+                  )}
+
                   {isAddingStaff && (
                     <div className="flex flex-col space-y-2 animate-slide-down bg-panel p-4 rounded-2xl border border-teal-500/30">
                       <input 
@@ -2147,7 +2850,7 @@ export default function Tickets() {
                           className="glass-input flex-1 p-2 text-xs bg-panel border-main"
                           placeholder="Email (Optional)..."
                         />
-                        <button type="button" onClick={handleAddQuickStaff} className="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-700 transition-colors">Save</button>
+                        <button type="button" onClick={handleAddQuickStaff} className="px-4 py-2 bg-teal-600 text-main rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-700 transition-colors">Save</button>
                       </div>
                     </div>
                   )}
@@ -2160,7 +2863,7 @@ export default function Tickets() {
                         formData.assignedStaff.map(id => {
                           const member = staff.find(s => (s.id || s._id) === id);
                           return (
-                            <div key={id} className="flex items-center bg-teal-500 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-lg shadow-teal-500/20">
+                            <div key={id} className="flex items-center bg-teal-500 text-main px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-lg shadow-teal-500/20">
                               {member?.name || 'Staff'}
                               <button type="button" onClick={() => toggleStaffSelection(id)} className="ml-2 hover:opacity-70"><X size={12} /></button>
                             </div>
@@ -2177,11 +2880,16 @@ export default function Tickets() {
                             onClick={() => toggleStaffSelection(s.id || s._id)}
                             className={`w-full px-4 py-2.5 rounded-xl text-left text-[9px] font-black uppercase tracking-widest transition-all border ${
                               formData.assignedStaff.includes(s.id || s._id)
-                                ? 'bg-teal-600 text-white border-teal-500'
+                                ? 'bg-teal-600 text-main border-teal-500'
                                 : 'bg-panel text-secondary border-main hover:border-teal-500/30'
                             }`}
                           >
                             {s.name}
+                            {(s.id || s._id) === formData.assignedTo && (
+                              <span className="ml-1.5 text-[8px] font-bold text-teal-300 uppercase tracking-wider">
+                                (Responsibility)
+                              </span>
+                            )}
                           </button>
                           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1 opacity-0 group-hover/staff:opacity-100 transition-opacity">
                             <button 
@@ -2257,7 +2965,7 @@ export default function Tickets() {
                           }}
                           className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
                             formData.status === status 
-                              ? 'bg-teal-600 text-white border-teal-500 shadow-lg shadow-teal-500/20' 
+                              ? 'bg-teal-600 text-main border-teal-500 shadow-lg shadow-teal-500/20' 
                               : 'bg-panel text-secondary border-main hover:bg-card'
                           }`}
                         >
@@ -2297,7 +3005,7 @@ export default function Tickets() {
                               <button 
                                 type="button" 
                                 onClick={() => setFormData(prev => ({ ...prev, inProgressImage: null }))}
-                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -2390,7 +3098,7 @@ export default function Tickets() {
                               <button 
                                 type="button" 
                                 onClick={() => setFormData(prev => ({ ...prev, completedImage: null }))}
-                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-white transition-colors"
+                                className="absolute top-3 right-3 p-1.5 bg-red-600/80 hover:bg-red-700 rounded-lg text-main transition-colors"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -2655,7 +3363,7 @@ export default function Tickets() {
                       setSubmitting(false);
                     }
                   }}
-                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-main py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
                 >
                   {submitting ? 'PROCESSING...' : 'START WORK'}
                 </button>
@@ -2865,7 +3573,7 @@ export default function Tickets() {
                       setSubmitting(false);
                     }
                   }}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-main py-3 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg uppercase"
                 >
                   {submitting ? 'PROCESSING...' : 'COMPLETE TICKET'}
                 </button>

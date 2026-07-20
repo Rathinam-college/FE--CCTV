@@ -11,8 +11,8 @@ RUN npm install
 # Copy the rest of the application
 COPY . .
 
-# Expose port 5173 (Vite default)
-EXPOSE 5173
+# Expose port 1573 (Vite default)
+EXPOSE 1573
 
 # Start the development server
 # --host 0.0.0.0 is required for Docker to expose the port correctly

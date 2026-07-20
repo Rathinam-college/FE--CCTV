@@ -13,12 +13,12 @@ export default function Division() {
   const { showNotification } = useNotificationStore();
   const { showConfirm } = useConfirmStore();
   const navigate = useNavigate();
-  
+
   const [Divisions, setDivisions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
-  
+
   const [formData, setFormData] = useState({
     division_type: 'Division'
   });
@@ -54,7 +54,7 @@ export default function Division() {
   }, [allLocations, Divisions]);
 
   const availableColleges = useMemo(() => {
-    return uniqueOldColleges.filter(c => 
+    return uniqueOldColleges.filter(c =>
       !selectedNames.includes(c) && c.toLowerCase().includes(inputValue.toLowerCase())
     );
   }, [uniqueOldColleges, selectedNames, inputValue]);
@@ -124,24 +124,24 @@ export default function Division() {
   const filteredDevices = useMemo(() => {
     if (!activeDivisionName) return [];
     const activeUpper = activeDivisionName.trim().toUpperCase();
-    
+
     return devices.filter(d => {
       const devCollege = (d.divisionName || '').trim().toUpperCase();
       if (devCollege !== activeUpper) return false;
-      
+
       if (deviceTypeFilter !== 'ALL' && d.deviceType !== deviceTypeFilter) return false;
-      
+
       if (deviceSearchQuery) {
         const q = deviceSearchQuery.toLowerCase();
         const name = d.name || d.cameraName || d.nvrName || d.biometricName || d.switchName || '';
         const serial = d.serialNumber || d.serialNo || d.sno || '';
         const loc = parseLocation(d);
         if (!name.toLowerCase().includes(q) &&
-            !serial.toLowerCase().includes(q) &&
-            !(d.ipAddress || '').toLowerCase().includes(q) &&
-            !(loc.block || '').toLowerCase().includes(q) &&
-            !(loc.floor || '').toLowerCase().includes(q) &&
-            !(loc.room || '').toLowerCase().includes(q)) {
+          !serial.toLowerCase().includes(q) &&
+          !(d.ipAddress || '').toLowerCase().includes(q) &&
+          !(loc.block || '').toLowerCase().includes(q) &&
+          !(loc.floor || '').toLowerCase().includes(q) &&
+          !(loc.room || '').toLowerCase().includes(q)) {
           return false;
         }
       }
@@ -167,7 +167,7 @@ export default function Division() {
       showNotification('No devices to export', 'error');
       return;
     }
-    
+
     const headers = ['Device', 'Type', 'Block', 'Floor', 'Room', 'IP', 'Serial', 'Status', 'Date Added'];
     const csvContent = [
       headers.join(','),
@@ -202,7 +202,7 @@ export default function Division() {
       showNotification('No divisions to export', 'error');
       return;
     }
-    
+
     const headers = ['Division Name', 'Type', 'Merged From'];
     const csvContent = [
       headers.join(','),
@@ -230,17 +230,17 @@ export default function Division() {
     if (inputValue.trim() && !namesToSubmit.includes(inputValue.trim())) {
       namesToSubmit.push(inputValue.trim());
     }
-    
+
     if (namesToSubmit.length === 0) return;
 
     try {
       setIsSubmitting(true);
-      
+
       if (isMergeMode) {
         if (!masterName.trim()) {
-           showNotification('Master name is required for merging', 'error');
-           setIsSubmitting(false);
-           return;
+          showNotification('Master name is required for merging', 'error');
+          setIsSubmitting(false);
+          return;
         }
         await api.post('/cameras/divisions/merge/', {
           old_names: namesToSubmit,
@@ -249,14 +249,14 @@ export default function Division() {
         });
         showNotification(`Merged ${namesToSubmit.length} divisions into ${masterName}`, 'success');
       } else {
-        const promises = namesToSubmit.map(name => 
+        const promises = namesToSubmit.map(name =>
           api.post('/cameras/divisions/', { name: name, division_type: formData.division_type })
             .catch(err => console.warn(`Could not create ${name}`, err))
         );
         await Promise.all(promises);
         showNotification(`${namesToSubmit.length} Divisions processed`, 'success');
       }
-      
+
       setSelectedNames([]);
       setInputValue('');
       setMasterName('');
@@ -330,11 +330,11 @@ export default function Division() {
             <div className="p-6 border-b border-main bg-main flex items-center justify-between">
               {activeDivisionName ? (
                 <div className="flex items-center space-x-4">
-                  <button 
+                  <button
                     onClick={() => setActiveDivisionName(null)}
                     className="px-3 py-1.5 bg-main hover:bg-panel border border-main text-secondary hover:text-main rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center"
                   >
-                     ← Back to Divisions
+                    ← Back to Divisions
                   </button>
                   <h2 className="text-lg font-black text-main tracking-tight uppercase flex items-center">
                     <Building className="mr-2 text-teal-500" size={20} />
@@ -371,7 +371,7 @@ export default function Division() {
                         Showing {filteredDevices.length} Devices
                       </p>
                     </div>
-                    
+
                     <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                       <select
                         value={deviceTypeFilter}
@@ -384,7 +384,7 @@ export default function Division() {
                         <option value="Biometric">Biometrics</option>
                         <option value="Switch">Switches</option>
                       </select>
-                      
+
                       <input
                         type="text"
                         value={deviceSearchQuery}
@@ -401,7 +401,7 @@ export default function Division() {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="overflow-x-auto glass-panel border border-main rounded-2xl shadow-sm">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -426,7 +426,7 @@ export default function Division() {
                             const loc = parseLocation(device);
                             const deviceName = device.name || device.cameraName || device.nvrName || device.biometricName || device.switchName || 'Unnamed Device';
                             const serialNo = device.serialNumber || device.serialNo || device.sno || '—';
-                            
+
                             let detailUrl = '';
                             if (device.deviceType === 'Camera') detailUrl = `/devices/cameras/${device.id || device._id}`;
                             else if (device.deviceType === 'NVR') detailUrl = `/devices/nvr/${device.id || device._id}`;
@@ -437,12 +437,11 @@ export default function Division() {
                               <tr key={`${device.deviceType}-${device.id || device._id}`} className="border-b border-main/50 hover:bg-main/20 transition-all group">
                                 <td className="p-4">
                                   <div className="flex items-center space-x-3">
-                                    <div className={`p-2 rounded-lg ${
-                                      device.deviceType === 'Camera' ? 'bg-blue-500/10 text-blue-500' :
-                                      device.deviceType === 'NVR' ? 'bg-purple-500/10 text-purple-500' :
-                                      device.deviceType === 'Biometric' ? 'bg-emerald-500/10 text-emerald-500' :
-                                      'bg-orange-500/10 text-orange-500'
-                                    }`}>
+                                    <div className={`p-2 rounded-lg ${device.deviceType === 'Camera' ? 'bg-blue-500/10 text-blue-500' :
+                                        device.deviceType === 'NVR' ? 'bg-purple-500/10 text-purple-500' :
+                                          device.deviceType === 'Biometric' ? 'bg-emerald-500/10 text-emerald-500' :
+                                            'bg-orange-500/10 text-orange-500'
+                                      }`}>
                                       {device.deviceType === 'Camera' && <Cctv size={16} />}
                                       {device.deviceType === 'NVR' && <Server size={16} />}
                                       {device.deviceType === 'Biometric' && <Fingerprint size={16} />}
@@ -469,17 +468,16 @@ export default function Division() {
                                   </div>
                                 </td>
                                 <td className="p-4">
-                                  <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${
-                                    device.status === 'Active' || device.status === 'Online' 
-                                      ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' 
+                                  <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${device.status === 'Active' || device.status === 'Online'
+                                      ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
                                       : 'text-rose-500 bg-rose-500/10 border-rose-500/20'
-                                  }`}>
+                                    }`}>
                                     {device.status || 'Active'}
                                   </span>
                                 </td>
                                 <td className="p-4 text-right">
                                   {detailUrl && (
-                                    <button 
+                                    <button
                                       onClick={() => navigate(detailUrl)}
                                       className="text-[10px] font-bold text-blue-500 hover:text-white hover:bg-blue-500 px-3 py-1.5 rounded-lg border border-blue-500/30 transition-all uppercase tracking-widest"
                                     >
@@ -503,8 +501,8 @@ export default function Division() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {Divisions.map(occ => (
-                    <div 
-                      key={occ.id} 
+                    <div
+                      key={occ.id}
                       onClick={() => setActiveDivisionName(occ.name)}
                       className="hud-panel border border-main rounded-2xl p-5 flex items-start justify-between hover:border-teal-500/40 transition-all group cursor-pointer relative overflow-hidden"
                     >
@@ -530,7 +528,7 @@ export default function Division() {
                       </div>
                       <div className="flex flex-col items-end h-full justify-between">
                         {canEdit && (
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(occ.id); }}
                             className="p-2 text-main/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                             title="Delete"
@@ -564,15 +562,15 @@ export default function Division() {
             </div>
             <form onSubmit={handleSubmit} className="p-8 space-y-6">
               <div className="flex bg-black/10 rounded-xl p-1 mb-4">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsMergeMode(false)}
                   className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${!isMergeMode ? 'bg-panel shadow text-blue-500' : 'text-main/50 hover:text-main'}`}
                 >
                   Bulk Create
                 </button>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsMergeMode(true)}
                   className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${isMergeMode ? 'bg-panel shadow text-blue-500' : 'text-main/50 hover:text-main'}`}
                 >
@@ -594,7 +592,7 @@ export default function Division() {
                         </button>
                       </span>
                     ))}
-                    <input 
+                    <input
                       type="text"
                       value={inputValue}
                       onChange={(e) => { setInputValue(e.target.value); setIsDropdownOpen(true); }}
@@ -605,11 +603,11 @@ export default function Division() {
                       placeholder={selectedNames.length === 0 ? "Type or select divisions..." : "Add more..."}
                     />
                   </div>
-                  
+
                   {isDropdownOpen && (availableColleges.length > 0 || (inputValue.trim() && !uniqueOldColleges.some(c => c.toLowerCase() === inputValue.trim().toLowerCase()) && !selectedNames.includes(inputValue.trim()))) && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-panel border border-main shadow-2xl rounded-xl max-h-48 overflow-y-auto z-[300]">
                       {availableColleges.map(c => (
-                        <div 
+                        <div
                           key={c}
                           onMouseDown={(e) => { e.preventDefault(); handleAddName(c); }}
                           className="px-4 py-3 cursor-pointer hover:bg-main text-sm font-bold text-main border-b border-main/30 last:border-0 transition-colors"
@@ -618,7 +616,7 @@ export default function Division() {
                         </div>
                       ))}
                       {inputValue.trim() && !uniqueOldColleges.some(c => c.toLowerCase() === inputValue.trim().toLowerCase()) && !selectedNames.includes(inputValue.trim()) && (
-                        <div 
+                        <div
                           onMouseDown={(e) => { e.preventDefault(); handleAddName(inputValue.trim()); }}
                           className="px-4 py-3 cursor-pointer hover:bg-main text-sm font-bold text-blue-500 bg-blue-500/10 transition-colors flex items-center"
                         >
@@ -636,7 +634,7 @@ export default function Division() {
                   <label className="block text-[11px] font-black text-dim uppercase tracking-widest mb-2 ml-1">
                     Master Division Name
                   </label>
-                  <input 
+                  <input
                     type="text"
                     required={isMergeMode}
                     value={masterName}
@@ -648,8 +646,8 @@ export default function Division() {
                 </div>
               )}
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={isSubmitting || (selectedNames.length === 0 && !inputValue.trim()) || (isMergeMode && !masterName.trim())}
                 className="w-full py-4 mt-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shadow-lg hover:shadow-blue-500/20"
               >

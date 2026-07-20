@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import api from '../services/api';
 import { 
   Plus, Search, Download, Calendar, MapPin, Tag, 
   X, Edit2, Trash2, LayoutGrid, Briefcase, Upload,
-  MessageSquare, Send, Info, Clock, CheckCircle, Shield, ChevronLeft, ChevronRight, Printer
+  MessageSquare, Send, Info, Clock, CheckCircle, Shield, ChevronLeft, ChevronRight, Printer, AlertCircle, Activity
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -12,6 +12,7 @@ import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import { useNavigate } from 'react-router-dom';
 import ComboInput from '../components/ComboInput';
+import { exportMonthlyPPT } from '../utils/pptExport';
 
 export default function Upgrades() {
   const { user } = useAuthStore();
@@ -21,6 +22,43 @@ export default function Upgrades() {
   const [tickets, setTickets] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
+
+  const getImageUrl = (path) => {
+    if (!path) return '';
+    try {
+      const url = new URL(path);
+      path = url.pathname;
+    } catch (e) {
+    }
+    let cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    if (cleanPath.startsWith('cctv/')) {
+      cleanPath = cleanPath.substring(5);
+    }
+    if (!cleanPath.startsWith('media/') && !cleanPath.startsWith('api/')) {
+      cleanPath = 'media/' + cleanPath;
+    }
+    const baseUrl = import.meta.env.BASE_URL || '/cctv/';
+    return `${baseUrl}${cleanPath}`;
+  };
+
+  const parseMetadata = (remarks) => {
+    try {
+      const parsed = JSON.parse(remarks);
+      if (parsed && typeof parsed === 'object') return parsed;
+      throw new Error("Not an object");
+    } catch (e) {
+      return {
+        location: '',
+        category: 'Upgrade',
+        actionTaken: '',
+        instructionBy: '',
+        receivedTime: '',
+        endTime: '',
+        totalTime: ''
+      };
+    }
+  };
   const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -30,6 +68,9 @@ export default function Upgrades() {
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [isAddingStaff, setIsAddingStaff] = useState(false);
   const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Maintenance:EDIT');
 
@@ -83,6 +124,47 @@ export default function Upgrades() {
     { name: 'Completed', value: summaryStats.completed, color: '#10b981' }
   ].filter(d => d.value > 0), [summaryStats]);
 
+  const divisionStats = useMemo(() => {
+    const divDataMap = {};
+    filteredTickets.forEach(t => {
+      const name = t.divisionName || 'UNASSIGNED';
+      divDataMap[name] = (divDataMap[name] || 0) + 1;
+    });
+    return Object.entries(divDataMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [filteredTickets]);
+
+  const blockStats = useMemo(() => {
+    const blockDataMap = {};
+    filteredTickets.forEach(t => {
+      const name = t.block || 'UNASSIGNED';
+      blockDataMap[name] = (blockDataMap[name] || 0) + 1;
+    });
+    return Object.entries(blockDataMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [filteredTickets]);
+
+  const uniqueAssignedStaffCount = useMemo(() => {
+    const staffSet = new Set();
+    filteredTickets.forEach(t => {
+      if (t.assignedTo) {
+        const name = typeof t.assignedTo === 'object' ? t.assignedTo.name : t.assignedTo;
+        if (name) staffSet.add(name);
+      }
+      if (t.assignedStaff && Array.isArray(t.assignedStaff)) {
+        t.assignedStaff.forEach(s => {
+          const name = typeof s === 'object' ? s.name : s;
+          if (name) staffSet.add(name);
+        });
+      }
+    });
+    return staffSet.size;
+  }, [filteredTickets]);
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     divisionName: '',
@@ -97,7 +179,9 @@ export default function Upgrades() {
     assignedStaff: [],
     receivedTime: '',
     endTime: '',
-    status: 'Open'
+    status: 'Open',
+    raisedBy: '',
+    raisedByName: ''
   });
 
   const uniqueColleges = useMemo(() => {
@@ -108,10 +192,35 @@ export default function Upgrades() {
 
   const uniqueBlocks = useMemo(() => {
     const blocks = new Set();
-    tickets.forEach(t => { if (t.block) blocks.add(t.block.toUpperCase()); });
-    allLocations.forEach(loc => { if (loc.block) blocks.add(loc.block.toUpperCase()); });
-    return Array.from(blocks).sort();
-  }, [tickets, allLocations]);
+    const targetDivision = String(formData.divisionName || '').trim().toUpperCase();
+    
+    tickets.forEach(t => {
+      const div = String(t.divisionName || '').trim().toUpperCase();
+      const matchDiv = !targetDivision || div === targetDivision;
+      if (matchDiv && t.block) {
+        blocks.add(t.block.toUpperCase().trim());
+      }
+    });
+
+    allLocations.forEach(loc => {
+      const div = String(loc.divisionName || '').trim().toUpperCase();
+      const matchDiv = !targetDivision || div === targetDivision;
+      if (matchDiv && loc.block) {
+        blocks.add(loc.block.toUpperCase().trim());
+      }
+    });
+
+    if (blocks.size === 0) {
+      tickets.forEach(t => {
+        if (t.block) blocks.add(t.block.toUpperCase().trim());
+      });
+      allLocations.forEach(loc => {
+        if (loc.block) blocks.add(loc.block.toUpperCase().trim());
+      });
+    }
+
+    return Array.from(blocks).filter(Boolean).sort();
+  }, [tickets, allLocations, formData.divisionName]);
 
   useEffect(() => {
     fetchData();
@@ -129,11 +238,72 @@ export default function Upgrades() {
       const allTickets = ticketRes.data || [];
       const sortedTickets = [...allTickets].sort((a, b) => (b.id || 0) - (a.id || 0));
       setTickets(sortedTickets);
-      setUsers(userRes.data || []);
+      const fetchedUsers = Array.isArray(userRes.data) ? userRes.data : (userRes.data?.results || []);
+      setUsers(fetchedUsers);
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEditStaff = async (e, s) => {
+    e.stopPropagation();
+    const newName = prompt('Enter new name for staff member:', s.name);
+    if (!newName) return;
+    const newEmail = prompt('Enter email address:', s.email || '');
+    if (newName === s.name && newEmail === (s.email || '')) return;
+    try {
+      const res = await api.patch(`/users/${s.id || s._id}/`, { name: newName.trim(), email: newEmail ? newEmail.trim() : s.email });
+      const updatedUsers = users.map(item => (item.id || item._id) === (s.id || s._id) ? { ...item, ...res.data } : item);
+      setUsers(updatedUsers);
+      showNotification('Staff member updated', 'success');
+    } catch (err) {
+      showNotification('Failed to update staff member', 'error');
+    }
+  };
+
+  const handleDeleteStaff = async (e, id) => {
+    e.stopPropagation();
+    showConfirm('Are you sure you want to delete this user entirely?', async () => {
+      try {
+        await api.delete(`/users/${id}/`);
+        const updatedUsers = users.filter(s => (s.id || s._id) !== id);
+        setUsers(updatedUsers);
+        setFormData(prev => ({
+          ...prev,
+          assignedStaff: (prev.assignedStaff || []).filter(sId => sId !== id)
+        }));
+        showNotification('User removed', 'success');
+      } catch (err) {
+        showNotification('Failed to delete user', 'error');
+      }
+    });
+  };
+
+  const handleAddQuickStaff = async () => {
+    if (!newStaffName.trim()) return;
+    try {
+      const emailToUse = newStaffEmail.trim() || `staff_${Date.now()}@cctv.local`;
+      const res = await api.post('/users/', { 
+        name: newStaffName.trim(), 
+        email: emailToUse,
+        password: 'password123',
+        role: 'Staff'
+      });
+      
+      const newUsersList = [...users, res.data];
+      setUsers(newUsersList);
+      setFormData(prev => ({
+        ...prev,
+        assignedStaff: [...(prev.assignedStaff || []), res.data.id || res.data._id]
+      }));
+      setNewStaffName('');
+      setNewStaffEmail('');
+      setIsAddingStaff(false);
+      showNotification('New staff user added with default password "password123"', 'success');
+    } catch (err) {
+      showNotification(err.response?.data?.email ? 'Email already exists' : 'Failed to add staff member', 'error');
     }
   };
 
@@ -155,6 +325,9 @@ export default function Upgrades() {
     
     setFormData(prev => {
       const newData = { ...prev, [name]: finalValue };
+      if (name === 'divisionName') {
+        newData.block = '';
+      }
       if (name === 'receivedTime' || name === 'endTime') {
         newData.totalTime = calculateTotalTime(newData.receivedTime, newData.endTime);
       }
@@ -185,6 +358,7 @@ export default function Upgrades() {
         totalTime: calculateTotalTime(formData.receivedTime, formData.endTime),
         remarks: JSON.stringify({ category: 'Upgrade', isUpgrade: true, receivedTime: formData.receivedTime, endTime: formData.endTime, totalTime: calculateTotalTime(formData.receivedTime, formData.endTime) }),
         raisedBy: user._id || user.id,
+        raisedByName: formData.raisedByName || '',
       };
 
       if (editingId) {
@@ -198,7 +372,9 @@ export default function Upgrades() {
       resetForm();
       fetchData();
     } catch (err) {
-      showNotification('Failed to save upgrade record', 'error');
+      const serverMsg = err.response?.data ? (typeof err.response.data === 'object' ? JSON.stringify(err.response.data) : err.response.data) : '';
+      showNotification(`Failed to save upgrade: ${serverMsg || err.message}`, 'error');
+      console.error('Error saving upgrade record:', err);
     } finally {
       setSubmitting(false);
     }
@@ -220,7 +396,9 @@ export default function Upgrades() {
       assignedStaff: [],
       receivedTime: '',
       endTime: '',
-      status: 'Open'
+      status: 'Open',
+      raisedBy: user?._id || user?.id || '',
+      raisedByName: ''
     });
     setEditingId(null);
   };
@@ -238,10 +416,19 @@ export default function Upgrades() {
       actionTaken: ticket.actionTaken || '',
       instructionBy: ticket.instructionBy || '',
       assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
-      assignedStaff: ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id || s) : [],
+      assignedStaff: (() => {
+        const respId = ticket.assignedTo?.id || ticket.assignedTo || '';
+        const staffIds = ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id || s) : [];
+        if (respId && !staffIds.includes(respId)) {
+          staffIds.push(respId);
+        }
+        return staffIds;
+      })(),
       receivedTime: ticket.receivedTime || '',
       endTime: ticket.endTime || '',
-      status: ticket.status || 'Open'
+      status: ticket.status || 'Open',
+      raisedBy: ticket.raisedBy?.id || ticket.raisedBy?._id || (typeof ticket.raisedBy !== 'object' ? ticket.raisedBy : '') || '',
+      raisedByName: ticket.raisedByName || ''
     });
     setEditingId(ticket.id || ticket._id);
     setShowModal(true);
@@ -386,17 +573,39 @@ export default function Upgrades() {
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
-        <div>
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <Shield className="mr-3 text-cyan-400" size={28} />
             Upgrades
           </h1>
+          <div className="flex bg-panel border border-main rounded-xl p-0.5 sm:ml-4 self-start">
+            <button
+              onClick={() => setViewMode('registry')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'registry'
+                  ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Upgrade List
+            </button>
+            <button
+              onClick={() => setViewMode('report')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'report'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Report View
+            </button>
+          </div>
         </div>
         <div className="flex space-x-4 items-center">
-          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Download size={14} className="mr-2" /> Export CSV
           </button>
-          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-white transition-colors">
+          <button onClick={printToPDF} className="flex items-center text-[12px] font-bold text-slate-300 hover:text-main transition-colors">
             <Printer size={14} className="mr-2" /> Print PDF
           </button>
           {canEdit && (
@@ -405,79 +614,6 @@ export default function Upgrades() {
               Register Upgrade
             </button>
           )}
-        </div>
-      </div>
-
-      {/* Summary Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
-        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-red-500/30 text-left">
-          <div className="flex justify-between items-start w-full">
-            <h3 className="text-[11px] font-bold text-rose-500 tracking-widest uppercase">[OPEN UPGRADES]</h3>
-            <Clock size={18} className="text-slate-500" />
-          </div>
-          <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.open}</span>
-          </div>
-        </button>
-
-        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-amber-500/30 text-left">
-          <div className="flex justify-between items-start w-full">
-            <h3 className="text-[11px] font-bold text-amber-500 tracking-widest uppercase">[IN PROGRESS]</h3>
-            <Shield size={18} className="text-slate-500" />
-          </div>
-          <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.inProgress}</span>
-          </div>
-        </button>
-
-        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30 text-left">
-          <div className="flex justify-between items-start w-full">
-            <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[COMPLETED]</h3>
-            <CheckCircle size={18} className="text-slate-500" />
-          </div>
-          <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-white">{summaryStats.completed}</span>
-          </div>
-        </button>
-
-        <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50 text-left">
-          <div className="flex justify-between items-start w-full">
-            <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL UPGRADES]</h3>
-            <Briefcase size={18} className="text-slate-500" />
-          </div>
-          <div className="flex items-end mt-4">
-            <span className="text-4xl font-bold text-cyan-400">{summaryStats.total}</span>
-          </div>
-          <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
-        </button>
-
-        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
-          <div className="w-24 h-24 relative flex items-center justify-center">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
-            )}
-            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[12px] font-bold text-white leading-none text-center mt-1">100%<br/><span className="text-[7px] text-slate-400">DIST.</span></span>
-            </div>
-          </div>
-          <div className="absolute right-2 flex flex-col space-y-1">
-            {chartData.map(d => (
-              <div key={d.name} className="flex items-center space-x-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
-                <span className="text-[9px] text-slate-300 font-bold uppercase">{d.name}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -522,7 +658,7 @@ export default function Upgrades() {
               className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${
                 statusFilter === status 
                   ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' 
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-main'
               }`}
             >
               {status}
@@ -531,113 +667,524 @@ export default function Upgrades() {
         </div>
       </div>
 
-      <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 mr-2">
-            <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
-            >
-              <option value={10}>10</option>
-              <option value={15}>15</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-          <div className="flex items-center space-x-1">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
-              <ChevronLeft size={14} />
+      {viewMode === 'registry' ? (
+        <>
+          {/* Summary Dashboard */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-red-500/30 text-left">
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-rose-500 tracking-widest uppercase">[OPEN UPGRADES]</h3>
+                <Clock size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-main">{summaryStats.open}</span>
+              </div>
             </button>
-            <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
-              {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
-            </span>
-            <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-white disabled:opacity-30 transition-colors">
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
 
-      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
-            <thead>
-              <tr className="bg-panel border-b border-main">
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">S.No</th>
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Location</th>
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upgrade Description</th>
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Action Taken</th>
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>
-                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
-                {canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-main">
-              {loading ? (
-                <tr><td colSpan="9" className="p-10 text-center text-dim">Loading upgrades...</td></tr>
-              ) : filteredTickets.length === 0 ? (
-                <tr><td colSpan="9" className="p-10 text-center text-dim">No upgrades found.</td></tr>
-              ) : (
-                filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((ticket, index) => (
-                  <tr 
-                    key={ticket.id || ticket._id} 
-                    className="hover:bg-slate-700/30 transition-colors cursor-pointer group"
-                    onClick={(e) => {
-                      if (!e.target.closest('button')) {
-                        navigate(`/tickets/${ticket.id || ticket._id}`);
-                      }
-                    }}
-                  >
-                    <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                    <td className="p-4 text-xs font-mono text-slate-300">{ticket.operationDate || new Date().toISOString().split('T')[0]}</td>
-                    <td className="p-4 text-xs font-semibold text-main uppercase">{ticket.divisionName || 'N/A'} - {ticket.block}</td>
-                    <td className="p-4 text-xs text-slate-400 uppercase">{ticket.issueDescription}</td>
-                    <td className="p-4 text-xs text-slate-400 uppercase">{ticket.actionTaken || 'Pending'}</td>
-                    <td className="p-4 text-xs text-main uppercase">{ticket.instructionBy || 'N/A'}</td>
-                    <td className="p-4">
-                      <div className="flex flex-col items-center space-y-1">
-                        <span className="text-[10px] text-emerald-400 font-mono">{ticket.receivedTime || '--:--'}</span>
-                        <span className="text-[10px] text-red-400 font-mono">{ticket.endTime || '--:--'}</span>
-                        <div className="h-[1px] w-8 bg-slate-700"></div>
-                        <span className="text-[10px] text-main font-bold">{ticket.totalTime || '0h 0m'}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                        ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
-                        ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
-                        'text-red-500 border-red-500/50'
-                      }`}>
-                        {ticket.status}
-                      </span>
-                    </td>
-                    {canEdit && (
-                      <td className="p-4 text-right">
-                        <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => navigate(`/tickets/${ticket.id || ticket._id}`)} 
-                            className="text-slate-400 hover:text-cyan-400 transition-colors"
-                            title="View Full Details"
-                          >
-                            <Info size={14} />
-                          </button>
-                          <button onClick={() => handleEdit(ticket)} className="text-slate-400 hover:text-cyan-400 transition-colors"><Edit2 size={14} /></button>
-                          <button onClick={() => handleDelete(ticket.id || ticket._id)} className="text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    )}
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-amber-500/30 text-left">
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-amber-500 tracking-widest uppercase">[IN PROGRESS]</h3>
+                <Shield size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-main">{summaryStats.inProgress}</span>
+              </div>
+            </button>
+
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30 text-left">
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[COMPLETED]</h3>
+                <CheckCircle size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-main">{summaryStats.completed}</span>
+              </div>
+            </button>
+
+            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50 text-left">
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL UPGRADES]</h3>
+                <Briefcase size={18} className="text-slate-500" />
+              </div>
+              <div className="flex items-end mt-4">
+                <span className="text-4xl font-bold text-cyan-400">{summaryStats.total}</span>
+              </div>
+              <div className="absolute bottom-0 left-0 h-1 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{ width: '30%' }}></div>
+            </button>
+
+            <div className="bg-panel rounded-md p-4 flex items-center justify-between gap-3 w-full">
+              <div className="w-20 h-20 relative flex items-center justify-center flex-shrink-0">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={28} outerRadius={38} paddingAngle={2} dataKey="value" stroke="none" label={false} labelLine={false}>
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <span className="text-[10px] text-slate-500 font-bold uppercase">No Data</span>
+                )}
+                <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[11px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[6px] text-slate-400">DIST.</span></span>
+                </div>
+              </div>
+              <div className="flex flex-col space-y-1.5 flex-1 min-w-[70px] justify-center">
+                {chartData.map(d => (
+                  <div key={d.name} className="flex items-center space-x-1.5">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }}></div>
+                    <span className="text-[9px] text-slate-300 font-bold uppercase truncate">{d.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 border-b border-main flex justify-end items-center bg-card/40 rounded-t-2xl mb-4 mt-6">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 mr-2">
+                <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
+                >
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+              <div className="flex items-center space-x-1">
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
+                  {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
+                </span>
+                <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
+                <thead>
+                  <tr className="bg-panel border-b border-main">
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">S.No</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Location</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upgrade Description</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Action Taken</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work By</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                    {canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>}
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-main">
+                  {loading ? (
+                    <tr><td colSpan="10" className="p-10 text-center text-dim">Loading upgrades...</td></tr>
+                  ) : filteredTickets.length === 0 ? (
+                    <tr><td colSpan="10" className="p-10 text-center text-dim">No upgrades found.</td></tr>
+                  ) : (
+                    filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((ticket, index) => (
+                      <tr 
+                        key={ticket.id || ticket._id} 
+                        className="hover:bg-slate-700/30 transition-colors cursor-pointer group"
+                        onClick={(e) => {
+                          if (!e.target.closest('button')) {
+                            navigate(`/tickets/${ticket.id || ticket._id}`);
+                          }
+                        }}
+                      >
+                        <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                        <td className="p-4 text-xs font-mono text-slate-300">{ticket.operationDate || new Date().toISOString().split('T')[0]}</td>
+                        <td className="p-4 text-xs font-semibold text-main uppercase">{ticket.divisionName || 'N/A'} - {ticket.block}</td>
+                        <td className="p-4 text-xs text-slate-400 uppercase">{ticket.issueDescription}</td>
+                        <td className="p-4 text-xs text-slate-400 uppercase">{ticket.actionTaken || 'Pending'}</td>
+                        <td className="p-4 text-xs text-main uppercase">{ticket.instructionBy || 'N/A'}</td>
+                        <td className="p-4 text-xs text-main uppercase">
+                          {ticket.assignedTo?.name || (ticket.assignedStaff && ticket.assignedStaff.length > 0 ? ticket.assignedStaff.map(s => s.name || s.username).filter(Boolean).join(', ') : '') || ticket.raisedByName || 'Authorized Staff'}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-col items-center space-y-1">
+                            <span className="text-[10px] text-emerald-400 font-mono">{ticket.receivedTime || '--:--'}</span>
+                            <span className="text-[10px] text-red-400 font-mono">{ticket.endTime || '--:--'}</span>
+                            <div className="h-[1px] w-8 bg-slate-700"></div>
+                            <span className="text-[10px] text-main font-bold">{ticket.totalTime || '0h 0m'}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                            ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                            'text-red-500 border-red-500/50'
+                          }`}>
+                            {ticket.status}
+                          </span>
+                        </td>
+                        {canEdit && (
+                          <td className="p-4 text-right">
+                            <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={() => navigate(`/tickets/${ticket.id || ticket._id}`)} 
+                                className="text-slate-400 hover:text-cyan-400 transition-colors"
+                                title="View Full Details"
+                              >
+                                <Info size={14} />
+                              </button>
+                              <button onClick={() => handleEdit(ticket)} className="text-slate-400 hover:text-cyan-400 transition-colors"><Edit2 size={14} /></button>
+                              <button onClick={() => handleDelete(ticket.id || ticket._id)} className="text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-8 animate-fade-in max-w-7xl mx-auto pb-10">
+          {/* Detailed Upgrade Report View */}
+          <div className="bg-panel border border-main rounded-md p-8 flex flex-col justify-between overflow-hidden relative transition-all group shadow-2xl">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div>
+                <h2 className="text-xl font-bold text-main tracking-wider uppercase mb-1">Upgrade Operations & Performance Report</h2>
+                <p className="text-xs text-dim font-medium">
+                  Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+                </p>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <span className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-[9px] font-bold uppercase tracking-widest text-slate-300">
+                    Period: {startMonth || 'ALL'} to {endMonth || 'ALL'}
+                  </span>
+                  <span className="px-2.5 py-1 rounded bg-teal-500/10 border border-teal-500/20 text-[9px] font-bold uppercase tracking-widest text-teal-400">
+                    Status Filter: {statusFilter}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3 self-end md:self-center shrink-0">
+                <button
+                  onClick={async () => {
+                    showNotification('Generating PPT, this may take a moment...', 'info');
+                    try {
+                      const monthName = startMonth || endMonth ? `${startMonth || 'All'}_to_${endMonth || 'All'}` : 'All_Time';
+                      await exportMonthlyPPT(filteredTickets, getImageUrl, monthName, 'Upgrade');
+                      showNotification('PPT generated successfully!', 'success');
+                    } catch (e) {
+                      console.error('PPT Error:', e);
+                      showNotification('Failed to generate PPT: ' + (e.message || 'Unknown error'), 'error');
+                    }
+                  }}
+                  className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-indigo-700 px-3 py-2 bg-indigo-900/50 hover:bg-indigo-800/80 rounded transition-colors"
+                >
+                  <Download size={12} className="mr-2 text-indigo-400" />
+                  Download PPT
+                </button>
+                <button
+                  onClick={printToPDF}
+                  className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+                >
+                  <Printer size={12} className="mr-2" />
+                  Print PDF Report
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-2 bg-slate-800 rounded transition-colors"
+                >
+                  <Download size={12} className="mr-2" />
+                  Export CSV Data
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+            <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total Upgrades</span>
+              <span className="text-3xl font-bold font-mono text-main mt-2">{filteredTickets.length}</span>
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
+            </div>
+            <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+              <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest">Open Queue</span>
+              <span className="text-3xl font-bold font-mono text-rose-400 mt-2">{filteredTickets.filter(t => t.status === 'Open').length}</span>
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-rose-500 shadow-lg shadow-rose-500/50"></div>
+            </div>
+            <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+              <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">In Progress</span>
+              <span className="text-3xl font-bold font-mono text-amber-400 mt-2">{filteredTickets.filter(t => t.status === 'In Progress').length}</span>
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-amber-500 shadow-lg shadow-amber-500/50"></div>
+            </div>
+            <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+              <span className="text-[9px] font-bold text-green-500 uppercase tracking-widest">Completed</span>
+              <span className="text-3xl font-bold font-mono text-green-400 mt-2">{filteredTickets.filter(t => t.status === 'Completed').length}</span>
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-green-500 shadow-lg shadow-green-500/50"></div>
+            </div>
+            <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+              <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-widest">Resolution Rate</span>
+              <span className="text-3xl font-bold font-mono text-cyan-400 mt-2">
+                {((filteredTickets.filter(t => t.status === 'Completed').length / (filteredTickets.length || 1)) * 100).toFixed(0)}%
+              </span>
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-cyan-400 shadow-lg shadow-cyan-400/50"></div>
+            </div>
+            <div className="bg-panel border border-main rounded-md p-5 flex flex-col justify-between h-28 relative overflow-hidden transition-all group">
+              <span className="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Assigned Staff</span>
+              <span className="text-3xl font-bold font-mono text-purple-400 mt-2">{uniqueAssignedStaffCount}</span>
+              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-purple-400 shadow-lg shadow-purple-400/50"></div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-panel border border-main rounded-md p-6 flex flex-col">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Upgrades by Division</h3>
+              <div className="h-64 flex items-center justify-center">
+                {divisionStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={divisionStats} margin={{ left: 0, right: 10, top: 10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={8} interval={0} angle={-30} textAnchor="end" height={40} />
+                      <YAxis stroke="#94a3b8" fontSize={9} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--glass-border)',
+                          borderRadius: '8px',
+                          fontSize: '10px'
+                        }}
+                      />
+                      <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">No Division Data</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-md p-6 flex flex-col">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Upgrades by Block</h3>
+              <div className="h-64 flex items-center justify-center">
+                {blockStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={blockStats} margin={{ left: 0, right: 10, top: 10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={8} interval={0} angle={-30} textAnchor="end" height={40} />
+                      <YAxis stroke="#94a3b8" fontSize={9} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--glass-border)',
+                          borderRadius: '8px',
+                          fontSize: '10px'
+                        }}
+                      />
+                      <Bar dataKey="count" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">No Block Data</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-panel border border-main rounded-md p-6">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Technician Load & Productivity Matrix</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-panel border-b border-main">
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician</th>
+                    <th className="p-4 text-[10px] font-bold text-rose-500 uppercase tracking-widest text-center">Open</th>
+                    <th className="p-4 text-[10px] font-bold text-amber-500 uppercase tracking-widest text-center">In Progress</th>
+                    <th className="p-4 text-[10px] font-bold text-green-500 uppercase tracking-widest text-center">Completed</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Total Assigned</th>
+                    <th className="p-4 text-[10px] font-bold text-cyan-400 uppercase tracking-widest text-center">Completion Rate</th>
+                    <th className="p-4 text-[10px] font-bold text-indigo-400 uppercase tracking-widest text-center">Avg Time</th>
+                    <th className="p-4 text-[10px] font-bold text-purple-400 uppercase tracking-widest text-center">Total Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-slate-400">
+                  {(() => {
+                    const formatTime = (totalMins) => {
+                      if (!totalMins || totalMins <= 0) return '0m';
+                      const t = Math.floor(totalMins);
+                      if (t < 60) return `${t}m`;
+                      const h = Math.floor(t / 60);
+                      const m = t % 60;
+                      return `${h}h ${m}m`;
+                    };
+
+                    const techReportMap = {};
+                    filteredTickets.forEach(t => {
+                      let assignees = [];
+                      
+                      if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
+                         assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+                      }
+                      
+                      if (assignees.length === 0) {
+                         const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+                         if (typeof rawAssign === 'string') {
+                            assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+                         } else {
+                            assignees = ['Unassigned'];
+                         }
+                      }
+                      
+                      if (assignees.length === 0) assignees = ['Unassigned'];
+
+                      let timeTaken = 0;
+                      let normalizedStatus = 'Open';
+                      const sLow = String(t.status || 'Open').toLowerCase();
+                      
+                      if (sLow.includes('completed') || sLow.includes('finished')) {
+                         normalizedStatus = 'Completed';
+                         if (t.createdAt && t.updatedAt) {
+                            const s = new Date(t.createdAt);
+                            const e = new Date(t.updatedAt);
+                            if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+                               timeTaken = Math.max(0, Math.floor((e - s) / 60000));
+                            }
+                         }
+                      } else if (sLow.includes('progress')) {
+                         normalizedStatus = 'In Progress';
+                      }
+
+                      assignees.forEach(name => {
+                        if (!techReportMap[name]) {
+                           techReportMap[name] = { Open: 0, 'In Progress': 0, Completed: 0, totalTime: 0 };
+                        }
+                        techReportMap[name][normalizedStatus]++;
+                        if (timeTaken > 0) {
+                           techReportMap[name].totalTime += (timeTaken / assignees.length);
+                        }
+                      });
+                    });
+
+                    const data = Object.entries(techReportMap).sort((a,b) => {
+                      const sumA = a[1].Open + a[1]['In Progress'] + a[1].Completed;
+                      const sumB = b[1].Open + b[1]['In Progress'] + b[1].Completed;
+                      return sumB - sumA;
+                    });
+                    
+                    if (data.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={8} className="p-8 text-center text-xs">No technician load data found.</td>
+                        </tr>
+                      );
+                    }
+                    
+                    return data.map(([name, counts]) => {
+                      const total = counts.Open + counts['In Progress'] + counts.Completed;
+                      const rate = total > 0 ? ((counts.Completed / total) * 100).toFixed(0) : 0;
+                      const avgMins = counts.Completed > 0 ? counts.totalTime / counts.Completed : 0;
+                      const avgTimeStr = formatTime(avgMins);
+                      const totalTimeStr = formatTime(counts.totalTime);
+                      
+                      return (
+                        <tr key={name} className="hover:bg-slate-700/30 transition-colors">
+                          <td className="p-4 text-xs font-bold text-main flex items-center space-x-2">
+                            <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
+                              {name.charAt(0).toUpperCase()}
+                            </div>
+                            <span>{name}</span>
+                          </td>
+                          <td className="p-4 font-mono text-center text-rose-400 font-bold">{counts.Open}</td>
+                          <td className="p-4 font-mono text-center text-amber-400 font-bold">{counts['In Progress']}</td>
+                          <td className="p-4 font-mono text-center text-green-400 font-bold">{counts.Completed}</td>
+                          <td className="p-4 font-mono text-center text-main font-bold">{total}</td>
+                          <td className="p-4 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-cyan-500/30 text-cyan-400 bg-cyan-500/10 font-mono">
+                              {rate}%
+                            </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-indigo-500/30 text-indigo-400 bg-indigo-500/10 font-mono">
+                              {avgTimeStr}
+                            </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border border-purple-500/30 text-purple-400 bg-purple-500/10 font-mono">
+                              {totalTimeStr}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
+            <div className="p-4 bg-panel border-b border-main flex justify-between items-center">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Report Registry ({filteredTickets.length} Records)</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-panel border-b border-main text-slate-400">
+                    <th className="p-4 text-[9px] font-bold uppercase tracking-widest text-center w-12">S.No</th>
+                    <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Date</th>
+                    <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Location</th>
+                    <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Upgrade Description</th>
+                    <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Action Taken</th>
+                    <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Instruction By</th>
+                    <th className="p-4 text-[9px] font-bold uppercase tracking-widest">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-main">
+                  {filteredTickets.map((ticket, idx) => {
+                    return (
+                      <tr key={ticket.id || ticket._id} className="hover:bg-slate-700/30 transition-colors">
+                        <td className="p-4 text-center font-mono text-[10px] text-slate-500">{idx + 1}</td>
+                        <td className="p-4 font-mono text-[10px] text-slate-400">
+                          {ticket.operationDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                        </td>
+                        <td className="p-4 text-xs font-bold text-blue-400">
+                          {ticket.divisionName || 'N/A'} - {ticket.block || ''}
+                        </td>
+                        <td className="p-4 text-xs text-slate-200">
+                          {ticket.issueDescription || 'N/A'}
+                        </td>
+                        <td className="p-4 text-xs text-slate-400">
+                          {ticket.actionTaken || 'N/A'}
+                        </td>
+                        <td className="p-4 text-xs text-slate-400">
+                          {ticket.instructionBy || 'N/A'}
+                        </td>
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                            ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                            'text-red-500 border-red-500/50'
+                          }`}>
+                            {ticket.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
@@ -652,25 +1199,33 @@ export default function Upgrades() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Division</label>
-                  <ComboInput 
+                  <select 
                     required 
                     name="divisionName" 
                     value={formData.divisionName} 
                     onChange={handleInputChange} 
-                    options={uniqueColleges} 
-                    placeholder="Select or Type Division..." 
-                  />
+                    className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer"
+                  >
+                    <option value="">SELECT DIVISION</option>
+                    {uniqueColleges.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Block/Location</label>
-                  <ComboInput 
+                  <select 
                     required 
                     name="block" 
                     value={formData.block} 
                     onChange={handleInputChange} 
-                    options={uniqueBlocks} 
-                    placeholder="Select or Type Block..." 
-                  />
+                    className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer"
+                  >
+                    <option value="">SELECT BLOCK</option>
+                    {uniqueBlocks.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div>
@@ -693,28 +1248,144 @@ export default function Upgrades() {
                   <input type="text" name="actionTaken" value={formData.actionTaken} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" />
                 </div>
                 <div>
+                  <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Raised By</label>
+                  <input type="text" name="raisedByName" value={formData.raisedByName} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Name of person raising upgrade" />
+                </div>
+                <div>
                   <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Instruction By</label>
                   <input type="text" name="instructionBy" value={formData.instructionBy} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Authorized by..." />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Assigned Staff</label>
-                  <select 
-                    multiple 
-                    name="assignedStaff" 
-                    value={formData.assignedStaff || []} 
-                    onChange={(e) => {
-                      const values = Array.from(e.target.selectedOptions, option => option.value);
-                      setFormData(prev => ({ ...prev, assignedStaff: values }));
-                    }} 
-                    className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer"
-                    style={{ minHeight: '80px' }}
-                  >
-                    {users.map(s => (
-                      <option key={s.id || s._id} value={s.id || s._id}>{s.name || s.username}</option>
-                    ))}
-                  </select>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-[9px] font-black text-secondary uppercase tracking-widest flex items-center gap-1">
+                      <Shield size={10} className="text-cyan-400" />
+                      Responsibility
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsAddingStaff(!isAddingStaff)}
+                      className="flex items-center space-x-1 px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-cyan-500/20 transition-all"
+                    >
+                      <Plus size={10} />
+                      <span>Quick Add Staff</span>
+                    </button>
+                  </div>
+
+                  {formData.assignedTo && (
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-xl max-w-max animate-fade-in mb-3">
+                      <span className="text-[8px] font-black text-cyan-400 uppercase tracking-widest">Site Responsibility:</span>
+                      <span className="text-[10px] font-bold text-white">
+                        {users.find(u => String(u.id || u._id) === String(formData.assignedTo))?.name || 'Loading...'}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {isAddingStaff && (
+                    <div className="flex flex-col space-y-2 animate-slide-down bg-panel p-3 rounded-xl border border-cyan-500/30 mb-3">
+                      <input 
+                        autoFocus
+                        type="text" 
+                        value={newStaffName}
+                        onChange={(e) => setNewStaffName(e.target.value)}
+                        className="glass-input w-full p-2 text-xs bg-panel border-main text-white"
+                        placeholder="Staff Name..."
+                      />
+                      <div className="flex space-x-2">
+                        <input 
+                          type="email" 
+                          value={newStaffEmail}
+                          onChange={(e) => setNewStaffEmail(e.target.value)}
+                          className="glass-input flex-1 p-2 text-xs bg-panel border-main text-white"
+                          placeholder="Email (Optional)..."
+                        />
+                        <button type="button" onClick={handleAddQuickStaff} className="px-3 py-1.5 bg-cyan-400 hover:bg-cyan-500 text-slate-900 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors">Save</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selected staff container */}
+                  <div className="bg-panel/40 border border-main rounded-xl p-3 min-h-[50px] flex flex-wrap gap-2 items-center justify-center text-center mb-3">
+                    {formData.assignedStaff && formData.assignedStaff.length > 0 ? (
+                      formData.assignedStaff.map(staffId => {
+                        const staff = users.find(u => String(u.id || u._id) === String(staffId));
+                        return (
+                          <span key={staffId} className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 animate-fade-in">
+                            {staff?.name || staff?.username || 'Unknown'}
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assignedStaff: (prev.assignedStaff || []).filter(id => String(id) !== String(staffId))
+                                }));
+                              }}
+                              className="hover:text-red-400 transition-colors"
+                            >
+                              <X size={10} />
+                            </button>
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <span className="text-[9px] font-black text-dim uppercase tracking-widest italic">NO STAFF ASSIGNED YET</span>
+                    )}
+                  </div>
+
+                  {/* Toggle buttons for each staff with edit/delete icons on hover */}
+                  <div className="grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto pr-1 custom-scrollbar">
+                    {users.map(s => {
+                      const isSelected = (formData.assignedStaff || []).some(id => String(id) === String(s.id || s._id));
+                      return (
+                        <div key={s.id || s._id} className="group/staff relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const id = s.id || s._id;
+                              setFormData(prev => {
+                                const current = prev.assignedStaff || [];
+                                const hasIt = current.some(item => String(item) === String(id));
+                                const next = hasIt 
+                                  ? current.filter(item => String(item) !== String(id)) 
+                                  : [...current, id];
+                                return { ...prev, assignedStaff: next };
+                              });
+                            }}
+                            className={`w-full p-2.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all text-left pr-10
+                              ${isSelected 
+                                ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)]' 
+                                : 'bg-panel/30 border-main text-secondary hover:bg-panel hover:text-main'
+                              }
+                            `}
+                          >
+                            {s.name || s.username}
+                            {String(s.id || s._id) === String(formData.assignedTo) && (
+                              <span className="ml-1.5 text-[8px] font-bold text-cyan-300 uppercase tracking-wider">
+                                (Responsibility)
+                              </span>
+                            )}
+                          </button>
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1 opacity-0 group-hover/staff:opacity-100 transition-opacity">
+                            <button 
+                              type="button" 
+                              onClick={(e) => handleEditStaff(e, s)}
+                              className="p-1 hover:text-blue-400 bg-black/40 rounded text-slate-300"
+                            >
+                              <Edit2 size={10} />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={(e) => handleDeleteStaff(e, s.id || s._id)}
+                              className="p-1 hover:text-red-400 bg-black/40 rounded text-slate-300"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Status</label>

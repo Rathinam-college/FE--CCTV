@@ -105,7 +105,9 @@ export default function ProjectTickets() {
     assignedStaff: [],
     projectId: projectId,
     status: 'Open',
-    workImage: null
+    workImage: null,
+    raisedBy: '',
+    raisedByName: ''
   });
 
   const [allLocations, setAllLocations] = useState([]);
@@ -149,8 +151,8 @@ export default function ProjectTickets() {
     const newName = prompt('Enter new name for staff member:', s.name);
     if (!newName || newName === s.name) return;
     try {
-      const res = await api.put(`/tickets/staff/${s.id || s._id}/`, { name: newName.trim() });
-      setStaff(staff.map(item => (item.id || item._id) === (s.id || s._id) ? res.data : item));
+      const res = await api.patch(`/users/${s.id || s._id}/`, { name: newName.trim(), email: s.email });
+      setStaff(staff.map(item => (item.id || item._id) === (s.id || s._id) ? { ...item, ...res.data } : item));
       showNotification('Staff member updated', 'success');
     } catch (err) {
       showNotification('Failed to update staff member', 'error');
@@ -161,7 +163,7 @@ export default function ProjectTickets() {
     e.stopPropagation();
     showConfirm('Are you sure?', async () => {
       try {
-        await api.delete(`/tickets/staff/${id}/`);
+        await api.delete(`/users/${id}/`);
         setStaff(staff.filter(s => (s.id || s._id) !== id));
         setFormData(prev => ({
           ...prev,
@@ -177,8 +179,16 @@ export default function ProjectTickets() {
   const handleAddQuickStaff = async () => {
     if (!newStaffName.trim()) return;
     try {
-      const res = await api.post('/tickets/staff/', { name: newStaffName.trim() });
-      setStaff([...staff, res.data]);
+      const emailToUse = `staff_${Date.now()}@cctv.local`;
+      const res = await api.post('/users/', { 
+        name: newStaffName.trim(), 
+        email: emailToUse,
+        password: 'password123',
+        role: 'Staff'
+      });
+      const newStaffList = [...staff, res.data];
+      setStaff(newStaffList);
+      setUsers(newStaffList);
       setFormData(prev => ({ ...prev, assignedStaff: [...prev.assignedStaff, res.data.id || res.data._id] }));
       setNewStaffName('');
       setShowStaffAdd(false);
@@ -259,7 +269,12 @@ export default function ProjectTickets() {
         );
 
         if (matchingLoc && matchingLoc.assignedTo) {
-          newData.assignedTo = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          const respId = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          newData.assignedTo = respId;
+          // Auto-select site responsibility in assignedStaff
+          if (respId && !newData.assignedStaff.includes(respId)) {
+            newData.assignedStaff = [...newData.assignedStaff, respId];
+          }
         }
       }
 
@@ -293,6 +308,7 @@ export default function ProjectTickets() {
         totalTime: formData.totalTime,
         remarks: formData.remarks || '',
         raisedBy: user._id || user.id,
+        raisedByName: formData.raisedByName || '',
       };
 
       if (!editingId) {
@@ -303,6 +319,7 @@ export default function ProjectTickets() {
       if (editingId) {
         payload.cameraId = currentTicket?.cameraId?._id || currentTicket?.cameraId?.id || (typeof currentTicket?.cameraId !== 'object' ? currentTicket?.cameraId : null);
         payload.raisedBy = currentTicket?.raisedBy?._id || currentTicket?.raisedBy?.id || (typeof currentTicket?.raisedBy !== 'object' ? currentTicket?.raisedBy : null) || user?._id || user?.id;
+        payload.raisedByName = formData.raisedByName || '';
       } else {
         payload.cameraId = null;
       }
@@ -359,7 +376,9 @@ export default function ProjectTickets() {
       assignedStaff: [],
       projectId: projectId,
       status: 'Open',
-      workImage: null
+      workImage: null,
+      raisedBy: user?._id || user?.id || '',
+      raisedByName: ''
     });
     setEditingId(null);
     setCurrentTicket(null);
@@ -384,10 +403,19 @@ export default function ProjectTickets() {
       endTime: ticket.endTime || '',
       totalTime: ticket.totalTime || '0h 0m',
       assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
-      assignedStaff: (ticket.assignedStaff || []).map(s => s.id || s._id || s),
+      assignedStaff: (() => {
+        const respId = ticket.assignedTo?.id || ticket.assignedTo || '';
+        const staffIds = (ticket.assignedStaff || []).map(s => s.id || s._id || s);
+        if (respId && !staffIds.includes(respId)) {
+          staffIds.push(respId);
+        }
+        return staffIds;
+      })(),
       projectId: projectId,
       status: ticket.status || 'Open',
-      workImage: null
+      workImage: null,
+      raisedBy: ticket.raisedBy?.id || ticket.raisedBy?._id || (typeof ticket.raisedBy !== 'object' ? ticket.raisedBy : '') || '',
+      raisedByName: ticket.raisedByName || ''
     });
     setEditingId(ticket.id || ticket._id);
     setCurrentTicket(ticket);
@@ -715,20 +743,35 @@ export default function ProjectTickets() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center space-x-2 text-[11px] text-secondary">
-                        {(() => {
-                          const displayUser = assignedUser || ticket.raisedBy;
-                          return (
-                            <>
-                              <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[8px] font-bold text-blue-400">
-                                {String(displayUser?.name || 'U').charAt(0).toUpperCase()}
-                              </div>
-                              <span className="font-bold text-white">
-                                {displayUser?.name || 'Unassigned'}
-                              </span>
-                            </>
-                          );
-                        })()}
+                      <div className="flex flex-col space-y-1">
+                        {Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {ticket.assignedStaff.map(s => {
+                              const nameStr = typeof s === 'object' ? s.name : (users.find(u => (u.id || u._id) === s)?.name || 'Staff');
+                              return (
+                                <span key={typeof s === 'object' ? (s.id || s._id) : s} className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border border-blue-500/30 text-blue-400 bg-blue-500/10">
+                                  {nameStr}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-2 text-[11px] text-secondary">
+                            {(() => {
+                              const displayUser = assignedUser || ticket.raisedBy;
+                              return (
+                                <>
+                                  <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[8px] font-bold text-blue-400">
+                                    {String(displayUser?.name || 'U').charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="font-bold text-white">
+                                    {displayUser?.name || 'Unassigned'}
+                                  </span>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
@@ -833,11 +876,12 @@ export default function ProjectTickets() {
                         handleInputChange(e);
                         setFormData(prev => ({ ...prev, floor: '', room: '' }));
                       }}
-                      options={Array.from(new Set(
-                        allLocations
-                          .filter(l => !formData.divisionName || !l.divisionName || l.divisionName === formData.divisionName)
-                          .map(l => l.block)
-                      )).filter(Boolean).sort()}
+                      options={(() => {
+                        const filtered = allLocations.filter(l => !formData.divisionName || String(l.divisionName || '').toUpperCase() === String(formData.divisionName || '').toUpperCase()).map(l => l.block);
+                        const unique = Array.from(new Set(filtered)).filter(Boolean).sort();
+                        if (unique.length > 0) return unique;
+                        return Array.from(new Set(allLocations.map(l => l.block))).filter(Boolean).sort();
+                      })()}
                       placeholder="Block name..." 
                     />
                   </div>
@@ -851,11 +895,14 @@ export default function ProjectTickets() {
                         handleInputChange(e);
                         setFormData(prev => ({ ...prev, room: '' }));
                       }}
-                      options={Array.from(new Set(
-                        allLocations
-                          .filter(l => (!formData.divisionName || !l.divisionName || l.divisionName === formData.divisionName) && (!formData.block || l.block === formData.block))
-                          .map(l => l.floor)
-                      )).filter(Boolean).sort()}
+                      options={(() => {
+                        const filtered = allLocations.filter(l => (!formData.divisionName || String(l.divisionName || '').toUpperCase() === String(formData.divisionName || '').toUpperCase()) && (!formData.block || String(l.block || '').toUpperCase() === String(formData.block || '').toUpperCase())).map(l => l.floor);
+                        const unique = Array.from(new Set(filtered)).filter(Boolean).sort();
+                        if (unique.length > 0) return unique;
+                        const filteredBlockOnly = allLocations.filter(l => !formData.block || String(l.block || '').toUpperCase() === String(formData.block || '').toUpperCase()).map(l => l.floor);
+                        const uniqueBlockOnly = Array.from(new Set(filteredBlockOnly)).filter(Boolean).sort();
+                        return uniqueBlockOnly;
+                      })()}
                       placeholder="Floor..." 
                     />
                   </div>
@@ -865,11 +912,14 @@ export default function ProjectTickets() {
                       name="room" 
                       value={formData.room} 
                       onChange={handleInputChange} 
-                      options={Array.from(new Set(
-                        allLocations
-                          .filter(l => (!formData.divisionName || !l.divisionName || l.divisionName === formData.divisionName) && (!formData.block || l.block === formData.block) && (!formData.floor || l.floor === formData.floor))
-                          .map(l => l.room)
-                      )).filter(Boolean).sort()}
+                      options={(() => {
+                        const filtered = allLocations.filter(l => (!formData.divisionName || String(l.divisionName || '').toUpperCase() === String(formData.divisionName || '').toUpperCase()) && (!formData.block || String(l.block || '').toUpperCase() === String(formData.block || '').toUpperCase()) && (!formData.floor || String(l.floor || '').toUpperCase() === String(formData.floor || '').toUpperCase())).map(l => l.room);
+                        const unique = Array.from(new Set(filtered)).filter(Boolean).sort();
+                        if (unique.length > 0) return unique;
+                        const filteredBlockFloor = allLocations.filter(l => (!formData.block || String(l.block || '').toUpperCase() === String(formData.block || '').toUpperCase()) && (!formData.floor || String(l.floor || '').toUpperCase() === String(formData.floor || '').toUpperCase())).map(l => l.room);
+                        const uniqueBlockFloor = Array.from(new Set(filteredBlockFloor)).filter(Boolean).sort();
+                        return uniqueBlockFloor;
+                      })()}
                       placeholder="Select or Type Room..." 
                     />
                   </div>
@@ -885,6 +935,10 @@ export default function ProjectTickets() {
                   
                   <div className="space-y-4">
 
+                    <div>
+                      <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Raised By</label>
+                      <input type="text" name="raisedByName" value={formData.raisedByName} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main" placeholder="Name of person raising ticket" />
+                    </div>
                     <div>
                       <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Done By (Responsible Manager)</label>
                       <select name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer">
@@ -910,6 +964,15 @@ export default function ProjectTickets() {
                     </button>
                   </div>
 
+                  {formData.assignedTo && (
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-xl max-w-max animate-fade-in mt-2">
+                      <span className="text-[8px] font-black text-teal-400 uppercase tracking-widest">Site Responsibility:</span>
+                      <span className="text-[10px] font-bold text-white">
+                        {staff.find(s => (s.id || s._id) === formData.assignedTo)?.name || 'Loading...'}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="space-y-6">
                     {showStaffAdd && (
                       <div className="flex items-center space-x-2 animate-slide-down">
@@ -923,6 +986,11 @@ export default function ProjectTickets() {
                         <div key={s.id || s._id} className="group/staff relative">
                           <button type="button" onClick={() => toggleStaffSelection(s.id || s._id)} className={`w-full px-4 py-2.5 rounded-xl text-left text-[9px] font-black uppercase tracking-widest transition-all border ${formData.assignedStaff.includes(s.id || s._id) ? 'bg-teal-600 text-white border-teal-500 shadow-lg shadow-teal-500/20' : 'bg-panel text-secondary border-main hover:border-teal-500/30'}`}>
                             {s.name}
+                            {(s.id || s._id) === formData.assignedTo && (
+                              <span className="ml-1.5 text-[8px] font-bold text-teal-300 uppercase tracking-wider">
+                                (Responsibility)
+                              </span>
+                            )}
                           </button>
                           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1 opacity-0 group-hover/staff:opacity-100 transition-opacity">
                             <button type="button" onClick={(e) => handleEditStaff(e, s)} className="p-1 hover:text-blue-400 bg-black/20 rounded backdrop-blur-sm"><Edit2 size={10} /></button>

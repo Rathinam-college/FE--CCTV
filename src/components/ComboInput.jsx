@@ -6,12 +6,11 @@ export default function ComboInput({ value, onChange, options, placeholder, name
   const filteredOptions = (options || []).filter(o => o && String(o).toLowerCase().includes((value || '').toLowerCase()));
 
   const handleBlur = () => {
-    setTimeout(() => {
-      setIsOpen(false);
-      if (strict && value && !(options || []).includes(value)) {
-        onChange({ target: { name, value: '' } });
-      }
-    }, 200);
+    // If strict is true, reset value on blur if not matches
+    if (strict && value && !(options || []).includes(value)) {
+      onChange({ target: { name, value: '' } });
+    }
+    setIsOpen(false);
   };
 
   return (
@@ -36,7 +35,11 @@ export default function ComboInput({ value, onChange, options, placeholder, name
           {filteredOptions.map(opt => (
             <div
               key={opt}
-              onClick={() => onChange({ target: { name, value: opt } })}
+              onMouseDown={(e) => {
+                e.preventDefault(); // Prevents input onBlur from firing before selection is registered
+                onChange({ target: { name, value: opt } });
+                setIsOpen(false);
+              }}
               className="p-3 text-xs text-secondary font-bold hover:bg-blue-500/20 hover:text-white cursor-pointer border-b border-white/5 last:border-0 transition-colors"
             >
               {opt}

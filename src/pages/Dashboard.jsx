@@ -466,7 +466,7 @@ export default function Dashboard() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Radio size={20} color={C.cameras} style={{ filter: `drop-shadow(0 0 4px ${C.cameras})` }} />
-            <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: 0.5, margin: 0, textTransform: 'uppercase' }}>CAMPUS CCTV DASHBOARD</h1>
+            <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: 0.5, margin: 0, textTransform: 'uppercase' }}>CCTV DASHBOARD</h1>
           </div>
           <p style={{ fontFamily: mono, fontSize: 11.5, color: C.textMute, marginTop: 4 }}>
             Rathinam College · {now.toLocaleTimeString()}
