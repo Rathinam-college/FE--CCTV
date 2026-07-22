@@ -269,12 +269,8 @@ export default function ProjectTickets() {
         );
 
         if (matchingLoc && matchingLoc.assignedTo) {
-          const respId = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          const respId = matchingLoc.assignedTo.id || matchingLoc.assignedTo._id || matchingLoc.assignedTo;
           newData.assignedTo = respId;
-          // Auto-select site responsibility in assignedStaff
-          if (respId && !newData.assignedStaff.includes(respId)) {
-            newData.assignedStaff = [...newData.assignedStaff, respId];
-          }
         }
       }
 
@@ -402,15 +398,8 @@ export default function ProjectTickets() {
       receivedTime: ticket.receivedTime || '',
       endTime: ticket.endTime || '',
       totalTime: ticket.totalTime || '0h 0m',
-      assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
-      assignedStaff: (() => {
-        const respId = ticket.assignedTo?.id || ticket.assignedTo || '';
-        const staffIds = (ticket.assignedStaff || []).map(s => s.id || s._id || s);
-        if (respId && !staffIds.includes(respId)) {
-          staffIds.push(respId);
-        }
-        return staffIds;
-      })(),
+      assignedTo: ticket.assignedTo?.id || ticket.assignedTo?._id || (typeof ticket.assignedTo !== 'object' ? ticket.assignedTo : '') || '',
+      assignedStaff: (ticket.assignedStaff || []).map(s => s.id || s._id || s),
       projectId: projectId,
       status: ticket.status || 'Open',
       workImage: null,

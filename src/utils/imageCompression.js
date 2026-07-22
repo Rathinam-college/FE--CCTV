@@ -36,16 +36,27 @@ export const compressImage = async (file, maxSizeKB = 50) => {
         
         const tryCompress = (currentQuality) => {
           canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error("Canvas to Blob conversion failed"));
+              return;
+            }
             if (blob.size <= maxSizeKB * 1024 || currentQuality <= 0.1) {
-              // Create a new File object
-              const compressedFile = new File([blob], file.name, {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
-              resolve(compressedFile);
+              try {
+                // Create a new File object
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(compressedFile);
+              } catch (e) {
+                // Fallback to Blob with name and lastModified properties
+                blob.name = file.name || 'compressed_image.jpg';
+                blob.lastModifiedDate = new Date();
+                resolve(blob);
+              }
             } else {
-              // Recursively reduce quality
-              tryCompress(currentQuality - 0.15);
+              // Recursively reduce quality, clamping to a minimum of 0.05
+              tryCompress(Math.max(0.05, currentQuality - 0.15));
             }
           }, 'image/jpeg', currentQuality);
         };

@@ -99,7 +99,6 @@ export default function Tickets() {
     division: true,
     blockLocation: true,
     category: true,
-    project: true,
     instructionBy: true,
     raisedBy: true,
     timeRET: true,
@@ -636,12 +635,8 @@ export default function Tickets() {
         );
 
         if (matchingLoc && matchingLoc.assignedTo) {
-          const respId = matchingLoc.assignedTo.id || matchingLoc.assignedTo;
+          const respId = matchingLoc.assignedTo.id || matchingLoc.assignedTo._id || matchingLoc.assignedTo;
           newData.assignedTo = respId;
-          // Auto-select site responsibility in assignedStaff
-          if (respId && !newData.assignedStaff.includes(respId)) {
-            newData.assignedStaff = [...newData.assignedStaff, respId];
-          }
         }
       }
 
@@ -688,38 +683,38 @@ export default function Tickets() {
       }
 
       // Handle Image Fields
-      // If it's a File object, append it. If it is null or empty, don't append (or append empty string if cleared)
-      if (formData.createdImage instanceof File) {
+      // If it's a File or Blob object, append it. If it is null or empty, don't append (or append empty string if cleared)
+      if (formData.createdImage instanceof File || formData.createdImage instanceof Blob) {
         formDataToSend.append('createdImage', formData.createdImage);
       } else if (!formData.createdImage) {
         formDataToSend.append('createdImage', '');
       }
 
-      if (formData.createdVideo instanceof File) {
+      if (formData.createdVideo instanceof File || formData.createdVideo instanceof Blob) {
         formDataToSend.append('createdVideo', formData.createdVideo);
       } else if (!formData.createdVideo) {
         formDataToSend.append('createdVideo', '');
       }
 
-      if (formData.inProgressImage instanceof File) {
+      if (formData.inProgressImage instanceof File || formData.inProgressImage instanceof Blob) {
         formDataToSend.append('inProgressImage', formData.inProgressImage);
       } else if (!formData.inProgressImage) {
         formDataToSend.append('inProgressImage', '');
       }
 
-      if (formData.inProgressVideo instanceof File) {
+      if (formData.inProgressVideo instanceof File || formData.inProgressVideo instanceof Blob) {
         formDataToSend.append('inProgressVideo', formData.inProgressVideo);
       } else if (!formData.inProgressVideo) {
         formDataToSend.append('inProgressVideo', '');
       }
 
-      if (formData.completedImage instanceof File) {
+      if (formData.completedImage instanceof File || formData.completedImage instanceof Blob) {
         formDataToSend.append('completedImage', formData.completedImage);
       } else if (!formData.completedImage) {
         formDataToSend.append('completedImage', '');
       }
 
-      if (formData.completedVideo instanceof File) {
+      if (formData.completedVideo instanceof File || formData.completedVideo instanceof Blob) {
         formDataToSend.append('completedVideo', formData.completedVideo);
       } else if (!formData.completedVideo) {
         formDataToSend.append('completedVideo', '');
@@ -854,18 +849,11 @@ export default function Tickets() {
       receivedDate: ticket.receivedDate || (ticket.createdDate ? ticket.createdDate : (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0])),
       receivedTime: ticket.receivedTime || meta.receivedTime || '',
       endTime: ticket.endTime || meta.endTime || '',
-      assignedTo: ticket.assignedTo?.id || ticket.assignedTo || '',
+      assignedTo: ticket.assignedTo?.id || ticket.assignedTo?._id || (typeof ticket.assignedTo !== 'object' ? ticket.assignedTo : '') || '',
       raisedBy: ticket.raisedBy?.id || ticket.raisedBy?._id || (typeof ticket.raisedBy !== 'object' ? ticket.raisedBy : '') || '',
       raisedByName: ticket.raisedByName || '',
-      assignedStaff: (() => {
-        const respId = ticket.assignedTo?.id || ticket.assignedTo || '';
-        const staffIds = ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id) : [];
-        if (respId && !staffIds.includes(respId)) {
-          staffIds.push(respId);
-        }
-        return staffIds;
-      })(),
-      projectId: ticket.projectId?.id || ticket.projectId || '',
+      assignedStaff: ticket.assignedStaff ? ticket.assignedStaff.map(s => s.id || s._id) : [],
+      projectId: ticket.projectId?.id || ticket.projectId?._id || (typeof ticket.projectId !== 'object' ? ticket.projectId : '') || '',
       status: ticket.status || 'Open',
       
       createdImage: ticket.createdImage || null,
@@ -1999,7 +1987,6 @@ export default function Tickets() {
                 {columnVisibility.division && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Division</th>}
                 {columnVisibility.blockLocation && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Block / Location</th>}
                 {columnVisibility.category && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</th>}
-                {columnVisibility.project && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project</th>}
                 {columnVisibility.instructionBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>}
                 {columnVisibility.raisedBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Raised By</th>}
                 {columnVisibility.timeRET && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>}
@@ -2011,13 +1998,13 @@ export default function Tickets() {
             <tbody className="divide-y divide-white/5 text-main">
                {loading ? (
                 <tr>
-                  <td colSpan="14" className="p-20 text-center text-dim">
+                  <td colSpan="13" className="p-20 text-center text-dim">
                     Loading tickets...
                   </td>
                 </tr>
               ) : filteredTickets.length === 0 ? (
                 <tr>
-                  <td colSpan="14" className="p-20 text-center text-dim">
+                  <td colSpan="13" className="p-20 text-center text-dim">
                     No tickets found.
                   </td>
                 </tr>
@@ -2086,15 +2073,6 @@ export default function Tickets() {
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border border-blue-500/50 text-blue-400 bg-blue-500/10">
                             {ticket.category || meta.category || 'Issue'}
                           </span>
-                        </td>
-                      )}
-
-                      {columnVisibility.project && (
-                        <td className="p-4">
-                          <div className="flex items-center text-xs text-slate-400 font-medium">
-                            <Briefcase size={12} className="mr-2 text-cyan-400" />
-                            {ticket.project?.name || 'Independent'}
-                          </div>
                         </td>
                       )}
 
@@ -2674,9 +2652,9 @@ export default function Tickets() {
                              <Trash2 size={12} />
                            </button>
                          </div>
-                       ) : formData.createdImage instanceof File ? (
+                       ) : (formData.createdImage instanceof File || formData.createdImage instanceof Blob) ? (
                          <div className="mt-2 flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                           <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.createdImage.name}</span>
+                           <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.createdImage.name || 'compressed_image.jpg'}</span>
                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, createdImage: null }))} className="text-blue-400"><X size={14} /></button>
                          </div>
                        ) : (
@@ -2742,9 +2720,9 @@ export default function Tickets() {
                              <Trash2 size={12} />
                            </button>
                          </div>
-                       ) : formData.createdVideo instanceof File ? (
+                       ) : (formData.createdVideo instanceof File || formData.createdVideo instanceof Blob) ? (
                          <div className="mt-2 flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                           <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.createdVideo.name}</span>
+                           <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.createdVideo.name || 'video.mp4'}</span>
                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, createdVideo: null }))} className="text-blue-400"><X size={14} /></button>
                          </div>
                        ) : (
@@ -3010,9 +2988,9 @@ export default function Tickets() {
                                 <Trash2 size={12} />
                               </button>
                             </div>
-                          ) : formData.inProgressImage instanceof File ? (
+                          ) : (formData.inProgressImage instanceof File || formData.inProgressImage instanceof Blob) ? (
                             <div className="mt-2 flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                              <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.inProgressImage.name}</span>
+                              <span className="text-[10px] text-blue-400 font-bold truncate max-w-[200px]">{formData.inProgressImage.name || 'compressed_image.jpg'}</span>
                               <button type="button" onClick={() => setFormData(prev => ({ ...prev, inProgressImage: null }))} className="text-blue-400"><X size={14} /></button>
                             </div>
                           ) : (
@@ -3103,9 +3081,9 @@ export default function Tickets() {
                                 <Trash2 size={12} />
                               </button>
                             </div>
-                          ) : formData.completedImage instanceof File ? (
+                          ) : (formData.completedImage instanceof File || formData.completedImage instanceof Blob) ? (
                             <div className="mt-2 flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                              <span className="text-[10px] text-emerald-400 font-bold truncate max-w-[200px]">{formData.completedImage.name}</span>
+                              <span className="text-[10px] text-emerald-400 font-bold truncate max-w-[200px]">{formData.completedImage.name || 'compressed_image.jpg'}</span>
                               <button type="button" onClick={() => setFormData(prev => ({ ...prev, completedImage: null }))} className="text-emerald-400"><X size={14} /></button>
                             </div>
                           ) : (

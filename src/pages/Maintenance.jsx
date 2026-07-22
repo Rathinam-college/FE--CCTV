@@ -80,7 +80,9 @@ export default function Maintenance() {
 
   const parseMetadata = (remarks) => {
     try {
-      return JSON.parse(remarks);
+      const parsed = JSON.parse(remarks);
+      if (parsed && typeof parsed === 'object') return parsed;
+      throw new Error("Not an object");
     } catch (e) {
       return {
         location: '',
