@@ -245,7 +245,7 @@ export default function ProjectTickets() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     let newValue = value;
-    if (typeof newValue === 'string' && !['date', 'status', 'receivedTime', 'endTime'].includes(name)) {
+    if (typeof newValue === 'string' && !['date', 'status', 'receivedTime', 'endTime', 'raisedByName', 'instructionBy'].includes(name)) {
       newValue = newValue.toUpperCase();
     }
 
@@ -488,12 +488,29 @@ export default function ProjectTickets() {
                 <th>Category</th>
                 <th>Location</th>
                 <th>Issue Description</th>
+                <th>Responsibility</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               ${filteredTickets.map((ticket, idx) => {
                 const meta = parseMetadata(ticket.remarks);
+                
+                let staffNames = 'Unassigned';
+                if (Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0) {
+                  staffNames = ticket.assignedStaff.map(s => s.name || s.username).filter(Boolean).join(', ');
+                } else {
+                  const assignedId = ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo;
+                  const assignedUser = ticket.assignedTo && typeof ticket.assignedTo === 'object'
+                    ? ticket.assignedTo
+                    : (Array.isArray(users) ? users.find(u => (u.id || u._id) === assignedId) : null);
+                  if (assignedUser?.name || assignedUser?.username) {
+                    staffNames = assignedUser.name || assignedUser.username;
+                  } else if (ticket.raisedBy && typeof ticket.raisedBy === 'object') {
+                    staffNames = ticket.raisedBy.name || ticket.raisedBy.username || 'Unassigned';
+                  }
+                }
+
                 return `
                 <tr>
                   <td>${idx + 1}</td>
@@ -501,6 +518,7 @@ export default function ProjectTickets() {
                   <td>${ticket.category || meta.category || 'CCTV'}</td>
                   <td>${[ticket.divisionName, ticket.block, ticket.room].filter(Boolean).join(' / ') || ticket.location || meta.location || 'N/A'}</td>
                   <td>${ticket.issueDescription || 'N/A'}</td>
+                  <td>${staffNames}</td>
                   <td><span class="badge ${ticket.status === 'Completed' ? 'status-completed' : ticket.status === 'In Progress' ? 'status-inprogress' : 'status-open'}">${ticket.status || 'N/A'}</span></td>
                 </tr>
                 `

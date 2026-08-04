@@ -111,7 +111,7 @@ export default function Maintenance() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     let newValue = value;
-    if (typeof newValue === 'string' && !['date', 'status', 'receivedTime', 'endTime'].includes(name)) {
+    if (typeof newValue === 'string' && !['date', 'status', 'receivedTime', 'endTime', 'raisedByName', 'instructionBy'].includes(name)) {
       newValue = newValue.toUpperCase();
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));

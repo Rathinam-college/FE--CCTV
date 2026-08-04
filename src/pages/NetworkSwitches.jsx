@@ -22,6 +22,7 @@ export default function NetworkSwitches() {
   const { currentSite, fetchSite, allLocations, fetchAllLocations, ensureLocationExists, divisions, fetchDivisions, brands, fetchBrands } = useSiteStore();
   const [switches, setSwitches] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
   
@@ -563,11 +564,33 @@ export default function NetworkSwitches() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
-        <div>
+        <div className="flex flex-wrap items-center gap-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <Network className="mr-3 text-cyan-400" size={28} />
             Switches
           </h1>
+          <div className="flex bg-panel border border-main rounded-xl p-0.5 self-center">
+            <button
+              onClick={() => setViewMode('registry')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'registry'
+                  ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Device List
+            </button>
+            <button
+              onClick={() => setViewMode('report')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'report'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Report View
+            </button>
+          </div>
         </div>
         <div className="flex space-x-4 items-center">
           {canEdit && (
@@ -593,7 +616,9 @@ export default function NetworkSwitches() {
         </div>
       </div>
 
-      {/* Stats Dashboard */}
+      {viewMode === 'registry' ? (
+        <>
+          {/* Stats Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-slide-up delay-100">
         <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50">
           <div className="flex justify-between items-start w-full">
@@ -864,6 +889,117 @@ export default function NetworkSwitches() {
           </table>
         </div>
       </div>
+        </>
+      ) : (
+        /* Network Switches Status & Remarks History Log Report View */
+        <div className="space-y-6 animate-fade-in">
+          {/* Status Summary Count Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Online Switches</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-emerald-400">{stats.online}</span>
+                <span className="text-[10px] text-dim font-mono">
+                  {switches.length ? ((stats.online / switches.length) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Offline Switches</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-red-400">{stats.offline}</span>
+                <span className="text-[10px] text-dim font-mono">
+                  {switches.length ? ((stats.offline / switches.length) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Maintenance</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-amber-400">{stats.maintenance}</span>
+                <span className="text-[10px] text-dim font-mono">
+                  {switches.length ? ((stats.maintenance / switches.length) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Total Registered</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-cyan-400">{switches.length}</span>
+                <span className="text-[10px] text-dim font-mono">Units</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Remarks Table & Audit Log */}
+          <div className="glass-panel overflow-hidden bg-panel border border-main rounded-2xl shadow-2xl">
+            <div className="p-6 border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40">
+              <div className="flex items-center space-x-3">
+                <Network className="text-cyan-400" size={20} />
+                <h3 className="text-sm font-black uppercase tracking-widest text-main">
+                  Network Switches Status & Audit Log Report
+                </h3>
+              </div>
+              <button onClick={printToPDF} className="flex items-center px-4 py-2 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-purple-500/30 transition-all">
+                <Printer size={14} className="mr-2" /> Print Switch Report
+              </button>
+            </div>
+
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-card border-b border-main text-[10px] font-bold text-dim uppercase tracking-widest">
+                    <th className="p-4 text-center">#</th>
+                    <th className="p-4">Switch Name</th>
+                    <th className="p-4">Asset Number</th>
+                    <th className="p-4">IP Address</th>
+                    <th className="p-4">Location</th>
+                    <th className="p-4">Ports Specs</th>
+                    <th className="p-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-main text-xs font-medium">
+                  {filteredSwitches.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="p-12 text-center text-dim">
+                        No network switch records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSwitches.map((sw, idx) => (
+                      <tr key={sw.id || sw._id || idx} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                        <td className="p-4 font-bold text-main">{sw.name || '—'}</td>
+                        <td className="p-4 font-mono text-xs text-amber-400">{sw.serialNumber || '—'}</td>
+                        <td className="p-4 font-mono text-cyan-400">{sw.ipAddress || '—'}</td>
+                        <td className="p-4 text-slate-300">
+                          <div>{sw.divisionName || '—'}</div>
+                          <div className="text-[10px] text-dim">{[sw.block, sw.floor, sw.room].filter(Boolean).join(' / ')}</div>
+                        </td>
+                        <td className="p-4 font-mono text-slate-300">
+                          {sw.portCount || '—'} Ports ({sw.ethUplink || '0'} ETH / {sw.sfpUplink || '0'} SFP)
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            sw.status === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                            sw.status === 'Maintenance' ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' :
+                            'text-red-400 border-red-500/50 bg-red-500/10'
+                          }`}>
+                            {sw.status || 'Online'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Switch Modal (Add / Edit) */}
       {showModal && (

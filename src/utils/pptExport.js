@@ -49,18 +49,14 @@ const generateTicketCanvas = async (ticket, getImageUrl, titlePrefix = 'TICKET')
   ctx.lineWidth = 4;
   ctx.strokeRect(10, 10, 880, 740);
 
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = 'bold 24px Arial';
-  ctx.fillText(`${titlePrefix.toUpperCase()} #${ticket.id || ticket._id}`, 40, 60);
-
   const isCompleted = ticket.status === 'Completed';
   const badgeColor = isCompleted ? '#10b981' : (ticket.status === 'In Progress' ? '#f97316' : '#ef4444');
   ctx.fillStyle = badgeColor;
-  ctx.fillRect(40, 85, 120, 30);
+  ctx.fillRect(40, 45, 130, 32);
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 12px Arial';
+  ctx.font = 'bold 13px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText((ticket.status || 'Open').toUpperCase(), 100, 105);
+  ctx.fillText((ticket.status || 'Open').toUpperCase(), 105, 66);
   ctx.textAlign = 'left';
 
   ctx.fillStyle = '#94a3b8';
@@ -201,35 +197,183 @@ const generateTicketCanvas = async (ticket, getImageUrl, titlePrefix = 'TICKET')
   return canvas;
 };
 
-export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthly', titlePrefix = 'Ticket') => {
+export const exportMonthlyPPT = async (tickets, getImageUrl, monthName = 'Monthly', titlePrefix = 'Ticket', stats = null) => {
   if (!tickets || tickets.length === 0) {
     throw new Error('No tickets available to generate PPT.');
   }
 
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_16x9';
+
+  // Active stats calculation or fallback
+  const activeStats = stats || (() => {
+  // Active stats calculation or fallback
+  const activeStats = stats || (() => {
+    const currentYm = new Date().toISOString().substring(0, 7);
+    let openCount = 0, closedCount = 0, oldOpen = 0;
+
+    tickets.forEach(t => {
+      let d = t.createdAt ? String(t.createdAt).substring(0, 7) : '';
+      if (t.remarks) {
+        try {
+          const meta = typeof t.remarks === 'string' ? JSON.parse(t.remarks) : t.remarks;
+          if (meta.manualDate) d = meta.manualDate.substring(0, 7);
+        } catch(e){}
+      }
+      const isCompleted = t.status === 'Completed';
+
+      if (d === currentYm) {
+        if (isCompleted) closedCount++;
+        else openCount++;
+      } else if (d && d < currentYm && !isCompleted) {
+        oldOpen++;
+      }
+    });
+
+    return {
+      currentMonthName: currentYm,
+      currentOpenCount: openCount,
+      currentClosedCount: closedCount,
+      prevMonthOpenCount: oldOpen
+    };
+  })();
   
-  // Create a title slide
+  // Create a title slide (Slide 1)
   const titleSlide = pptx.addSlide();
   titleSlide.background = { color: '0F172A' };
-  titleSlide.addText(`${monthName} ${titlePrefix} Report`, {
-    x: 0,
-    y: 3,
-    w: '100%',
-    h: 1,
+
+  // Main Header
+  const displayTitleMonth = activeStats.currentMonthName || (monthName ? monthName.replace(/_/g, ' ') : 'Monthly');
+  titleSlide.addText(`${displayTitleMonth} ${titlePrefix} Operations Report`, {
+    x: 0.5,
+    y: 0.5,
+    w: 12.33,
+    h: 0.8,
     align: 'center',
-    fontSize: 44,
+    fontSize: 32,
     color: 'FFFFFF',
     bold: true
   });
-  titleSlide.addText(`${tickets.length} ${titlePrefix}s Processed`, {
-    x: 0,
-    y: 4,
-    w: '100%',
-    h: 1,
+
+  // Subheader
+  titleSlide.addText(`Monthly Performance & Operational Status Summary`, {
+    x: 0.5,
+    y: 1.2,
+    w: 12.33,
+    h: 0.4,
     align: 'center',
-    fontSize: 24,
+    fontSize: 14,
     color: '94A3B8'
+  });
+
+  // 4 Metric Cards Configuration on Slide 1
+  const cardData = [
+    {
+      title: 'Current Month Open',
+      count: String(activeStats.currentOpenCount ?? 0),
+      subtitle: `Open / In-Progress (${activeStats.currentMonthName || 'Current'})`,
+      accentColor: 'F59E0B',
+      bgColor: '1E293B'
+    },
+    {
+      title: 'Current Month Closed',
+      count: String(activeStats.currentClosedCount ?? 0),
+      subtitle: `Completed (${activeStats.currentMonthName || 'Current'})`,
+      accentColor: '10B981',
+      bgColor: '1E293B'
+    },
+    {
+      title: 'Past Month Open / In Progress',
+      count: String(activeStats.prevMonthOpenCount ?? 0),
+      subtitle: 'Carried Over Unresolved',
+      accentColor: 'EF4444',
+      bgColor: '1E293B'
+    },
+    {
+      title: 'Total Tickets in Report',
+      count: String(tickets.length),
+      subtitle: 'Slides / Tickets in PPT',
+      accentColor: '38BDF8',
+      bgColor: '1E293B'
+    }
+  ];
+
+  const cardW = 2.7;
+  const cardH = 3.6;
+  const startX = 0.8;
+  const gap = 0.3;
+  const cardY = 2.0;
+
+  cardData.forEach((card, index) => {
+    const x = startX + index * (cardW + gap);
+
+    // Card Container
+    titleSlide.addShape(pptx.shapes.RECTANGLE, {
+      x,
+      y: cardY,
+      w: cardW,
+      h: cardH,
+      fill: { color: card.bgColor },
+      line: { color: '334155', width: 1 }
+    });
+
+    // Top Accent Border Line
+    titleSlide.addShape(pptx.shapes.RECTANGLE, {
+      x,
+      y: cardY,
+      w: cardW,
+      h: 0.1,
+      fill: { color: card.accentColor },
+      line: { color: card.accentColor }
+    });
+
+    // Card Title
+    titleSlide.addText(card.title, {
+      x: x + 0.1,
+      y: cardY + 0.3,
+      w: cardW - 0.2,
+      h: 0.5,
+      fontSize: 12,
+      color: '94A3B8',
+      bold: true,
+      align: 'center'
+    });
+
+    // Big Count Number
+    titleSlide.addText(card.count, {
+      x: x + 0.1,
+      y: cardY + 1.0,
+      w: cardW - 0.2,
+      h: 1.2,
+      fontSize: 44,
+      color: card.accentColor,
+      bold: true,
+      align: 'center'
+    });
+
+    // Subtitle
+    titleSlide.addText(card.subtitle, {
+      x: x + 0.1,
+      y: cardY + 2.5,
+      w: cardW - 0.2,
+      h: 0.5,
+      fontSize: 11,
+      color: 'CBD5E1',
+      align: 'center'
+    });
+  });
+
+  // Footer text
+  titleSlide.addText(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()} | CCTV Operations System`, {
+    x: 0.5,
+    y: 6.4,
+    w: 12.33,
+    h: 0.4,
+    align: 'center',
+    fontSize: 10,
+    color: '64748B'
+  });
+    color: '64748B'
   });
 
   // Create a slide for each ticket

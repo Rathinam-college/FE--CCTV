@@ -154,12 +154,13 @@ export default function Tickets() {
       const meta = parseMetadata(ticket.remarks);
       const ticketDate = meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
       
-      // Month range filter
+      // Month range filter (includes old unresolved tickets from prior months)
       if (startMonth || endMonth) {
         if (!ticketDate) return false;
         const tMonth = String(ticketDate).substring(0, 7); // 'YYYY-MM'
-        if (startMonth && tMonth < startMonth) return false;
-        if (endMonth && tMonth > endMonth) return false;
+        const inRange = (!startMonth || tMonth >= startMonth) && (!endMonth || tMonth <= endMonth);
+        const isOldUnresolved = startMonth && tMonth < startMonth && ticket.status !== 'Completed';
+        if (!inRange && !isOldUnresolved) return false;
       }
 
       // Advanced Filters
@@ -182,6 +183,40 @@ export default function Tickets() {
       return true;
     });
   }, [baseFilteredTickets, statusFilter]);
+
+  const pptStats = useMemo(() => {
+    const currentYm = startMonth || new Date().toISOString().substring(0, 7);
+
+    let currentOpenCount = 0;
+    let currentClosedCount = 0;
+    let prevMonthOpenCount = 0;
+
+    (Array.isArray(tickets) ? tickets : []).forEach(ticket => {
+      const meta = parseMetadata(ticket.remarks);
+      const ticketDate = meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+      if (!ticketDate) return;
+      const tMonth = String(ticketDate).substring(0, 7);
+      const isCompleted = ticket.status === 'Completed';
+
+      if (tMonth === currentYm) {
+        if (isCompleted) {
+          currentClosedCount++;
+        } else {
+          currentOpenCount++;
+        }
+      }
+      if (tMonth < currentYm && !isCompleted) {
+        prevMonthOpenCount++;
+      }
+    });
+
+    return {
+      currentMonthName: formatMonthLabel(currentYm),
+      currentOpenCount,
+      currentClosedCount,
+      prevMonthOpenCount
+    };
+  }, [tickets, startMonth]);
 
   const summaryStats = useMemo(() => ({
     total: baseFilteredTickets.length,
@@ -606,7 +641,7 @@ export default function Tickets() {
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
     let newValue = value;
-    if (type === 'text') {
+    if (type === 'text' && name !== 'raisedByName' && name !== 'instructionBy') {
       newValue = value.toUpperCase();
     }
     
@@ -1651,12 +1686,29 @@ export default function Tickets() {
                 <th>Category</th>
                 <th>Location</th>
                 <th>Issue Description</th>
+                <th>Responsibility</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               ${filteredTickets.map((ticket, idx) => {
                 const meta = parseMetadata(ticket.remarks);
+                
+                let staffNames = 'Unassigned';
+                if (Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0) {
+                  staffNames = ticket.assignedStaff.map(s => s.name || s.username).filter(Boolean).join(', ');
+                } else {
+                  const assignedId = ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo;
+                  const assignedUser = ticket.assignedTo && typeof ticket.assignedTo === 'object'
+                    ? ticket.assignedTo
+                    : (Array.isArray(users) ? users.find(u => (u.id || u._id) === assignedId) : null);
+                  if (assignedUser?.name || assignedUser?.username) {
+                    staffNames = assignedUser.name || assignedUser.username;
+                  } else if (ticket.raisedBy && typeof ticket.raisedBy === 'object') {
+                    staffNames = ticket.raisedBy.name || ticket.raisedBy.username || 'Unassigned';
+                  }
+                }
+
                 return `
                 <tr>
                   <td>${idx + 1}</td>
@@ -1664,6 +1716,7 @@ export default function Tickets() {
                   <td>${ticket.category || meta.category || 'CCTV'}</td>
                   <td>${[ticket.divisionName, ticket.block, ticket.room].filter(Boolean).join(' / ') || ticket.location || meta.location || 'N/A'}</td>
                   <td>${ticket.issueDescription || 'N/A'}</td>
+                  <td>${staffNames}</td>
                   <td><span class="badge ${ticket.status === 'Completed' ? 'status-completed' : ticket.status === 'In Progress' ? 'status-inprogress' : 'status-open'}">${ticket.status || 'N/A'}</span></td>
                 </tr>
                 `
@@ -2205,8 +2258,10 @@ export default function Tickets() {
               onClick={async () => {
                 showNotification('Generating PPT, this may take a moment...', 'info');
                 try {
-                  const monthName = startMonth || endMonth ? `${startMonth || 'All'}_to_${endMonth || 'All'}` : 'All_Time';
-                  await exportMonthlyPPT(filteredTickets, getImageUrl, monthName);
+                  const monthName = startMonth
+                    ? (endMonth && endMonth !== startMonth ? `${formatMonthLabel(startMonth)} to ${formatMonthLabel(endMonth)}` : formatMonthLabel(startMonth))
+                    : formatMonthLabel(new Date().toISOString().substring(0, 7));
+                  await exportMonthlyPPT(filteredTickets, getImageUrl, monthName, 'Ticket', pptStats);
                   showNotification('PPT generated successfully!', 'success');
                 } catch (e) {
                   console.error('PPT Error:', e);

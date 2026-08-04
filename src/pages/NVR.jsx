@@ -29,6 +29,7 @@ export default function NVR() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [filterType, setFilterType] = useState('ALL'); // Campus zone
 
+  const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Storage:EDIT');
   
   // Modal State
@@ -602,11 +603,33 @@ export default function NVR() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
-        <div>
+        <div className="flex flex-wrap items-center gap-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <HardDrive className="mr-3 text-emerald-500" size={28} />
             Storage Units
           </h1>
+          <div className="flex bg-panel border border-main rounded-xl p-0.5 self-center">
+            <button
+              onClick={() => setViewMode('registry')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'registry'
+                  ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Device List
+            </button>
+            <button
+              onClick={() => setViewMode('report')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'report'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Report View
+            </button>
+          </div>
         </div>
         <div className="flex space-x-4 items-center">
           <button onClick={() => navigate('/nvr-mapping')} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
@@ -634,7 +657,9 @@ export default function NVR() {
         </div>
       </div>
 
-      {/* Stats Dashboard */}
+      {viewMode === 'registry' ? (
+        <>
+          {/* Stats Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-slide-up delay-100">
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
           <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50">
@@ -955,6 +980,116 @@ export default function NVR() {
           </table>
         </div>
       </div>
+        </>
+      ) : (
+        /* NVR Status & Remarks History Log Report View */
+        <div className="space-y-6 animate-fade-in">
+          {/* Status Summary Count Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Online Units</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-emerald-400">{stats.online}</span>
+                <span className="text-[10px] text-dim font-mono">
+                  {nvrs.length ? ((stats.online / nvrs.length) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Offline Units</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-red-400">{stats.offline}</span>
+                <span className="text-[10px] text-dim font-mono">
+                  {nvrs.length ? ((stats.offline / nvrs.length) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Total NVRs Registered</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-cyan-400">{nvrs.length}</span>
+                <span className="text-[10px] text-dim font-mono">Units</span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Total Channels</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-amber-400">
+                  {nvrs.reduce((acc, n) => acc + (parseInt(n.channel) || 0), 0)}
+                </span>
+                <span className="text-[10px] text-dim font-mono">Channels</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Remarks Table & Audit Log */}
+          <div className="glass-panel overflow-hidden bg-panel border border-main rounded-2xl shadow-2xl">
+            <div className="p-6 border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40">
+              <div className="flex items-center space-x-3">
+                <Server className="text-cyan-400" size={20} />
+                <h3 className="text-sm font-black uppercase tracking-widest text-main">
+                  NVR Storage Units Status & Audit Log Report
+                </h3>
+              </div>
+              <button onClick={printToPDF} className="flex items-center px-4 py-2 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-purple-500/30 transition-all">
+                <Printer size={14} className="mr-2" /> Print NVR Report
+              </button>
+            </div>
+
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-card border-b border-main text-[10px] font-bold text-dim uppercase tracking-widest">
+                    <th className="p-4 text-center">#</th>
+                    <th className="p-4">NVR Designation</th>
+                    <th className="p-4">Asset Number</th>
+                    <th className="p-4">IP Address</th>
+                    <th className="p-4">Location</th>
+                    <th className="p-4">Specs (Disk / Channels)</th>
+                    <th className="p-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-main text-xs font-medium">
+                  {filteredNVRs.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="p-12 text-center text-dim">
+                        No NVR records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredNVRs.map((nvr, idx) => (
+                      <tr key={nvr.id || nvr._id || idx} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                        <td className="p-4 font-bold text-main">{nvr.nvrName || '—'}</td>
+                        <td className="p-4 font-mono text-xs text-amber-400">{nvr.serialNumber || '—'}</td>
+                        <td className="p-4 font-mono text-cyan-400">{nvr.ipAddress || '—'}</td>
+                        <td className="p-4 text-slate-300">
+                          <div>{nvr.divisionName || '—'}</div>
+                          <div className="text-[10px] text-dim">{[nvr.block, nvr.floor, nvr.room].filter(Boolean).join(' / ')}</div>
+                        </td>
+                        <td className="p-4 font-mono text-slate-300">
+                          {nvr.hardDisk || '—'} / {nvr.channel || '—'} Ch
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            nvr.status === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                            'text-red-400 border-red-500/50 bg-red-500/10'
+                          }`}>
+                            {nvr.status || 'Online'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">

@@ -93,8 +93,9 @@ export default function Upgrades() {
       if (startMonth || endMonth) {
         if (!ticketDate) return false;
         const tMonth = ticketDate.substring(0, 7); // 'YYYY-MM'
-        if (startMonth && tMonth < startMonth) return false;
-        if (endMonth && tMonth > endMonth) return false;
+        const inRange = (!startMonth || tMonth >= startMonth) && (!endMonth || tMonth <= endMonth);
+        const isOldUnresolved = startMonth && tMonth < startMonth && ticket.status !== 'Completed';
+        if (!inRange && !isOldUnresolved) return false;
       }
       
       const searchStr = `${ticket.issueDescription} ${ticket.location}`.toLowerCase();
@@ -320,7 +321,7 @@ export default function Upgrades() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    const shouldUppercase = typeof value === 'string' && !['date', 'status', 'receivedTime', 'endTime'].includes(name);
+    const shouldUppercase = typeof value === 'string' && !['date', 'status', 'receivedTime', 'endTime', 'raisedByName', 'instructionBy'].includes(name);
     const finalValue = shouldUppercase ? value.toUpperCase() : value;
     
     setFormData(prev => {
@@ -536,11 +537,27 @@ export default function Upgrades() {
                 <th>Location</th>
                 <th>Description</th>
                 <th>Action Taken</th>
+                <th>Responsibility</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               ${filteredTickets.map((ticket, idx) => {
+                let staffNames = 'Unassigned';
+                if (Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0) {
+                  staffNames = ticket.assignedStaff.map(s => s.name || s.username).filter(Boolean).join(', ');
+                } else {
+                  const assignedId = ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo;
+                  const assignedUser = ticket.assignedTo && typeof ticket.assignedTo === 'object'
+                    ? ticket.assignedTo
+                    : (Array.isArray(users) ? users.find(u => (u.id || u._id) === assignedId) : null);
+                  if (assignedUser?.name || assignedUser?.username) {
+                    staffNames = assignedUser.name || assignedUser.username;
+                  } else if (ticket.raisedBy && typeof ticket.raisedBy === 'object') {
+                    staffNames = ticket.raisedBy.name || ticket.raisedBy.username || 'Unassigned';
+                  }
+                }
+
                 return `
                 <tr>
                   <td>${idx + 1}</td>
@@ -548,6 +565,7 @@ export default function Upgrades() {
                   <td>${ticket.divisionName || 'N/A'} - ${ticket.block || ''}</td>
                   <td>${ticket.issueDescription || 'N/A'}</td>
                   <td>${ticket.actionTaken || 'Pending'}</td>
+                  <td>${staffNames}</td>
                   <td><span class="badge ${ticket.status === 'Completed' ? 'status-completed' : ticket.status === 'In Progress' ? 'status-inprogress' : 'status-open'}">${ticket.status || 'N/A'}</span></td>
                 </tr>
                 `

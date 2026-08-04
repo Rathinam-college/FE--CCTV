@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
-import { Search, Filter, Plus, Cctv as CctvIcon, Map, Building, Shield, X, Edit2, Trash2, Download, Upload, ChevronLeft, ChevronRight, Server, Save, RefreshCw, Printer, Video } from 'lucide-react';
+import { Search, Filter, Plus, Cctv as CctvIcon, Map, Building, Shield, X, Edit2, Trash2, Download, Upload, ChevronLeft, ChevronRight, Server, Save, RefreshCw, Printer, Video, FileText, MessageSquare, Clock } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -103,13 +103,69 @@ export default function Cameras() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
 
-  // Quick Edit Modal State
+  // Camera Remarks & Status History State
+  const [cameraRemarks, setCameraRemarks] = useState([]);
+  const [loadingRemarks, setLoadingRemarks] = useState(false);
+  const [statusRemark, setStatusRemark] = useState('');
+  const [initialStatus, setInitialStatus] = useState('');
+  const [remarkSearchQuery, setRemarkSearchQuery] = useState('');
+  const [remarkStatusFilter, setRemarkStatusFilter] = useState('ALL');
+
+  const fetchRemarksHistory = async () => {
+    try {
+      setLoadingRemarks(true);
+      const res = await api.get('/cameras/remarks/');
+      const data = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+      setCameraRemarks(data);
+    } catch (err) {
+      console.error('Failed to fetch camera remarks:', err);
+    } finally {
+      setLoadingRemarks(false);
+    }
+  };
+
+  const filteredRemarks = useMemo(() => {
+    return cameraRemarks.filter(rem => {
+      const cam = cameras.find(c => String(c.id || c._id) === String(rem.camera));
+      const statusStr = rem.device_status || cam?.status || '';
+      if (remarkStatusFilter !== 'ALL' && statusStr !== remarkStatusFilter) return false;
+      if (remarkSearchQuery) {
+        const q = remarkSearchQuery.toLowerCase();
+        const camName = (rem.camera_name || cam?.name || '').toLowerCase();
+        const camIp = (rem.camera_ip || cam?.ipAddress || '').toLowerCase();
+        const camDiv = (rem.camera_division || cam?.divisionName || '').toLowerCase();
+        const camLoc = (rem.camera_location || cam?.siteName || '').toLowerCase();
+        const remarkText = (rem.remark || '').toLowerCase();
+        const userName = (rem.userName || '').toLowerCase();
+        return (
+          camName.includes(q) ||
+          camIp.includes(q) ||
+          camDiv.includes(q) ||
+          camLoc.includes(q) ||
+          remarkText.includes(q) ||
+          userName.includes(q)
+        );
+      }
+      return true;
+    });
+  }, [cameraRemarks, cameras, remarkStatusFilter, remarkSearchQuery]);
+
+  const statusCounts = useMemo(() => {
+    return {
+      online: cameras.filter(c => c.status === 'Online').length,
+      offline: cameras.filter(c => c.status === 'Offline').length,
+      maintenance: cameras.filter(c => c.status === 'Maintenance').length,
+      scrap: cameras.filter(c => c.status === 'Scrap').length
+    };
+  }, [cameras]);
+  const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [quickEditCamera, setQuickEditCamera] = useState(null);
   const [showQuickEditModal, setShowQuickEditModal] = useState(false);
   const [quickEditTab, setQuickEditTab] = useState('status');
   const [confirmStatus, setConfirmStatus] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [quickEditCamera, setQuickEditCamera] = useState(null);
+  const [quickLocationRemark, setQuickLocationRemark] = useState('');
   const [quickFormData, setQuickFormData] = useState({
     name: '', block: '', floor: '', room: '', divisionName: '',
     brand: '', ipAddress: '', ipv4Gateway: '', subnetMask: '', portNumber: '',
@@ -242,6 +298,26 @@ export default function Cameras() {
     return counts;
   }, [cameras]);
 
+  const fetchCameras = async () => {
+    try {
+      const res = await api.get('/cameras/');
+      const data = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+      setCameras(data);
+    } catch (err) {
+      console.error('Failed to fetch cameras:', err);
+    }
+  };
+
+  const fetchNvrs = async () => {
+    try {
+      const res = await api.get('/cameras/nvrs/');
+      const data = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+      setNvrs(data);
+    } catch (err) {
+      console.error('Failed to fetch NVRs:', err);
+    }
+  };
+
   useEffect(() => {
     fetchCameras();
     fetchNvrs();
@@ -249,6 +325,7 @@ export default function Cameras() {
     fetchAllLocations();
     fetchDivisions();
     fetchBrands();
+    fetchRemarksHistory();
 
     // Check for college filter in URL
     const collegeParam = searchParams.get('college');
@@ -278,24 +355,6 @@ export default function Cameras() {
       setFormData(prev => ({ ...prev, deviceSerialNumber: `${prefix}${formattedNumber}` }));
     }
   }, [showModal, editingId, cameras, formData.deviceType]);
-
-  const fetchCameras = async () => {
-    try {
-      const res = await api.get('/cameras/');
-      setCameras(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchNvrs = async () => {
-    try {
-      const res = await api.get('/cameras/nvrs/');
-      setNvrs(res.data);
-    } catch (err) {
-      console.error('Failed to fetch NVRs', err);
-    }
-  };
 
   useEffect(() => {
     if (showModal && !editingId) {
@@ -416,6 +475,19 @@ export default function Cameras() {
       if (editingId) {
         await api.put(`/cameras/${editingId}/`, payload);
         showNotification('Camera configuration updated');
+
+        if (statusRemark.trim() || payload.status !== initialStatus) {
+          try {
+            await api.post('/cameras/remarks/', {
+              camera: editingId,
+              device_status: payload.status,
+              remark: statusRemark.trim() || `Status updated to ${payload.status}`
+            });
+            await fetchRemarksHistory();
+          } catch (rErr) {
+            console.error('Failed to log camera remark:', rErr);
+          }
+        }
       } else {
         await api.post('/cameras/', payload);
         showNotification('New asset registered successfully');
@@ -453,6 +525,8 @@ export default function Cameras() {
 
       setShowModal(false);
       setEditingId(null);
+      setStatusRemark('');
+      setInitialStatus('');
       setFormData({
         name: '', block: '', floor: '', room: '', deviceType: '', ipAddress: '',
         ipv4Gateway: '', portNumber: '', deviceSerialNumber: '', serialNumber: '', subnetMask: '', macAddress: '', status: 'Online',
@@ -494,6 +568,8 @@ export default function Cameras() {
     const loc = parseLocation(camera);
     const { ipv4Gateway, subnetMask, macAddress, portNumber, divisionName } = parseNetworkDetails(camera);
 
+    setInitialStatus(camera.status || 'Online');
+    setStatusRemark('');
     setFormData({
       block: loc.block !== '—' ? loc.block : '',
       floor: loc.floor !== '—' ? loc.floor : '',
@@ -521,6 +597,8 @@ export default function Cameras() {
 
   const openQuickEditModal = (camera) => {
     setQuickEditCamera(camera);
+    setInitialStatus(camera.status || 'Online');
+    setStatusRemark('');
     const loc = parseLocation(camera);
     const net = parseNetworkDetails(camera);
     setQuickFormData({
@@ -542,17 +620,32 @@ export default function Cameras() {
     });
     setQuickEditTab('status');
     setConfirmStatus(null);
+    setQuickLocationRemark('');
     setShowQuickEditModal(true);
   };
 
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (newStatus, remarkText = '') => {
     if (!quickEditCamera) return;
     try {
       setUpdatingStatus(true);
-      await api.patch(`/cameras/${quickEditCamera._id || quickEditCamera.id}/`, { status: newStatus });
+      const camId = quickEditCamera._id || quickEditCamera.id;
+      await api.patch(`/cameras/${camId}/`, { status: newStatus });
+
+      try {
+        await api.post('/cameras/remarks/', {
+          camera: camId,
+          device_status: newStatus,
+          remark: (remarkText || statusRemark).trim() || `Status changed from ${quickEditCamera.status || 'N/A'} to ${newStatus}`
+        });
+        await fetchRemarksHistory();
+      } catch (rErr) {
+        console.error('Failed to log camera remark:', rErr);
+      }
+
       showNotification(`Asset status changed to ${newStatus}`);
       setConfirmStatus(null);
       setShowQuickEditModal(false);
+      setStatusRemark('');
       fetchCameras();
     } catch (err) {
       console.error(err);
@@ -564,6 +657,10 @@ export default function Cameras() {
 
   const handleSaveRelocation = async () => {
     if (!quickEditCamera) return;
+    if (!quickLocationRemark.trim()) {
+      showNotification('Modification remark is required', 'error');
+      return;
+    }
     try {
       setIsSaving(true);
       const oldLoc = parseLocation(quickEditCamera);
@@ -592,28 +689,47 @@ export default function Cameras() {
 
       await api.patch(`/cameras/${quickEditCamera._id || quickEditCamera.id}/`, payload);
 
-      let moveLog = `Asset Relocated/Updated. `;
+      let autoDetails = '';
       if (oldBlock !== quickFormData.block || oldFloor !== quickFormData.floor) {
-        moveLog += `Moved from ${oldBlock}/${oldFloor} to ${quickFormData.block}/${quickFormData.floor}. `;
+        autoDetails += ` [Relocated from ${oldBlock}/${oldFloor} to ${quickFormData.block}/${quickFormData.floor}]`;
       }
       if (oldIp !== quickFormData.ipAddress) {
-        moveLog += `IP changed from ${oldIp} to ${quickFormData.ipAddress}. `;
+        autoDetails += ` [IP changed from ${oldIp} to ${quickFormData.ipAddress}]`;
       }
 
-      await api.post(`/cameras/${quickEditCamera._id || quickEditCamera.id}/add_relocation/`, {
-        old_location: `${oldBlock} - ${oldFloor}${oldLoc.room && oldLoc.room !== '—' ? ` - ${oldLoc.room}` : ''}`,
-        new_location: `${quickFormData.block} - ${quickFormData.floor}${quickFormData.room ? ` - ${quickFormData.room}` : ''}`,
-        old_ip: oldIp,
-        new_ip: quickFormData.ipAddress,
-        remark: moveLog
-      });
+      const finalRemark = `${quickLocationRemark.trim()}${autoDetails}`;
+      const camId = quickEditCamera._id || quickEditCamera.id;
 
-      showNotification('Asset successfully relocated and logs updated');
+      try {
+        await api.post(`/cameras/${camId}/add_relocation/`, {
+          old_location: `${oldBlock} - ${oldFloor}${oldLoc.room && oldLoc.room !== '—' ? ` - ${oldLoc.room}` : ''}`,
+          new_location: `${quickFormData.block} - ${quickFormData.floor}${quickFormData.room ? ` - ${quickFormData.room}` : ''}`,
+          old_ip: oldIp,
+          new_ip: quickFormData.ipAddress,
+          remark: finalRemark
+        });
+      } catch (relErr) {
+        console.error('Failed to log relocation API:', relErr);
+      }
+
+      try {
+        await api.post('/cameras/remarks/', {
+          camera: camId,
+          device_status: quickEditCamera.status || 'Online',
+          remark: finalRemark
+        });
+        await fetchRemarksHistory();
+      } catch (rErr) {
+        console.error('Failed to log camera remark:', rErr);
+      }
+
+      showNotification('Asset details updated & remark logged successfully');
       setShowQuickEditModal(false);
+      setQuickLocationRemark('');
       fetchCameras();
     } catch (err) {
       console.error(err);
-      showNotification('Failed to relocate asset', 'error');
+      showNotification('Failed to update asset details', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -905,11 +1021,33 @@ export default function Cameras() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
-        <div>
+        <div className="flex flex-wrap items-center gap-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <Video className="mr-3 text-blue-500" size={28} />
             Cameras
           </h1>
+          <div className="flex bg-panel border border-main rounded-xl p-0.5 self-center">
+            <button
+              onClick={() => setViewMode('registry')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'registry'
+                  ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Camera List
+            </button>
+            <button
+              onClick={() => { setViewMode('report'); fetchRemarksHistory(); }}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'report'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Report View
+            </button>
+          </div>
         </div>
         <div className="flex space-x-4 items-center">
           <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
@@ -934,11 +1072,10 @@ export default function Cameras() {
         </div>
       </div>
 
-      {/* View Switcher Tabs & Quick Building Search */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-      </div>
 
-      {/* Top Stats & Chart Row (Visible for all views) */}
+      {viewMode === 'registry' ? (
+        <>
+          {/* Top Stats & Chart Row (Visible for all views) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-slide-up delay-100">
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
           <button onClick={() => { setActiveView('LIST'); setFilterType('ALL'); }} className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ${activeView === 'LIST' && filterType === 'ALL' ? 'ring-1 ring-cyan-500/50' : 'hover:ring-1 hover:ring-cyan-500/30'}`}>
@@ -1507,6 +1644,180 @@ export default function Cameras() {
         </div>
       )}
 
+        </>
+      ) : (
+        /* Camera Status & Remarks History Log Report View */
+        <div className="space-y-6 animate-fade-in">
+        <h2 className="text-xl font-black text-main uppercase tracking-tight flex items-center">
+          <FileText className="mr-3 text-cyan-400" size={22} />
+          Camera Status & Remarks History Log
+        </h2>
+
+        {/* Status Summary Count Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Online (Current)</span>
+            <div className="flex items-end justify-between mt-2">
+              <span className="text-3xl font-black text-emerald-400">{statusCounts.online}</span>
+              <span className="text-[10px] text-dim font-mono">
+                {cameras.length ? ((statusCounts.online / cameras.length) * 100).toFixed(0) : 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+            <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Offline</span>
+            <div className="flex items-end justify-between mt-2">
+              <span className="text-3xl font-black text-red-400">{statusCounts.offline}</span>
+              <span className="text-[10px] text-dim font-mono">
+                {cameras.length ? ((statusCounts.offline / cameras.length) * 100).toFixed(0) : 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Maintenance</span>
+            <div className="flex items-end justify-between mt-2">
+              <span className="text-3xl font-black text-amber-400">{statusCounts.maintenance}</span>
+              <span className="text-[10px] text-dim font-mono">
+                {cameras.length ? ((statusCounts.maintenance / cameras.length) * 100).toFixed(0) : 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+            <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Scrap</span>
+            <div className="flex items-end justify-between mt-2">
+              <span className="text-3xl font-black text-rose-500">{statusCounts.scrap}</span>
+              <span className="text-[10px] text-dim font-mono">
+                {cameras.length ? ((statusCounts.scrap / cameras.length) * 100).toFixed(0) : 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Total Remarks Logs</span>
+            <div className="flex items-end justify-between mt-2">
+              <span className="text-3xl font-black text-cyan-400">{cameraRemarks.length}</span>
+              <span className="text-[10px] text-dim font-mono">Entries</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Remarks Table & Search Filter Bar */}
+        <div className="glass-panel overflow-hidden bg-panel border border-main rounded-2xl shadow-2xl">
+          <div className="p-6 border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40">
+            <div className="flex items-center space-x-3">
+              <FileText className="text-cyan-400" size={20} />
+              <h3 className="text-sm font-black uppercase tracking-widest text-main">
+                Status Change Remarks & Audit Log
+              </h3>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" size={14} />
+                <input
+                  type="text"
+                  value={remarkSearchQuery}
+                  onChange={(e) => setRemarkSearchQuery(e.target.value)}
+                  placeholder="Search camera name, IP, remark..."
+                  className="bg-panel text-xs text-main border border-main rounded-xl pl-9 pr-3 py-2 outline-none focus:border-teal-500 w-full"
+                />
+              </div>
+
+              <select
+                value={remarkStatusFilter}
+                onChange={(e) => setRemarkStatusFilter(e.target.value)}
+                className="bg-panel text-xs font-bold text-main border border-main rounded-xl px-3 py-2 outline-none"
+              >
+                <option value="ALL">ALL STATUSES</option>
+                <option value="Online">Online</option>
+                <option value="Offline">Offline</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Scrap">Scrap</option>
+              </select>
+
+              <button
+                onClick={fetchRemarksHistory}
+                className="p-2 bg-panel border border-main rounded-xl text-dim hover:text-cyan-400 transition-colors"
+                title="Refresh Remarks"
+              >
+                <RefreshCw size={14} className={loadingRemarks ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-card border-b border-main text-[10px] font-bold text-dim uppercase tracking-widest">
+                  <th className="p-4 text-center">#</th>
+                  <th className="p-4">Date & Time</th>
+                  <th className="p-4">Camera Designation</th>
+                  <th className="p-4">IP Address</th>
+                  <th className="p-4">Division / Location</th>
+                  <th className="p-4 text-center">Status</th>
+                  <th className="p-4">Status Remark / Reason</th>
+                  <th className="p-4">Updated By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-main text-xs font-medium">
+                {filteredRemarks.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="p-12 text-center text-dim">
+                      No status change remarks logged yet.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRemarks.map((rem, idx) => {
+                    const cam = cameras.find(c => String(c.id || c._id) === String(rem.camera));
+                    const cameraName = rem.camera_name || cam?.name || '—';
+                    const cameraIp = rem.camera_ip || cam?.ipAddress || '—';
+                    const cameraDiv = rem.camera_division || cam?.divisionName || '—';
+                    const cameraLoc = rem.camera_location || cam?.siteName || '—';
+                    const statusStr = rem.device_status || cam?.status || 'Online';
+
+                    return (
+                      <tr key={rem.id || idx} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                        <td className="p-4 font-mono text-[11px] text-slate-300">
+                          <div>{rem.date || (rem.createdAt ? String(rem.createdAt).split('T')[0] : '—')}</div>
+                          <div className="text-[10px] text-dim">{rem.time || (rem.createdAt ? String(rem.createdAt).split('T')[1]?.substring(0, 5) : '')}</div>
+                        </td>
+                        <td className="p-4 font-bold text-main">{cameraName}</td>
+                        <td className="p-4 font-mono text-cyan-400">{cameraIp}</td>
+                        <td className="p-4 text-slate-300">
+                          <div>{cameraDiv}</div>
+                          <div className="text-[10px] text-dim">{cameraLoc}</div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            statusStr === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                            statusStr === 'Offline' ? 'text-red-400 border-red-500/50 bg-red-500/10' :
+                            statusStr === 'Maintenance' ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' :
+                            'text-rose-400 border-rose-500/50 bg-rose-500/10'
+                          }`}>
+                            {statusStr}
+                          </span>
+                        </td>
+                        <td className="p-4 italic text-slate-200 bg-white/[0.02] rounded-lg">
+                          {rem.remark || 'No remark entered.'}
+                        </td>
+                        <td className="p-4 font-bold text-teal-400">
+                          {rem.userName || 'System/Admin'}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-fade-in overflow-y-auto">
           <div className="bg-card rounded-[2.5rem] w-full max-w-3xl overflow-hidden border border-main shadow-2xl relative my-8 flex flex-col max-h-[85vh]">
@@ -1728,21 +2039,48 @@ export default function Cameras() {
                   </div>
                   {editingId && (
                     <div className="space-y-4 pt-4 border-t border-main">
-                      <h3 className="text-[10px] font-black text-teal-600 uppercase tracking-widest">Health Status</h3>
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-[10px] font-black text-teal-400 uppercase tracking-widest flex items-center">
+                          <MessageSquare size={14} className="mr-1.5 text-cyan-400" /> Health Status Selection
+                        </h3>
+                        {formData.status !== initialStatus && (
+                          <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            Status Changed
+                          </span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-4 gap-2">
                         {['Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
                           <button
                             key={s}
                             type="button"
                             onClick={() => setFormData({ ...formData, status: s })}
-                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg border transition-all ${formData.status === s
-                                ? 'bg-teal-600/20 border-teal-500/50 text-teal-400 shadow-[0_0_10px_rgba(13,148,136,0.2)]'
+                            className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border transition-all ${
+                              formData.status === s
+                                ? s === 'Online' ? 'bg-green-500/20 border-green-500/50 text-green-400 shadow-lg' :
+                                  s === 'Offline' ? 'bg-red-500/20 border-red-500/50 text-red-400 shadow-lg' :
+                                  s === 'Maintenance' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 shadow-lg' :
+                                  'bg-rose-900/30 border-rose-500/50 text-rose-400 shadow-lg'
                                 : 'border-main text-secondary hover:text-main hover:bg-white/5'
-                              }`}
+                            }`}
                           >
-                            {s}
+                            {s} {s === initialStatus ? '(Current)' : ''}
                           </button>
                         ))}
+                      </div>
+                      <div className="space-y-1.5 mt-3">
+                        <label className="text-[10px] font-black text-secondary uppercase tracking-widest flex items-center">
+                          Status Change Remark / Reason
+                          {formData.status !== initialStatus && <span className="text-red-400 ml-1.5">*Required</span>}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={statusRemark}
+                          onChange={(e) => setStatusRemark(e.target.value)}
+                          placeholder={`Enter operational reason for setting status to ${formData.status}...`}
+                          className="glass-input w-full p-3 text-xs bg-panel border-main rounded-xl outline-none focus:border-teal-500"
+                          required={formData.status !== initialStatus}
+                        />
                       </div>
                     </div>
                   )}
@@ -1964,23 +2302,40 @@ export default function Cameras() {
                   </div>
 
                   {confirmStatus && (
-                    <div className="mt-8 p-6 bg-sky-50 border border-sky-200 rounded-2xl animate-fade-in">
-                      <h4 className="text-sky-800 font-bold mb-2">Confirm Status Change</h4>
-                      <p className="text-sky-600 text-sm mb-6">Are you sure you want to change the status of {quickEditCamera.name} to <strong>{confirmStatus}</strong>?</p>
-                      <div className="flex space-x-4">
+                    <div className="mt-8 p-6 bg-panel border border-main rounded-2xl animate-fade-in space-y-4">
+                      <h4 className="text-main font-bold text-sm uppercase tracking-wider flex items-center">
+                        <MessageSquare size={16} className="mr-2 text-cyan-400" /> Confirm Status Change
+                      </h4>
+                      <p className="text-secondary text-xs">
+                        Changing status of <strong>{quickEditCamera.name}</strong> from <strong>{quickEditCamera.status || 'Online'}</strong> to <strong className="text-cyan-400">{confirmStatus}</strong>.
+                      </p>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-dim uppercase tracking-widest">
+                          Status Remark / Reason <span className="text-red-400">*Required</span>
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={statusRemark}
+                          onChange={(e) => setStatusRemark(e.target.value)}
+                          placeholder={`Enter reason for changing status to ${confirmStatus}...`}
+                          className="glass-input w-full p-3 text-xs bg-card border-main rounded-xl outline-none focus:border-cyan-500"
+                          required
+                        />
+                      </div>
+                      <div className="flex space-x-4 pt-2">
                         <button
-                          onClick={() => setConfirmStatus(null)}
-                          className="flex-1 py-3 bg-white text-slate-700 border border-slate-300 rounded-xl font-bold text-xs uppercase hover:bg-slate-50 transition-all"
+                          onClick={() => { setConfirmStatus(null); setStatusRemark(''); }}
+                          className="flex-1 py-3 bg-card text-secondary border border-main rounded-xl font-bold text-xs uppercase hover:text-main transition-all"
                         >
                           Cancel
                         </button>
                         <button
-                          onClick={() => handleStatusChange(confirmStatus)}
-                          disabled={updatingStatus}
-                          className="flex-1 py-3 bg-sky-600 text-white rounded-xl font-bold text-xs uppercase hover:bg-sky-500 transition-all shadow-md flex items-center justify-center space-x-2"
+                          onClick={() => handleStatusChange(confirmStatus, statusRemark)}
+                          disabled={updatingStatus || !statusRemark.trim()}
+                          className="flex-1 py-3 bg-cyan-500 text-slate-900 rounded-xl font-bold text-xs uppercase hover:bg-cyan-400 transition-all shadow-md flex items-center justify-center space-x-2 disabled:opacity-50"
                         >
                           {updatingStatus ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                          <span>Confirm & Save</span>
+                          <span>Confirm & Save Remark</span>
                         </button>
                       </div>
                     </div>
@@ -2120,23 +2475,40 @@ export default function Cameras() {
                     </div>
                   </div>
 
-                  <div className="mt-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl">
-                    <h4 className="text-amber-800 font-bold mb-2">Confirm Modifications</h4>
-                    <p className="text-amber-600 text-sm mb-6">Review the changes above. This will update the asset's registry and record a relocation log if the block, floor, or IP address has changed.</p>
-                    <div className="flex space-x-4">
+                  <div className="mt-8 p-6 bg-panel border border-main rounded-2xl space-y-4">
+                    <h4 className="text-main font-bold text-sm uppercase tracking-wider flex items-center">
+                      <MessageSquare size={16} className="mr-2 text-cyan-400" /> Confirm Modifications
+                    </h4>
+                    <p className="text-secondary text-xs">
+                      Review the changes above. Enter a mandatory modification remark to log this update.
+                    </p>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-dim uppercase tracking-widest">
+                        Modification Remark / Reason <span className="text-red-400">*Required</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={quickLocationRemark}
+                        onChange={(e) => setQuickLocationRemark(e.target.value)}
+                        placeholder="Enter reason or remark for modifying camera details..."
+                        className="glass-input w-full p-3 text-xs bg-card border-main rounded-xl outline-none focus:border-cyan-500 font-medium"
+                        required
+                      />
+                    </div>
+                    <div className="flex space-x-4 pt-2">
                       <button
                         onClick={() => setShowQuickEditModal(false)}
-                        className="flex-1 py-3 bg-white text-slate-700 border border-slate-300 rounded-xl font-bold text-xs uppercase hover:bg-slate-50 transition-all"
+                        className="flex-1 py-3 bg-card text-secondary border border-main rounded-xl font-bold text-xs uppercase hover:text-main transition-all"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleSaveRelocation}
-                        disabled={isSaving}
-                        className="flex-1 py-3 bg-amber-500 text-black rounded-xl font-bold text-xs uppercase hover:bg-amber-400 transition-all shadow-md flex items-center justify-center space-x-2"
+                        disabled={isSaving || !quickLocationRemark.trim()}
+                        className="flex-1 py-3 bg-cyan-500 text-slate-900 rounded-xl font-bold text-xs uppercase hover:bg-cyan-400 transition-all shadow-md flex items-center justify-center space-x-2 disabled:opacity-50"
                       >
                         {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                        <span>Confirm Relocation & Save</span>
+                        <span>Confirm & Save Details</span>
                       </button>
                     </div>
                   </div>

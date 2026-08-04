@@ -490,18 +490,14 @@ export default function TicketDetail() {
     ctx.lineWidth = 4;
     ctx.strokeRect(10, 10, 880, 740);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 24px Arial';
-    ctx.fillText(`TICKET #${ticket.id || ticket._id}`, 40, 60);
-
     const isCompleted = ticket.status === 'Completed';
     const badgeColor = isCompleted ? '#10b981' : (ticket.status === 'In Progress' ? '#f97316' : '#ef4444');
     ctx.fillStyle = badgeColor;
-    ctx.fillRect(40, 85, 120, 30);
+    ctx.fillRect(40, 45, 130, 32);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 12px Arial';
+    ctx.font = 'bold 13px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(ticket.status.toUpperCase(), 100, 105);
+    ctx.fillText(ticket.status.toUpperCase(), 105, 66);
     ctx.textAlign = 'left';
 
     ctx.fillStyle = '#94a3b8';
@@ -726,7 +722,7 @@ export default function TicketDetail() {
             
             <div className="flex justify-between items-start mb-6">
               <div>
-                <p className="margin-0 text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Ticket #{ticket.id || ticket._id}</p>
+                <p className="margin-0 text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Ticket Overview</p>
                 <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight uppercase max-w-xl leading-tight">
                   {ticket.category === 'Upgrade' || meta.category === 'Upgrade' ? 'Upgrade details' : (ticket.projectId || ticket.project ? 'Log details' : 'Ticket details')}
                 </h2>
@@ -1296,7 +1292,7 @@ export default function TicketDetail() {
                   Billing & PO Management
                 </h2>
                 <p className="text-[10px] text-secondary mt-1 font-bold">
-                  Ticket #{ticket.id} - {ticket.issueDescription}
+                  {ticket.issueDescription}
                 </p>
               </div>
               <button onClick={() => setShowBillingModal(false)} className="p-1.5 hover:bg-panel rounded-xl text-secondary hover:text-main transition-all"><X size={20} /></button>
@@ -1480,7 +1476,7 @@ export default function TicketDetail() {
                   General Documents
                 </h2>
                 <p className="text-[10px] text-secondary mt-1 font-bold">
-                  Ticket #{ticket.id} - {ticket.issueDescription}
+                  {ticket.issueDescription}
                 </p>
               </div>
               <button onClick={() => setShowDocModal(false)} className="p-1.5 hover:bg-panel rounded-xl text-secondary hover:text-main transition-all"><X size={20} /></button>
