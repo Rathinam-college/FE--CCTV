@@ -27,6 +27,7 @@ export default function Biometrics() {
   const [floorFilter, setFloorFilter] = useState('ALL');
   const [roomFilter, setRoomFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
   const [filterType, setFilterType] = useState('ALL'); // Campus zone
   const [typeFilter, setTypeFilter] = useState('ALL');
 
@@ -544,11 +545,33 @@ export default function Biometrics() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
-        <div>
+        <div className="flex flex-wrap items-center gap-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
-            <Fingerprint className="mr-3 text-orange-500" size={28} />
+            <Fingerprint className="mr-3 text-cyan-500" size={28} />
             Biometric
           </h1>
+          <div className="flex bg-panel border border-main rounded-xl p-0.5 self-center">
+            <button
+              onClick={() => setViewMode('registry')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'registry'
+                  ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Device List
+            </button>
+            <button
+              onClick={() => setViewMode('report')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'report'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Report View
+            </button>
+          </div>
         </div>
         <div className="flex space-x-4 items-center">
           <button onClick={exportToExcel} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
@@ -573,9 +596,10 @@ export default function Biometrics() {
         </div>
       </div>
 
-      {/* Stats Dashboard */}
-      {/* Stats Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
+      {viewMode === 'registry' ? (
+        <>
+          {/* Stats Dashboard */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
         <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4">
           <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50">
             <div className="flex justify-between items-start w-full">
@@ -620,11 +644,11 @@ export default function Biometrics() {
           </button>
         </div>
 
-        <div className="bg-panel rounded-md p-4 flex items-center justify-center relative">
-          <div className="w-24 h-24 relative flex items-center justify-center">
+        <div className="bg-panel rounded-md p-4 flex items-center justify-between gap-3 w-full">
+          <div className="w-20 h-20 relative flex items-center justify-center flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartData} cx="50%" cy="50%" innerRadius={30} outerRadius={40} paddingAngle={2} dataKey="value" stroke="none">
+                <Pie data={chartData} cx="50%" cy="50%" innerRadius={28} outerRadius={38} paddingAngle={2} dataKey="value" stroke="none" label={false} labelLine={false}>
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
@@ -632,14 +656,14 @@ export default function Biometrics() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[12px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[7px] text-dim">DIST.</span></span>
+              <span className="text-[11px] font-bold text-main leading-none text-center mt-1">100%<br/><span className="text-[6px] text-dim">DIST.</span></span>
             </div>
           </div>
-          <div className="absolute right-2 flex flex-col space-y-2">
+          <div className="flex flex-col space-y-1.5 flex-1 min-w-[70px] justify-center">
             {chartData.map(d => (
-              <div key={d.name} className="flex items-center space-x-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
-                <span className="text-[9px] text-secondary font-bold uppercase">{d.name}</span>
+              <div key={d.name} className="flex items-center space-x-1.5">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }}></div>
+                <span className="text-[9px] text-secondary font-bold uppercase truncate">{d.name}</span>
               </div>
             ))}
           </div>
@@ -890,6 +914,114 @@ export default function Biometrics() {
           </table>
         </div>
       </div>
+        </>
+      ) : (
+        /* Biometrics Status & Remarks History Log Report View */
+        <div className="space-y-6 animate-fade-in">
+          {/* Status Summary Count Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Online Devices</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-emerald-400">{stats.online}</span>
+                <span className="text-[10px] text-dim font-mono">
+                  {devices.length ? ((stats.online / devices.length) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Offline Devices</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-red-400">{stats.offline}</span>
+                <span className="text-[10px] text-dim font-mono">
+                  {devices.length ? ((stats.offline / devices.length) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Total Registered</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-cyan-400">{devices.length}</span>
+                <span className="text-[10px] text-dim font-mono">Units</span>
+              </div>
+            </div>
+
+            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">In-Sync Devices</span>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-black text-amber-400">
+                  {devices.filter(d => d.syncStatus === 'In Sync').length}
+                </span>
+                <span className="text-[10px] text-dim font-mono">In Sync</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Remarks Table & Audit Log */}
+          <div className="glass-panel overflow-hidden bg-panel border border-main rounded-2xl shadow-2xl">
+            <div className="p-6 border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40">
+              <div className="flex items-center space-x-3">
+                <Fingerprint className="text-cyan-400" size={20} />
+                <h3 className="text-sm font-black uppercase tracking-widest text-main">
+                  Biometric Attendance Units Status & Audit Log Report
+                </h3>
+              </div>
+              <button onClick={printToPDF} className="flex items-center px-4 py-2 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-purple-500/30 transition-all">
+                <Printer size={14} className="mr-2" /> Print Biometric Report
+              </button>
+            </div>
+
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-card border-b border-main text-[10px] font-bold text-dim uppercase tracking-widest">
+                    <th className="p-4 text-center">#</th>
+                    <th className="p-4">Device Name</th>
+                    <th className="p-4">Asset Number</th>
+                    <th className="p-4">IP Address</th>
+                    <th className="p-4">Location</th>
+                    <th className="p-4">Sensor Type</th>
+                    <th className="p-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-main text-xs font-medium">
+                  {filteredDevices.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="p-12 text-center text-dim">
+                        No biometric records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDevices.map((d, idx) => (
+                      <tr key={d.id || d._id || idx} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                        <td className="p-4 font-bold text-main">{d.name || '—'}</td>
+                        <td className="p-4 font-mono text-xs text-amber-400">{d.serialNumber || '—'}</td>
+                        <td className="p-4 font-mono text-cyan-400">{d.ipAddress || '—'}</td>
+                        <td className="p-4 text-slate-300">
+                          <div>{d.divisionName || '—'}</div>
+                          <div className="text-[10px] text-dim">{[d.block, d.floor, d.room].filter(Boolean).join(' / ')}</div>
+                        </td>
+                        <td className="p-4 font-mono text-slate-300">{d.type || 'Fingerprint'}</td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            d.status === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                            'text-red-400 border-red-500/50 bg-red-500/10'
+                          }`}>
+                            {d.status || 'Online'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">

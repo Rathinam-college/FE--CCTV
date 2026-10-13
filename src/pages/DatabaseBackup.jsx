@@ -46,7 +46,12 @@ export default function DatabaseBackup() {
     { label: 'Projects', value: 'maintenance.project' },
     { label: 'Users', value: 'users.user' },
     { label: 'Activity Logs', value: 'cctv.activitylog' },
-    { label: 'Locations', value: 'cctv.masterlocation' }
+    { label: 'Divisions', value: 'cctv.division' },
+    { label: 'Brands', value: 'cctv.brand' },
+    { label: 'Blocks', value: 'cctv.block' },
+    { label: 'Floors', value: 'cctv.floor' },
+    { label: 'Rooms', value: 'cctv.room' },
+    { label: 'General Billing', value: 'maintenance.generalbillinginfo' }
   ];
 
   const handleToggleModel = (value) => {

@@ -421,7 +421,7 @@ export default function UnifiedOnboarding() {
               <div className="flex items-center space-x-4 mb-4 sm:mb-0">
                 <button 
                   onClick={() => setActiveFloorId(null)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded text-xs font-bold uppercase tracking-widest transition-all flex items-center"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-main rounded text-xs font-bold uppercase tracking-widest transition-all flex items-center"
                 >
                    ← Back to Floors
                 </button>
@@ -434,7 +434,7 @@ export default function UnifiedOnboarding() {
               <div className="flex items-center space-x-4 mb-4 sm:mb-0">
                 <button 
                   onClick={() => { setActiveBlockId(null); setActiveFloorId(null); }}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded text-xs font-bold uppercase tracking-widest transition-all flex items-center"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-main rounded text-xs font-bold uppercase tracking-widest transition-all flex items-center"
                 >
                    ← Back to Blocks
                 </button>
@@ -463,7 +463,7 @@ export default function UnifiedOnboarding() {
             {activeBlockObj && !activeFloorObj && canEdit && (
                <button 
                  onClick={() => handleOpenPrompt('Floor', { divisionName: activeBlockObj.divisionName, block: activeBlockObj.name })}
-                 className="text-[10px] font-bold text-cyan-400 hover:text-white border border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1.5 rounded transition-colors uppercase tracking-widest"
+                 className="text-[10px] font-bold text-cyan-400 hover:text-main border border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1.5 rounded transition-colors uppercase tracking-widest"
                >
                  <Plus size={14} className="mr-2 inline" /> Add Floor
                </button>
@@ -472,7 +472,7 @@ export default function UnifiedOnboarding() {
             {activeFloorObj && canEdit && (
                <button 
                  onClick={() => handleOpenPrompt('Room', { divisionName: activeBlockObj.divisionName, block: activeBlockObj.name, floor: activeFloorObj.name })}
-                 className="text-[10px] font-bold text-emerald-400 hover:text-white border border-emerald-500/30 hover:bg-emerald-500/20 px-3 py-1.5 rounded transition-colors uppercase tracking-widest"
+                 className="text-[10px] font-bold text-emerald-400 hover:text-main border border-emerald-500/30 hover:bg-emerald-500/20 px-3 py-1.5 rounded transition-colors uppercase tracking-widest"
                >
                  <Plus size={14} className="mr-2 inline" /> Add Room
                </button>
@@ -515,7 +515,7 @@ export default function UnifiedOnboarding() {
                               <Building size={20} />
                             </div>
                             <div>
-                              <h4 className="text-md font-bold text-white tracking-widest uppercase">{block.name}</h4>
+                              <h4 className="text-md font-bold text-main tracking-widest uppercase">{block.name}</h4>
                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{block.floors.length} Floors | {blockDevices.length} Devices</p>
                             </div>
                           </div>
@@ -583,7 +583,7 @@ export default function UnifiedOnboarding() {
                                 <Layers size={20} />
                               </div>
                               <div>
-                                <h4 className="text-md font-bold text-white tracking-widest uppercase">{floor.name}</h4>
+                                <h4 className="text-md font-bold text-main tracking-widest uppercase">{floor.name}</h4>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{floor.rooms.length} Rooms</p>
                               </div>
                             </div>
@@ -718,7 +718,7 @@ export default function UnifiedOnboarding() {
                                   {detailUrl && (
                                     <button
                                       onClick={() => navigate(detailUrl)}
-                                      className="text-[10px] font-bold text-cyan-400 hover:text-white border border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1 rounded transition-colors uppercase tracking-widest"
+                                      className="text-[10px] font-bold text-cyan-400 hover:text-main border border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1 rounded transition-colors uppercase tracking-widest"
                                     >
                                       View
                                     </button>
@@ -783,7 +783,7 @@ export default function UnifiedOnboarding() {
                 <Plus className="mr-3 text-cyan-400" size={24} />
                 Add {promptModal.type}
               </h2>
-              <button onClick={() => !isSubmitting && setPromptModal({ isOpen: false, type: '', parentData: null, value: '', secondaryValue: '', floorMode: 'bulk', selectedCollege: '' })} className="p-2 hover:bg-card rounded-xl text-secondary hover:text-white transition-all">
+              <button onClick={() => !isSubmitting && setPromptModal({ isOpen: false, type: '', parentData: null, value: '', secondaryValue: '', floorMode: 'bulk', selectedCollege: '' })} className="p-2 hover:bg-card rounded-xl text-secondary hover:text-main transition-all">
                 <X size={20} />
               </button>
             </div>
