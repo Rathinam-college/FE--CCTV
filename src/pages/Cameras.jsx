@@ -124,11 +124,21 @@ export default function Cameras() {
     }
   };
 
+  const parseStatusFromRemark = (remarkText, fallbackStatus) => {
+    if (!remarkText) return fallbackStatus || 'Online';
+    const matchTo = remarkText.match(/Status changed (?:from .* )?to "?(Online|Offline|Maintenance|Scrap)"?/i);
+    if (matchTo && matchTo[1]) {
+      const parsed = matchTo[1];
+      return parsed.charAt(0).toUpperCase() + parsed.slice(1).toLowerCase();
+    }
+    return fallbackStatus || 'Online';
+  };
+
   const filteredRemarks = useMemo(() => {
     return cameraRemarks.filter(rem => {
       const cam = cameras.find(c => String(c.id || c._id) === String(rem.camera));
-      const statusStr = rem.device_status || cam?.status || '';
-      if (remarkStatusFilter !== 'ALL' && statusStr !== remarkStatusFilter) return false;
+      const statusStr = rem.device_status || parseStatusFromRemark(rem.remark, cam?.status);
+      if (remarkStatusFilter !== 'ALL' && statusStr.toUpperCase() !== remarkStatusFilter.toUpperCase()) return false;
       if (remarkSearchQuery) {
         const q = remarkSearchQuery.toLowerCase();
         const camName = (rem.camera_name || cam?.name || '').toLowerCase();
@@ -825,12 +835,6 @@ export default function Cameras() {
   };
 
   const exportToExcel = () => {
-    const headers = [
-      'S.No', 'Division Name', 'Block', 'Floor', 'Room', 'Campus Zone',
-      'Device Type', 'Model', 'IP Address', 'IPv4 Gateway', 'Port Number',
-      'Device ID', 'Hardware Serial', 'Subnet Mask', 'MAC Address', 'Status', 'Date Added'
-    ];
-
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
       const str = String(val);
@@ -839,6 +843,54 @@ export default function Cameras() {
       }
       return str;
     };
+
+    if (viewMode === 'report') {
+      const headers = ['S.No', 'Date & Time', 'Camera Designation', 'Device ID', 'IP Address', 'Division / Location', 'Status', 'Saved Remark / Reason', 'Updated By'];
+      const dataRows = filteredRemarks.map((rem, idx) => {
+        const cam = cameras.find(c => String(c.id || c._id) === String(rem.camera));
+        const cameraName = rem.camera_name || cam?.name || '—';
+        const cameraIp = rem.camera_ip || cam?.ipAddress || '—';
+        const cameraDiv = rem.camera_division || cam?.divisionName || '—';
+        const cameraLoc = rem.camera_location || cam?.siteName || '—';
+        const statusStr = rem.device_status || cam?.status || 'Online';
+        const dateStr = rem.date ? `${rem.date} ${rem.time || ''}` : (rem.createdAt ? new Date(rem.createdAt).toLocaleString() : '—');
+
+        return [
+          idx + 1,
+          escapeCSV(dateStr),
+          escapeCSV(cameraName),
+          escapeCSV(cam?.cameraId || '—'),
+          escapeCSV(cameraIp),
+          escapeCSV([cameraDiv, cameraLoc].filter(Boolean).join(' / ')),
+          escapeCSV(statusStr),
+          escapeCSV(rem.remark || '—'),
+          escapeCSV(rem.userName || 'System Admin')
+        ];
+      });
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...dataRows.map(row => row.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+
+      let fileName = 'Camera_Status_Changes_Report';
+      if (remarkStatusFilter !== 'ALL') fileName += `_${remarkStatusFilter}`;
+      fileName += `_${new Date().toISOString().split('T')[0]}.csv`;
+
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showNotification(`Exported ${filteredRemarks.length} camera status change records (${remarkStatusFilter === 'ALL' ? 'All Statuses' : remarkStatusFilter})`);
+      return;
+    }
+
+    const headers = [
+      'S.No', 'Division Name', 'Block', 'Floor', 'Room', 'Campus Zone',
+      'Device Type', 'Model', 'IP Address', 'IPv4 Gateway', 'Port Number',
+      'Device ID', 'Hardware Serial', 'Subnet Mask', 'MAC Address', 'Status', 'Date Added'
+    ];
 
     const dataRows = filteredCameras.map((camera, idx) => {
       const loc = parseLocation(camera);
@@ -892,57 +944,104 @@ export default function Cameras() {
 
   const printToPDF = () => {
     const printWindow = window.open('', '_blank');
+    const isReportView = viewMode === 'report';
+
     const htmlContent = `
       <html>
         <head>
-          <title>Camera Inventory Export</title>
+          <title>${isReportView ? `Camera Status Changes Report (${remarkStatusFilter})` : 'Camera Inventory Export'}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
-            h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 20px; text-align: center; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
-            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+            h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 18px; text-align: center; text-transform: uppercase; }
+            .meta { text-align: center; font-size: 11px; color: #64748b; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+            th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; }
             th { background-color: #f3f4f6; font-weight: bold; text-transform: uppercase; color: #4b5563; }
             tr:nth-child(even) { background-color: #f9fafb; }
-            .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            .badge { padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
             .status-online { background-color: #d1fae5; color: #047857; }
             .status-offline { background-color: #fee2e2; color: #b91c1c; }
-            .footer { margin-top: 30px; font-size: 10px; color: #9ca3af; text-align: center; }
+            .status-maintenance { background-color: #fef3c7; color: #b45309; }
+            .footer { margin-top: 25px; font-size: 10px; color: #9ca3af; text-align: center; }
+            .remark-box { background-color: #f8fafc; padding: 4px 6px; border-radius: 4px; font-family: monospace; font-size: 10px; }
           </style>
         </head>
         <body>
-          <h1>Camera Inventory Report</h1>
+          <h1>${isReportView ? `Camera Status Changes & Remarks Audit Log Report` : 'Camera Inventory Report'}</h1>
+          <div class="meta">
+            ${isReportView ? `Filter Status: <strong>${remarkStatusFilter}</strong> &bull; Total Records: <strong>${filteredRemarks.length}</strong>` : `Total Records: <strong>${filteredCameras.length}</strong>`}
+          </div>
           <table>
             <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Device ID</th>
-                <th>Hardware Serial</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>IP Address</th>
-                <th>Location</th>
-                <th>Status</th>
-              </tr>
+              ${isReportView ? `
+                <tr>
+                  <th>S.No</th>
+                  <th>Date & Time</th>
+                  <th>Camera Designation</th>
+                  <th>IP Address</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Saved Remark / Reason</th>
+                  <th>Updated By</th>
+                </tr>
+              ` : `
+                <tr>
+                  <th>S.No</th>
+                  <th>Device ID</th>
+                  <th>Hardware Serial</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>IP Address</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                </tr>
+              `}
             </thead>
             <tbody>
-              ${filteredCameras.map((camera, idx) => {
-                const loc = parseLocation(camera);
-                return `
-                <tr>
-                  <td>${idx + 1}</td>
-                  <td>${camera.cameraId || 'N/A'}</td>
-                  <td>${camera.serialNumber || 'N/A'}</td>
-                  <td>${camera.name || 'N/A'}</td>
-                  <td>${camera.deviceType || 'N/A'}</td>
-                  <td>${camera.ipAddress || 'N/A'}</td>
-                  <td>${[loc.college, loc.block, loc.room].filter(Boolean).join(' / ') || 'N/A'}</td>
-                  <td><span class="badge ${camera.status === 'Online' ? 'status-online' : 'status-offline'}">${camera.status || 'N/A'}</span></td>
-                </tr>
-              `}).join('')}
+              ${isReportView ? (
+                filteredRemarks.map((rem, idx) => {
+                  const cam = cameras.find(c => String(c.id || c._id) === String(rem.camera));
+                  const cameraName = rem.camera_name || cam?.name || '—';
+                  const cameraIp = rem.camera_ip || cam?.ipAddress || '—';
+                  const cameraDiv = rem.camera_division || cam?.divisionName || '—';
+                  const cameraLoc = rem.camera_location || cam?.siteName || '—';
+                  const statusStr = rem.device_status || cam?.status || 'Online';
+                  const dateStr = rem.date ? `${rem.date} ${rem.time || ''}` : (rem.createdAt ? new Date(rem.createdAt).toLocaleString() : '—');
+                  const badgeClass = statusStr === 'Online' ? 'status-online' : statusStr === 'Offline' ? 'status-offline' : 'status-maintenance';
+
+                  return `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td>${dateStr}</td>
+                      <td><strong>${cameraName}</strong></td>
+                      <td>${cameraIp}</td>
+                      <td>${[cameraDiv, cameraLoc].filter(Boolean).join(' / ')}</td>
+                      <td><span class="badge ${badgeClass}">${statusStr}</span></td>
+                      <td><div class="remark-box">${rem.remark || '—'}</div></td>
+                      <td>${rem.userName || 'System Admin'}</td>
+                    </tr>
+                  `;
+                }).join('')
+              ) : (
+                filteredCameras.map((camera, idx) => {
+                  const loc = parseLocation(camera);
+                  return `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td>${camera.cameraId || 'N/A'}</td>
+                    <td>${camera.serialNumber || 'N/A'}</td>
+                    <td>${camera.name || 'N/A'}</td>
+                    <td>${camera.deviceType || 'N/A'}</td>
+                    <td>${camera.ipAddress || 'N/A'}</td>
+                    <td>${[loc.college, loc.block, loc.room].filter(Boolean).join(' / ') || 'N/A'}</td>
+                    <td><span class="badge ${camera.status === 'Online' ? 'status-online' : 'status-offline'}">${camera.status || 'N/A'}</span></td>
+                  </tr>
+                `}).join('')
+              )}
             </tbody>
           </table>
           <div class="footer">
-            Generated from CCTV System on ${new Date().toLocaleString()} &bull; Total Records: ${filteredCameras.length}
+            Generated from CCTV Asset Management System on ${new Date().toLocaleString()}
           </div>
         </body>
       </html>
@@ -1370,15 +1469,26 @@ export default function Cameras() {
                           </div>
                         </td>
                         <td className="p-4 text-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                            camera.status === 'Online' ? 'text-green-500 border-green-500/50' :
-                            camera.status === 'Offline' ? 'text-red-500 border-red-500/50' :
-                            camera.status === 'Maintenance' ? 'text-amber-500 border-amber-500/50' :
-                            camera.status === 'Scrap' ? 'text-red-500 border-red-500/50' :
-                            'text-amber-500 border-amber-500/50'
-                          }`}>
-                            {camera.status}
-                          </span>
+                          <div className="flex flex-col items-center gap-1.5">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                              camera.status === 'Online' ? 'text-green-500 border-green-500/50 bg-green-500/10' :
+                              camera.status === 'Offline' ? 'text-red-500 border-red-500/50 bg-red-500/10' :
+                              camera.status === 'Maintenance' ? 'text-amber-500 border-amber-500/50 bg-amber-500/10' :
+                              'text-slate-400 border-slate-500/50 bg-slate-500/10'
+                            }`}>
+                              {camera.status}
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openQuickEditModal(camera); }}
+                                className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded transition-all flex items-center shadow-sm"
+                              >
+                                <RefreshCw size={10} className="mr-1" />
+                                Status Change
+                              </button>
+                            )}
+                          </div>
                         </td>
                         {canEdit && (
                           <td className="p-3 text-right">
@@ -1648,61 +1758,6 @@ export default function Cameras() {
       ) : (
         /* Camera Status & Remarks History Log Report View */
         <div className="space-y-6 animate-fade-in">
-        <h2 className="text-xl font-black text-main uppercase tracking-tight flex items-center">
-          <FileText className="mr-3 text-cyan-400" size={22} />
-          Camera Status & Remarks History Log
-        </h2>
-
-        {/* Status Summary Count Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Online (Current)</span>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-3xl font-black text-emerald-400">{statusCounts.online}</span>
-              <span className="text-[10px] text-dim font-mono">
-                {cameras.length ? ((statusCounts.online / cameras.length) * 100).toFixed(0) : 0}%
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-            <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Offline</span>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-3xl font-black text-red-400">{statusCounts.offline}</span>
-              <span className="text-[10px] text-dim font-mono">
-                {cameras.length ? ((statusCounts.offline / cameras.length) * 100).toFixed(0) : 0}%
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Maintenance</span>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-3xl font-black text-amber-400">{statusCounts.maintenance}</span>
-              <span className="text-[10px] text-dim font-mono">
-                {cameras.length ? ((statusCounts.maintenance / cameras.length) * 100).toFixed(0) : 0}%
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-            <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Scrap</span>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-3xl font-black text-rose-500">{statusCounts.scrap}</span>
-              <span className="text-[10px] text-dim font-mono">
-                {cameras.length ? ((statusCounts.scrap / cameras.length) * 100).toFixed(0) : 0}%
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Total Remarks Logs</span>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-3xl font-black text-cyan-400">{cameraRemarks.length}</span>
-              <span className="text-[10px] text-dim font-mono">Entries</span>
-            </div>
-          </div>
-        </div>
 
         {/* Remarks Table & Search Filter Bar */}
         <div className="glass-panel overflow-hidden bg-panel border border-main rounded-2xl shadow-2xl">
@@ -1726,18 +1781,6 @@ export default function Cameras() {
                 />
               </div>
 
-              <select
-                value={remarkStatusFilter}
-                onChange={(e) => setRemarkStatusFilter(e.target.value)}
-                className="bg-panel text-xs font-bold text-main border border-main rounded-xl px-3 py-2 outline-none"
-              >
-                <option value="ALL">ALL STATUSES</option>
-                <option value="Online">Online</option>
-                <option value="Offline">Offline</option>
-                <option value="Maintenance">Maintenance</option>
-                <option value="Scrap">Scrap</option>
-              </select>
-
               <button
                 onClick={fetchRemarksHistory}
                 className="p-2 bg-panel border border-main rounded-xl text-dim hover:text-cyan-400 transition-colors"
@@ -1745,6 +1788,42 @@ export default function Cameras() {
               >
                 <RefreshCw size={14} className={loadingRemarks ? 'animate-spin' : ''} />
               </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-card/60 border-b border-main">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+              <span className="text-[10px] font-black text-secondary uppercase tracking-widest mr-2">Filter Log By Status:</span>
+              {['ALL', 'Online', 'Offline', 'Maintenance', 'Scrap'].map((st) => {
+                const count = st === 'ALL'
+                  ? cameraRemarks.length
+                  : cameraRemarks.filter(rem => {
+                      const cam = cameras.find(c => String(c.id || c._id) === String(rem.camera));
+                      const statusStr = rem.device_status || parseStatusFromRemark(rem.remark, cam?.status);
+                      return (statusStr || 'Online').toUpperCase() === st.toUpperCase();
+                    }).length;
+                const isActive = remarkStatusFilter.toUpperCase() === st.toUpperCase();
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setRemarkStatusFilter(st)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+                      isActive
+                        ? st.toUpperCase() === 'ONLINE' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-sm' :
+                          st.toUpperCase() === 'OFFLINE' ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-sm' :
+                          st.toUpperCase() === 'MAINTENANCE' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm' :
+                          'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-sm'
+                        : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'
+                    }`}
+                  >
+                    {st} ({count})
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-[11px] font-bold text-cyan-400">
+              Showing {filteredRemarks.length} of {cameraRemarks.length} Status Logs
             </div>
           </div>
 

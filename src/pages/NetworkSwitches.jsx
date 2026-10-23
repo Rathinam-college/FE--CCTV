@@ -4,7 +4,7 @@ import {
   Search, Filter, Plus, Server, Hash, Cpu, X,
   Edit2, Trash2, Building, Activity, ShieldCheck,
   ShieldAlert, Download, Network, Database, Upload,
-  Info, ChevronRight, ChevronLeft, Printer
+  Info, ChevronRight, ChevronLeft, Printer, RefreshCw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
@@ -25,6 +25,11 @@ export default function NetworkSwitches() {
   const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+  
+  // Status Change Modal State
+  const [statusModalDevice, setStatusModalDevice] = useState(null);
+  const [statusFormData, setStatusFormData] = useState({ status: 'Online', remark: '' });
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
   
   // Advanced Filter State
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -102,6 +107,49 @@ export default function NetworkSwitches() {
     } catch (err) {
       console.error(err);
       showNotification('Error fetching switches', 'error');
+    }
+  };
+
+  const openStatusModal = (device) => {
+    setStatusModalDevice(device);
+    setStatusFormData({
+      status: device.status || 'Online',
+      remark: ''
+    });
+  };
+
+  const handleSaveStatusChange = async (e) => {
+    e.preventDefault();
+    if (!statusModalDevice || statusSubmitting) return;
+
+    if (!statusFormData.remark.trim()) {
+      showNotification('Please enter a remark / reason for the status change.', 'error');
+      return;
+    }
+
+    setStatusSubmitting(true);
+    try {
+      const id = statusModalDevice._id || statusModalDevice.id;
+
+      await api.patch(`/cameras/switches/${id}/`, {
+        status: statusFormData.status,
+        remarks: statusFormData.remark,
+        remark: statusFormData.remark
+      });
+
+      await api.post(`/cameras/switches/${id}/add_remark/`, {
+        remark: statusFormData.remark,
+        device_status: statusFormData.status
+      });
+
+      showNotification(`Network Switch status updated to "${statusFormData.status}" & remark saved.`);
+      setStatusModalDevice(null);
+      fetchSwitches();
+    } catch (err) {
+      console.error("Status change error:", err);
+      showNotification(err.response?.data?.message || 'Failed to update status & save remark.', 'error');
+    } finally {
+      setStatusSubmitting(false);
     }
   };
 
@@ -408,7 +456,7 @@ export default function NetworkSwitches() {
 
   const filteredSwitches = useMemo(() => {
     return baseFilteredSwitches.filter(sw => {
-      if (statusFilter !== 'ALL' && (sw.status || 'Online') !== statusFilter) return false;
+      if (statusFilter !== 'ALL' && (sw.status || 'Online').toUpperCase() !== statusFilter.toUpperCase()) return false;
       return true;
     });
   }, [baseFilteredSwitches, statusFilter]);
@@ -523,10 +571,8 @@ export default function NetworkSwitches() {
                 <th>Asset Number</th>
                 <th>Switch Name</th>
                 <th>IP Address</th>
-                <th>Ports</th>
-                <th>ETH Uplink</th>
-                <th>SFP Uplink</th>
                 <th>Location</th>
+                <th>Remarks</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -537,10 +583,8 @@ export default function NetworkSwitches() {
                   <td>${sw.serialNumber || 'N/A'}</td>
                   <td>${sw.name || 'N/A'}</td>
                   <td>${sw.ipAddress || 'N/A'}</td>
-                  <td>${sw.portCount || 'N/A'}</td>
-                  <td>${sw.ethUplink || 'N/A'}</td>
-                  <td>${sw.sfpUplink || 'N/A'}</td>
                   <td>${[sw.divisionName, sw.block, sw.room].filter(Boolean).join(' / ') || 'N/A'}</td>
+                  <td>${sw.remarks || sw.remark || 'N/A'}</td>
                   <td><span class="badge ${sw.status === 'Online' ? 'status-online' : sw.status === 'Maintenance' ? 'status-maintenance' : 'status-offline'}">${sw.status || 'N/A'}</span></td>
                 </tr>
               `).join('')}
@@ -853,12 +897,24 @@ export default function NetworkSwitches() {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                      sw.status === 'Online' ? 'text-green-500 border-green-500/50' :
-                      sw.status === 'Offline' ? 'text-red-500 border-red-500/50' :
-                      'text-amber-500 border-amber-500/50'}`}>
-                      {sw.status}
-                    </span>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                        sw.status === 'Online' ? 'text-green-500 border-green-500/50 bg-green-500/10' :
+                        sw.status === 'Offline' ? 'text-red-500 border-red-500/50 bg-red-500/10' :
+                        'text-amber-500 border-amber-500/50 bg-amber-500/10'}`}>
+                        {sw.status}
+                      </span>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openStatusModal(sw); }}
+                          className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded transition-all flex items-center shadow-sm"
+                        >
+                          <RefreshCw size={10} className="mr-1" />
+                          Status Change
+                        </button>
+                      )}
+                    </div>
                   </td>
                   {canEdit && (
                     <td className="px-5 py-4 text-right">
@@ -893,47 +949,6 @@ export default function NetworkSwitches() {
       ) : (
         /* Network Switches Status & Remarks History Log Report View */
         <div className="space-y-6 animate-fade-in">
-          {/* Status Summary Count Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Online Switches</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-emerald-400">{stats.online}</span>
-                <span className="text-[10px] text-dim font-mono">
-                  {switches.length ? ((stats.online / switches.length) * 100).toFixed(0) : 0}%
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Offline Switches</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-red-400">{stats.offline}</span>
-                <span className="text-[10px] text-dim font-mono">
-                  {switches.length ? ((stats.offline / switches.length) * 100).toFixed(0) : 0}%
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Maintenance</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-amber-400">{stats.maintenance}</span>
-                <span className="text-[10px] text-dim font-mono">
-                  {switches.length ? ((stats.maintenance / switches.length) * 100).toFixed(0) : 0}%
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Total Registered</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-cyan-400">{switches.length}</span>
-                <span className="text-[10px] text-dim font-mono">Units</span>
-              </div>
-            </div>
-          </div>
-
           {/* Remarks Table & Audit Log */}
           <div className="glass-panel overflow-hidden bg-panel border border-main rounded-2xl shadow-2xl">
             <div className="p-6 border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40">
@@ -948,6 +963,38 @@ export default function NetworkSwitches() {
               </button>
             </div>
 
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-card/60 border-b border-main">
+              <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+                <span className="text-[10px] font-black text-secondary uppercase tracking-widest mr-2">Filter Switches By Status:</span>
+                {['ALL', 'Online', 'Offline', 'Maintenance', 'Scrap'].map((st) => {
+                  const count = st === 'ALL'
+                    ? baseFilteredSwitches.length
+                    : baseFilteredSwitches.filter(sw => (sw.status || 'Online').toUpperCase() === st.toUpperCase()).length;
+                  const isActive = statusFilter.toUpperCase() === st.toUpperCase();
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setStatusFilter(st)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+                        isActive
+                          ? st.toUpperCase() === 'ONLINE' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-sm' :
+                            st.toUpperCase() === 'OFFLINE' ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-sm' :
+                            st.toUpperCase() === 'MAINTENANCE' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm' :
+                            'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-sm'
+                          : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'
+                      }`}
+                    >
+                      {st} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] font-bold text-cyan-400">
+                Showing {filteredSwitches.length} of {baseFilteredSwitches.length} Switches
+              </div>
+            </div>
+
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -957,7 +1004,7 @@ export default function NetworkSwitches() {
                     <th className="p-4">Asset Number</th>
                     <th className="p-4">IP Address</th>
                     <th className="p-4">Location</th>
-                    <th className="p-4">Ports Specs</th>
+                    <th className="p-4">Remarks / Audit Log</th>
                     <th className="p-4 text-center">Status</th>
                   </tr>
                 </thead>
@@ -979,8 +1026,21 @@ export default function NetworkSwitches() {
                           <div>{sw.divisionName || '—'}</div>
                           <div className="text-[10px] text-dim">{[sw.block, sw.floor, sw.room].filter(Boolean).join(' / ')}</div>
                         </td>
-                        <td className="p-4 font-mono text-slate-300">
-                          {sw.portCount || '—'} Ports ({sw.ethUplink || '0'} ETH / {sw.sfpUplink || '0'} SFP)
+                        <td className="p-4 text-slate-300 max-w-xs font-medium">
+                          {(() => {
+                            const lastRemarkObj = sw.message_history && sw.message_history.length > 0 ? sw.message_history[sw.message_history.length - 1] : null;
+                            const text = sw.remarks || sw.remark || lastRemarkObj?.remark || '—';
+                            return (
+                              <div className="flex flex-col space-y-0.5">
+                                <span className="text-main font-semibold text-xs">{text}</span>
+                                {lastRemarkObj?.createdAt && (
+                                  <span className="text-[10px] text-cyan-400 font-mono">
+                                    {new Date(lastRemarkObj.createdAt).toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 text-center">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
@@ -1245,6 +1305,91 @@ export default function NetworkSwitches() {
                   className={`glass-button px-12 py-4 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {submitting ? 'Saving...' : (editingId ? 'Update' : 'Save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Status Change & Remark Modal */}
+      {statusModalDevice && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-card rounded-2xl w-full max-w-md overflow-hidden border border-main shadow-2xl">
+            <div className="p-6 border-b border-main bg-panel flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <RefreshCw size={20} className="text-cyan-400" />
+                <h3 className="text-lg font-black text-main uppercase tracking-tight">
+                  Status Change & Remark
+                </h3>
+              </div>
+              <button onClick={() => setStatusModalDevice(null)} className="p-1 hover:bg-card rounded-lg text-secondary hover:text-main">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveStatusChange} className="p-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-secondary uppercase tracking-widest block mb-1">
+                  Switch: {statusModalDevice.name || statusModalDevice.serialNumber}
+                </label>
+                <div className="text-xs text-cyan-400 font-mono mb-4">
+                  IP: {statusModalDevice.ipAddress || '—'}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-secondary uppercase tracking-widest block">
+                  Select New Status <span className="text-red-400">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Online', 'Offline', 'Maintenance', 'Scrap'].map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setStatusFormData(prev => ({ ...prev, status: st }))}
+                      className={`p-3 rounded-xl text-xs font-bold uppercase transition-all border ${
+                        statusFormData.status === st
+                          ? st === 'Online' ? 'bg-green-500/20 text-green-400 border-green-500' :
+                            st === 'Offline' ? 'bg-red-500/20 text-red-400 border-red-500' :
+                            st === 'Maintenance' ? 'bg-amber-500/20 text-amber-400 border-amber-500' :
+                            'bg-rose-500/20 text-rose-400 border-rose-500'
+                          : 'bg-panel text-secondary border-main hover:border-cyan-500/40'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-secondary uppercase tracking-widest block">
+                  Status Remark / Reason <span className="text-red-400">*Required</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={statusFormData.remark}
+                  onChange={(e) => setStatusFormData(prev => ({ ...prev, remark: e.target.value }))}
+                  placeholder={`Enter reason for changing status to "${statusFormData.status}"...`}
+                  className="w-full p-3 bg-panel border border-main rounded-xl text-xs text-main outline-none focus:border-cyan-500 font-medium"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalDevice(null)}
+                  className="flex-1 py-2.5 bg-panel border border-main text-secondary rounded-xl font-bold text-xs uppercase hover:text-main"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={statusSubmitting || !statusFormData.remark.trim()}
+                  className="flex-1 py-2.5 bg-cyan-400 text-slate-900 rounded-xl font-bold text-xs uppercase hover:bg-cyan-300 disabled:opacity-50 transition-all shadow-lg"
+                >
+                  {statusSubmitting ? 'Saving...' : 'Save & Log Status'}
                 </button>
               </div>
             </form>

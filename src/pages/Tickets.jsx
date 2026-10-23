@@ -14,6 +14,7 @@ import { useConfirmStore } from '../store/confirmStore';
 import { useSiteStore } from '../store/siteStore';
 import { useNavigate } from 'react-router-dom';
 import { exportMonthlyPPT } from '../utils/pptExport';
+import TicketChatView from '../components/TicketChatView';
 const getImageUrl = (path) => {
   if (!path) return '';
   try {
@@ -61,10 +62,40 @@ export default function Tickets() {
     }
   };
 
+  const isUpgradeTicket = (t) => {
+    if (!t) return false;
+    let meta = {};
+    try {
+      meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : (typeof t.remarks === 'object' && t.remarks ? t.remarks : {});
+    } catch(e) {}
+    const cat = String(t.category || meta.category || '').toLowerCase();
+    const desc = String(t.issueDescription || '').toLowerCase();
+    return cat.includes('upgrade') || desc.includes('upgrade') || meta.isUpgrade === true || meta.category === 'Upgrade';
+  };
+
   const { showNotification } = useNotificationStore();
   const { showConfirm } = useConfirmStore();
   const [tickets, setTickets] = useState([]);
-  const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
+
+  // Scoped to regular maintenance/service/issue tickets (excludes upgrades)
+  const regularTickets = useMemo(() => {
+    return (Array.isArray(tickets) ? tickets : []).filter(t => !isUpgradeTicket(t));
+  }, [tickets]);
+
+  const [viewMode, setViewMode] = useState('registry'); // 'registry', 'report', or 'chat'
+
+  const handleTicketRemarkAdded = (ticketId, newRemarkObj) => {
+    setTickets(prev => prev.map(t => {
+      if ((t.id || t._id) === ticketId) {
+        const prevHistory = Array.isArray(t.message_history) ? t.message_history : [];
+        return {
+          ...t,
+          message_history: [newRemarkObj, ...prevHistory]
+        };
+      }
+      return t;
+    }));
+  };
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -78,6 +109,8 @@ export default function Tickets() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [reportCurrentPage, setReportCurrentPage] = useState(1);
+  const [reportItemsPerPage, setReportItemsPerPage] = useState(10);
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
   const [knownLocations, setKnownLocations] = useState([]);
@@ -86,6 +119,7 @@ export default function Tickets() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterDevice, setFilterDevice] = useState('');
   const [filterDivision, setFilterDivision] = useState('');
+  const [staffFilter, setStaffFilter] = useState('ALL');
   const [projects, setProjects] = useState([]);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [expandedSidePanel, setExpandedSidePanel] = useState(false);
@@ -107,16 +141,17 @@ export default function Tickets() {
     actions: true
   });
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+  const [dateSortOrder, setDateSortOrder] = useState('desc'); // 'desc' (last entry first / newest first) or 'asc'
 
   const availableMonths = useMemo(() => {
-    if (!Array.isArray(tickets)) return [];
-    const months = tickets.map(ticket => {
+    if (!Array.isArray(regularTickets)) return [];
+    const months = regularTickets.map(ticket => {
       const meta = parseMetadata(ticket.remarks);
-      const ticketDate = meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+      const ticketDate = ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
       return ticketDate ? ticketDate.substring(0, 7) : null;
     }).filter(Boolean);
     return Array.from(new Set(months)).sort().reverse();
-  }, [tickets]);
+  }, [regularTickets]);
 
   const formatMonthLabel = (ym) => {
     if (!ym) return '';
@@ -149,10 +184,86 @@ export default function Tickets() {
   const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Maintenance:EDIT');
 
+  const uniqueTechnicians = useMemo(() => {
+    const techSet = new Set();
+    regularTickets.forEach(t => {
+      let assignees = [];
+      if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
+        assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+      }
+      if (assignees.length === 0) {
+        const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || '';
+        if (typeof rawAssign === 'string') {
+          assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+        }
+      }
+      assignees.forEach(name => {
+        if (name && name !== 'Unassigned') techSet.add(name);
+      });
+    });
+    if (Array.isArray(staff)) {
+      staff.forEach(s => {
+        const sName = s.name || s.username;
+        if (sName) techSet.add(sName);
+      });
+    }
+    return Array.from(techSet).sort();
+  }, [regularTickets, staff]);
+
+  const getTicketSortTimestamp = (ticket) => {
+    if (!ticket) return 0;
+    let meta = {};
+    try {
+      if (typeof ticket.remarks === 'string' && ticket.remarks.startsWith('{')) {
+        meta = JSON.parse(ticket.remarks);
+      } else if (typeof ticket.remarks === 'object' && ticket.remarks) {
+        meta = ticket.remarks;
+      }
+    } catch (e) {}
+
+    // Priority for date: operationDate > meta.manualDate > receivedDate > createdDate > createdAt
+    const dateStr = ticket.operationDate || meta.manualDate || ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+
+    // Priority for time: receivedTime > meta.receivedTime > createdTime > createdAt ISO time
+    let timeStr = ticket.receivedTime || meta.receivedTime || ticket.createdTime || '';
+    if (!timeStr && ticket.createdAt && String(ticket.createdAt).includes('T')) {
+      timeStr = String(ticket.createdAt).split('T')[1]?.substring(0, 5) || '';
+    }
+
+    let hour = 0;
+    let minute = 0;
+    if (timeStr) {
+      const match24 = String(timeStr).match(/^(\d{1,2}):(\d{2})/);
+      if (match24) {
+        hour = parseInt(match24[1], 10);
+        minute = parseInt(match24[2], 10);
+      }
+    }
+
+    if (!dateStr) {
+      return (ticket.id || 0);
+    }
+
+    const dateParts = String(dateStr).split('-');
+    if (dateParts.length === 3) {
+      const y = parseInt(dateParts[0], 10);
+      const m = parseInt(dateParts[1], 10) - 1;
+      const d = parseInt(dateParts[2], 10);
+      const dt = new Date(y, m, d, hour, minute, 0, 0);
+      const timeMs = dt.getTime();
+      if (!isNaN(timeMs)) {
+        return timeMs;
+      }
+    }
+
+    const fallback = new Date(dateStr).getTime();
+    return isNaN(fallback) ? (ticket.id || 0) : fallback;
+  };
+
   const baseFilteredTickets = useMemo(() => {
-    return Array.isArray(tickets) ? tickets.filter(ticket => {
+    return regularTickets.filter(ticket => {
       const meta = parseMetadata(ticket.remarks);
-      const ticketDate = meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+      const ticketDate = ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
       
       // Month range filter (includes old unresolved tickets from prior months)
       if (startMonth || endMonth) {
@@ -169,20 +280,511 @@ export default function Tickets() {
       if (filterDevice && (ticket.ticketDevice || meta.ticketDevice) !== filterDevice) return false;
       if (filterDivision && ticket.divisionName !== filterDivision) return false;
 
+      // Staff / Technician Filter
+      if (staffFilter !== 'ALL') {
+        let assignees = [];
+        if (ticket.assignedStaff && Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0) {
+          assignees = ticket.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+        }
+        if (assignees.length === 0) {
+          const rawAssign = ticket.assignedTo?.name || ticket.assignedTo?.username || ticket.assignedTo || 'Unassigned';
+          if (typeof rawAssign === 'string') {
+            assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+          } else {
+            assignees = ['Unassigned'];
+          }
+        }
+        if (!assignees.some(a => a.toUpperCase() === staffFilter.toUpperCase())) return false;
+      }
+
       // Search filter
-      const searchStr = `${ticket.issueDescription} ${meta.location} ${meta.category} ${ticket.project?.name || ''}`.toLowerCase();
+      const searchStr = `${ticket.issueDescription} ${ticket.location || meta.location || ''} ${ticket.category || meta.category || ''} ${ticket.project?.name || ''}`.toLowerCase();
       if (searchQuery && !searchStr.includes(searchQuery.toLowerCase())) return false;
 
       return true;
-    }) : [];
-  }, [tickets, startMonth, endMonth, filterProject, filterCategory, filterDevice, filterDivision, searchQuery]);
+    });
+  }, [regularTickets, startMonth, endMonth, filterProject, filterCategory, filterDevice, filterDivision, staffFilter, searchQuery]);
 
   const filteredTickets = useMemo(() => {
-    return baseFilteredTickets.filter(ticket => {
+    const list = baseFilteredTickets.filter(ticket => {
       if (statusFilter !== 'ALL' && ticket.status !== statusFilter) return false;
       return true;
     });
-  }, [baseFilteredTickets, statusFilter]);
+
+    return [...list].sort((a, b) => {
+      const timeA = getTicketSortTimestamp(a);
+      const timeB = getTicketSortTimestamp(b);
+      if (timeA !== timeB) {
+        return dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+      const idA = a.id || 0;
+      const idB = b.id || 0;
+      return dateSortOrder === 'asc' ? idA - idB : idB - idA;
+    });
+  }, [baseFilteredTickets, statusFilter, dateSortOrder]);
+
+  const registryFilteredTickets = filteredTickets;
+
+  const downloadStaffPDF = (staffTarget = 'ALL') => {
+    const isUpgradeTicket = (t) => {
+      if (!t) return false;
+      let meta = {};
+      try {
+        meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : (typeof t.remarks === 'object' && t.remarks ? t.remarks : {});
+      } catch(e) {}
+      const cat = String(t.category || meta.category || '').toLowerCase();
+      const desc = String(t.issueDescription || '').toLowerCase();
+      return cat.includes('upgrade') || desc.includes('upgrade') || meta.isUpgrade === true || meta.category === 'Upgrade';
+    };
+
+    const getTicketAssignees = (t) => {
+      let assignees = [];
+      if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
+        assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+      }
+      if (assignees.length === 0) {
+        const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+        if (typeof rawAssign === 'string') {
+          assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+        } else {
+          assignees = ['Unassigned'];
+        }
+      }
+      return assignees.length > 0 ? assignees : ['Unassigned'];
+    };
+
+    const getTicketWorkMinutes = (t) => {
+      if (t.totalTime && typeof t.totalTime === 'string') {
+        const hMatch = t.totalTime.match(/(\d+)\s*h/i);
+        const mMatch = t.totalTime.match(/(\d+)\s*m/i);
+        if (hMatch || mMatch) {
+          const hours = hMatch ? parseInt(hMatch[1], 10) : 0;
+          const mins = mMatch ? parseInt(mMatch[1], 10) : 0;
+          const total = hours * 60 + mins;
+          if (total > 0) return total;
+        }
+      }
+
+      if (t.receivedTime && t.endTime) {
+        const [sH, sM] = String(t.receivedTime).split(':').map(Number);
+        const [eH, eM] = String(t.endTime).split(':').map(Number);
+        if (!isNaN(sH) && !isNaN(sM) && !isNaN(eH) && !isNaN(eM)) {
+          let diff = (eH * 60 + eM) - (sH * 60 + sM);
+          if (diff < 0) diff += 24 * 60;
+          if (diff > 0) return diff;
+        }
+      }
+
+      const sLow = String(t.status || '').toLowerCase();
+      if ((sLow.includes('completed') || sLow.includes('finished')) && t.createdAt && t.updatedAt) {
+        const s = new Date(t.createdAt);
+        const e = new Date(t.updatedAt);
+        if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+          const diff = Math.max(0, Math.floor((e - s) / 60000));
+          if (diff > 0) return diff;
+        }
+      }
+
+      return 0;
+    };
+
+    const formatTimeMins = (totalMins) => {
+      if (!totalMins || totalMins <= 0) return '0m';
+      const t = Math.floor(totalMins);
+      if (t < 60) return `${t}m`;
+      const h = Math.floor(t / 60);
+      const m = t % 60;
+      return `${h}h ${m}m`;
+    };
+
+    const sourceTickets = baseFilteredTickets.filter(t => {
+      if (staffTarget === 'ALL') return true;
+      const assignees = getTicketAssignees(t);
+      return assignees.some(a => a.toUpperCase() === staffTarget.toUpperCase());
+    });
+
+    const techMap = {};
+    sourceTickets.forEach(t => {
+      const assignees = getTicketAssignees(t);
+      const isUp = isUpgradeTicket(t);
+      const mins = getTicketWorkMinutes(t);
+      const shareMins = mins > 0 ? mins / assignees.length : 0;
+      const sLow = String(t.status || 'Open').toLowerCase();
+      const normStatus = (sLow.includes('completed') || sLow.includes('finished')) ? 'Completed' : (sLow.includes('progress') ? 'In Progress' : 'Open');
+
+      assignees.forEach(name => {
+        if (staffTarget !== 'ALL' && name.toUpperCase() !== staffTarget.toUpperCase()) return;
+        if (!techMap[name]) {
+          techMap[name] = {
+            name,
+            tickets: [],
+            upgrades: [],
+            openCount: 0,
+            inProgressCount: 0,
+            completedCount: 0,
+            ticketsTime: 0,
+            upgradesTime: 0,
+            totalTime: 0
+          };
+        }
+
+        if (isUp) {
+          techMap[name].upgrades.push(t);
+          techMap[name].upgradesTime += shareMins;
+        } else {
+          techMap[name].tickets.push(t);
+          techMap[name].ticketsTime += shareMins;
+        }
+
+        if (normStatus === 'Completed') techMap[name].completedCount++;
+        else if (normStatus === 'In Progress') techMap[name].inProgressCount++;
+        else techMap[name].openCount++;
+
+        techMap[name].totalTime += shareMins;
+      });
+    });
+
+    const technicianList = Object.values(techMap).sort((a, b) => {
+      const sumA = a.tickets.length + a.upgrades.length;
+      const sumB = b.tickets.length + b.upgrades.length;
+      return sumB - sumA;
+    });
+
+    let totalAllTickets = 0;
+    let totalAllUpgrades = 0;
+    let totalAllOpen = 0;
+    let totalAllInProgress = 0;
+    let totalAllCompleted = 0;
+    let totalAllTimeMins = 0;
+
+    technicianList.forEach(tech => {
+      totalAllTickets += tech.tickets.length;
+      totalAllUpgrades += tech.upgrades.length;
+      totalAllOpen += tech.openCount;
+      totalAllInProgress += tech.inProgressCount;
+      totalAllCompleted += tech.completedCount;
+      totalAllTimeMins += tech.totalTime;
+    });
+
+    const totalAllWork = totalAllTickets + totalAllUpgrades;
+    const overallRate = totalAllWork > 0 ? ((totalAllCompleted / totalAllWork) * 100).toFixed(0) : 0;
+    const overallTimeStr = formatTimeMins(totalAllTimeMins);
+
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Technician Load & Productivity Comparison Report - ${staffTarget}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 25px; color: #0f172a; line-height: 1.4; background: #ffffff; margin: 0; }
+            .header-banner { border-bottom: 3px solid #0284c7; padding-bottom: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .header-title h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; font-weight: 900; }
+            .header-title h2 { margin: 4px 0 0 0; font-size: 13px; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+            .header-meta { text-align: right; font-size: 10px; color: #64748b; font-weight: 600; }
+            
+            .overview-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 25px; }
+            .overview-title { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #334155; margin-bottom: 10px; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+            .matrix-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 6px; }
+            .matrix-table th, .matrix-table td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: center; }
+            .matrix-table th { background-color: #f1f5f9; font-weight: 800; text-transform: uppercase; color: #334155; }
+            .matrix-table td.tech-name { text-align: left; font-weight: 800; color: #0f172a; }
+            .matrix-table tr.total-row { background-color: #e2e8f0; font-weight: 900; }
+            
+            .tech-block { border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; margin-bottom: 30px; background: #ffffff; page-break-inside: avoid; }
+            .tech-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 14px; }
+            .tech-profile { display: flex; align-items: center; gap: 10px; }
+            .tech-avatar { width: 32px; height: 32px; border-radius: 50%; background: #0284c7; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 900; }
+            .tech-name-large { font-size: 16px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 0; }
+            .tech-pill { display: inline-block; padding: 3px 8px; background: #e0f2fe; color: #0369a1; border-radius: 6px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+
+            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+            .kpi-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; text-align: center; }
+            .kpi-label { font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+            .kpi-val { font-size: 15px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+            .val-tickets { color: #0284c7; }
+            .val-upgrades { color: #9333ea; }
+            .val-completed { color: #16a34a; }
+            .val-progress { color: #d97706; }
+            .val-open { color: #e11d48; }
+
+            .section-subhead { font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 16px 0 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; border-radius: 6px; }
+            .subhead-tickets { background: #e0f2fe; color: #0369a1; border-left: 4px solid #0284c7; }
+            .subhead-upgrades { background: #f3e8ff; color: #7e22ce; border-left: 4px solid #9333ea; }
+
+            .data-table { width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 12px; }
+            .data-table th, .data-table td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: left; }
+            .data-table th { background-color: #f8fafc; font-weight: 800; text-transform: uppercase; color: #475569; font-size: 8.5px; }
+            .data-table tr:nth-child(even) { background-color: #fafafa; }
+            
+            .badge { padding: 2px 6px; border-radius: 8px; font-size: 8px; font-weight: 800; text-transform: uppercase; display: inline-block; }
+            .badge-open { background-color: #ffe4e6; color: #be123c; border: 1px solid #fda4af; }
+            .badge-progress { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+            .badge-completed { background-color: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+            .time-tag { font-family: monospace; font-weight: 700; font-size: 9px; }
+
+            .footer-note { margin-top: 30px; font-size: 9px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+
+            @media print {
+              body { padding: 10px; font-size: 9px; }
+              .tech-block { page-break-inside: avoid; margin-bottom: 20px; }
+              .page-break { page-break-before: always; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header-banner">
+            <div class="header-title">
+              <h1>Rathinam Group of Institutions</h1>
+              <h2>Technician Load, Productivity & Work Comparison Report</h2>
+            </div>
+            <div class="header-meta">
+              <div>Target: <strong>${staffTarget === 'ALL' ? 'ALL TECHNICIANS' : staffTarget}</strong></div>
+              <div>Generated: ${new Date().toLocaleString()}</div>
+              <div>Period: ${startMonth || 'ALL'} to ${endMonth || 'ALL'}</div>
+            </div>
+          </div>
+
+          <div class="overview-card">
+            <div class="overview-title">
+              <span>Executive Work Comparison Matrix (${technicianList.length} Technicians)</span>
+              <span>Total Work Logged: <strong>${totalAllWork} Tasks</strong> &bull; Total Time: <strong>${overallTimeStr}</strong></span>
+            </div>
+            <table class="matrix-table">
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Technician</th>
+                  <th style="color: #0284c7;">Regular Tickets</th>
+                  <th style="color: #0284c7;">Ticket Time</th>
+                  <th style="color: #9333ea;">Upgrades</th>
+                  <th style="color: #9333ea;">Upgrade Time</th>
+                  <th style="color: #e11d48;">Open</th>
+                  <th style="color: #d97706;">In Progress</th>
+                  <th style="color: #16a34a;">Completed</th>
+                  <th>Total Assigned</th>
+                  <th>Completion Rate</th>
+                  <th>Total Work Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${technicianList.length === 0 ? `
+                  <tr><td colspan="11" style="padding: 15px; color: #94a3b8;">No technician records found matching current filters.</td></tr>
+                ` : technicianList.map(tech => {
+                  const techTotal = tech.tickets.length + tech.upgrades.length;
+                  const techRate = techTotal > 0 ? ((tech.completedCount / techTotal) * 100).toFixed(0) : 0;
+                  return `
+                    <tr>
+                      <td class="tech-name">${tech.name}</td>
+                      <td style="font-weight: 800; color: #0284c7;">${tech.tickets.length}</td>
+                      <td class="time-tag">${formatTimeMins(tech.ticketsTime)}</td>
+                      <td style="font-weight: 800; color: #9333ea;">${tech.upgrades.length}</td>
+                      <td class="time-tag">${formatTimeMins(tech.upgradesTime)}</td>
+                      <td style="color: #e11d48; font-weight: 700;">${tech.openCount}</td>
+                      <td style="color: #d97706; font-weight: 700;">${tech.inProgressCount}</td>
+                      <td style="color: #16a34a; font-weight: 700;">${tech.completedCount}</td>
+                      <td style="font-weight: 900;">${techTotal}</td>
+                      <td><strong>${techRate}%</strong></td>
+                      <td class="time-tag" style="font-weight: 900; color: #7e22ce;">${formatTimeMins(tech.totalTime)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+                <tr class="total-row">
+                  <td style="text-align: left;">OVERALL TOTAL</td>
+                  <td style="color: #0284c7;">${totalAllTickets}</td>
+                  <td>${formatTimeMins(technicianList.reduce((acc, t) => acc + t.ticketsTime, 0))}</td>
+                  <td style="color: #9333ea;">${totalAllUpgrades}</td>
+                  <td>${formatTimeMins(technicianList.reduce((acc, t) => acc + t.upgradesTime, 0))}</td>
+                  <td style="color: #e11d48;">${totalAllOpen}</td>
+                  <td style="color: #d97706;">${totalAllInProgress}</td>
+                  <td style="color: #16a34a;">${totalAllCompleted}</td>
+                  <td>${totalAllWork}</td>
+                  <td>${overallRate}%</td>
+                  <td style="color: #7e22ce;">${overallTimeStr}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          ${technicianList.map((tech, techIdx) => {
+            const techTotalAssigned = tech.tickets.length + tech.upgrades.length;
+            const techRate = techTotalAssigned > 0 ? ((tech.completedCount / techTotalAssigned) * 100).toFixed(0) : 0;
+            const techAvgMins = tech.completedCount > 0 ? tech.totalTime / tech.completedCount : 0;
+
+            return `
+              <div class="tech-block ${techIdx > 0 && staffTarget === 'ALL' ? 'page-break' : ''}">
+                <div class="tech-header">
+                  <div class="tech-profile">
+                    <div class="tech-avatar">${tech.name.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <h3 class="tech-name-large">${tech.name}</h3>
+                      <span class="tech-pill">Technician Productivity Profile</span>
+                    </div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-size: 11px; font-weight: 800; color: #0f172a;">Completion Rate: <span style="color: #0284c7;">${techRate}%</span></div>
+                    <div style="font-size: 10px; font-weight: 700; color: #64748b;">Total Work Time: <span style="color: #7e22ce;" class="time-tag">${formatTimeMins(tech.totalTime)}</span></div>
+                  </div>
+                </div>
+
+                <div class="kpi-grid">
+                  <div class="kpi-box">
+                    <div class="kpi-label">Total Assigned</div>
+                    <div class="kpi-val">${techTotalAssigned}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Regular Tickets</div>
+                    <div class="kpi-val val-tickets">${tech.tickets.length} <span style="font-size: 10px; font-weight: normal;">(${formatTimeMins(tech.ticketsTime)})</span></div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">CCTV Upgrades</div>
+                    <div class="kpi-val val-upgrades">${tech.upgrades.length} <span style="font-size: 10px; font-weight: normal;">(${formatTimeMins(tech.upgradesTime)})</span></div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Completed</div>
+                    <div class="kpi-val val-completed">${tech.completedCount}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">In Progress</div>
+                    <div class="kpi-val val-progress">${tech.inProgressCount}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Open Tasks</div>
+                    <div class="kpi-val val-open">${tech.openCount}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Avg Time / Task</div>
+                    <div class="kpi-val">${formatTimeMins(techAvgMins)}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Total Logged Time</div>
+                    <div class="kpi-val" style="color: #7e22ce;">${formatTimeMins(tech.totalTime)}</div>
+                  </div>
+                </div>
+
+                <!-- Section 1: Regular Maintenance & Service Tickets -->
+                <div class="section-subhead subhead-tickets">
+                  <span>🔧 Regular Maintenance, Service & Issue Tickets (${tech.tickets.length} Tasks)</span>
+                  <span class="time-tag">Time: ${formatTimeMins(tech.ticketsTime)}</span>
+                </div>
+                ${tech.tickets.length === 0 ? `
+                  <div style="padding: 10px; text-align: center; font-size: 10px; color: #94a3b8; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; margin-bottom: 12px;">No regular tickets assigned to ${tech.name}.</div>
+                ` : `
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 25px; text-align: center;">#</th>
+                        <th>Date</th>
+                        <th>Division / Location</th>
+                        <th>Category</th>
+                        <th>Issue Description</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Duration</th>
+                        <th>Instruction By</th>
+                        <th>Raised By</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${tech.tickets.map((t, idx) => {
+                        const meta = parseMetadata(t.remarks);
+                        const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
+                        const locStr = [t.divisionName, t.block, t.room || meta.location].filter(Boolean).join(' / ') || 'N/A';
+                        const catStr = t.category || meta.category || 'Issue';
+                        const st = t.status || 'Open';
+                        const badgeClass = st === 'Completed' ? 'badge-completed' : (st === 'In Progress' ? 'badge-progress' : 'badge-open');
+                        const durationStr = t.totalTime || formatTimeMins(getTicketWorkMinutes(t)) || '--';
+                        return `
+                          <tr>
+                            <td style="text-align: center; color: #64748b;">${idx + 1}</td>
+                            <td class="time-tag">${tDate}</td>
+                            <td><strong>${locStr}</strong></td>
+                            <td>${catStr}</td>
+                            <td>${t.issueDescription || 'N/A'}</td>
+                            <td class="time-tag">${t.receivedTime || '--:--'}</td>
+                            <td class="time-tag">${t.endTime || '--:--'}</td>
+                            <td class="time-tag" style="font-weight: 800; color: #0284c7;">${durationStr}</td>
+                            <td>${t.instructionBy || meta.instructionBy || 'N/A'}</td>
+                            <td>${t.raisedByName || (t.raisedBy && (t.raisedBy.name || t.raisedBy.username)) || 'N/A'}</td>
+                            <td><span class="badge ${badgeClass}">${st}</span></td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                `}
+
+                <!-- Section 2: CCTV & Hardware Upgrades -->
+                <div class="section-subhead subhead-upgrades">
+                  <span>🛡️ CCTV & Hardware Upgrades (${tech.upgrades.length} Tasks)</span>
+                  <span class="time-tag">Time: ${formatTimeMins(tech.upgradesTime)}</span>
+                </div>
+                ${tech.upgrades.length === 0 ? `
+                  <div style="padding: 10px; text-align: center; font-size: 10px; color: #94a3b8; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; margin-bottom: 12px;">No CCTV upgrades assigned to ${tech.name}.</div>
+                ` : `
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 25px; text-align: center;">#</th>
+                        <th>Date</th>
+                        <th>Division / Location</th>
+                        <th>Upgrade Description</th>
+                        <th>Action Taken</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Duration</th>
+                        <th>Instruction By</th>
+                        <th>Raised By</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${tech.upgrades.map((t, idx) => {
+                        const meta = parseMetadata(t.remarks);
+                        const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
+                        const locStr = [t.divisionName, t.block, t.room || meta.location].filter(Boolean).join(' / ') || 'N/A';
+                        const st = t.status || 'Open';
+                        const badgeClass = st === 'Completed' ? 'badge-completed' : (st === 'In Progress' ? 'badge-progress' : 'badge-open');
+                        const durationStr = t.totalTime || formatTimeMins(getTicketWorkMinutes(t)) || '--';
+                        return `
+                          <tr>
+                            <td style="text-align: center; color: #64748b;">${idx + 1}</td>
+                            <td class="time-tag">${tDate}</td>
+                            <td><strong>${locStr}</strong></td>
+                            <td>${t.issueDescription || 'N/A'}</td>
+                            <td>${t.actionTaken || 'N/A'}</td>
+                            <td class="time-tag">${t.receivedTime || '--:--'}</td>
+                            <td class="time-tag">${t.endTime || '--:--'}</td>
+                            <td class="time-tag" style="font-weight: 800; color: #9333ea;">${durationStr}</td>
+                            <td>${t.instructionBy || meta.instructionBy || 'N/A'}</td>
+                            <td>${t.raisedByName || (t.raisedBy && (t.raisedBy.name || t.raisedBy.username)) || 'N/A'}</td>
+                            <td><span class="badge ${badgeClass}">${st}</span></td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                `}
+              </div>
+            `;
+          }).join('')}
+
+          <div class="footer-note">
+            Rathinam CCTV Management & Surveillance System &bull; Confidential Performance Report &bull; Page Generated on ${new Date().toLocaleString()}
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 300);
+  };
 
   const pptStats = useMemo(() => {
     const currentYm = startMonth || new Date().toISOString().substring(0, 7);
@@ -191,9 +793,9 @@ export default function Tickets() {
     let currentClosedCount = 0;
     let prevMonthOpenCount = 0;
 
-    (Array.isArray(tickets) ? tickets : []).forEach(ticket => {
+    regularTickets.forEach(ticket => {
       const meta = parseMetadata(ticket.remarks);
-      const ticketDate = meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+      const ticketDate = ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
       if (!ticketDate) return;
       const tMonth = String(ticketDate).substring(0, 7);
       const isCompleted = ticket.status === 'Completed';
@@ -216,7 +818,7 @@ export default function Tickets() {
       currentClosedCount,
       prevMonthOpenCount
     };
-  }, [tickets, startMonth]);
+  }, [regularTickets, startMonth]);
 
   const summaryStats = useMemo(() => ({
     total: baseFilteredTickets.length,
@@ -226,8 +828,8 @@ export default function Tickets() {
   }), [baseFilteredTickets]);
 
   const filterCounts = useMemo(() => {
-    const counts = { division: {}, category: {}, device: {} };
-    (Array.isArray(tickets) ? tickets : []).forEach(ticket => {
+    const counts = { division: {}, category: {}, device: {}, technician: {} };
+    regularTickets.forEach(ticket => {
       const meta = parseMetadata(ticket.remarks);
       const division = String(ticket.divisionName || '');
       const category = String(ticket.category || meta.category || '');
@@ -236,9 +838,23 @@ export default function Tickets() {
       if (division) counts.division[division] = (counts.division[division] || 0) + 1;
       if (category) counts.category[category] = (counts.category[category] || 0) + 1;
       if (device) counts.device[device] = (counts.device[device] || 0) + 1;
+
+      let assignees = [];
+      if (ticket.assignedStaff && Array.isArray(ticket.assignedStaff) && ticket.assignedStaff.length > 0) {
+        assignees = ticket.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+      }
+      if (assignees.length === 0) {
+        const rawAssign = ticket.assignedTo?.name || ticket.assignedTo?.username || ticket.assignedTo || '';
+        if (typeof rawAssign === 'string') {
+          assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+        }
+      }
+      assignees.forEach(name => {
+        if (name) counts.technician[name] = (counts.technician[name] || 0) + 1;
+      });
     });
     return counts;
-  }, [tickets]);
+  }, [regularTickets]);
 
   const chartData = useMemo(() => [
     { name: 'Open', value: summaryStats.open, color: '#f43f5e' },
@@ -594,23 +1210,7 @@ export default function Tickets() {
       ]);
       const tData = Array.isArray(ticketRes.data) ? ticketRes.data : (ticketRes.data?.results || []);
       const sortedTData = [...tData].sort((a, b) => (b.id || 0) - (a.id || 0));
-      setTickets(sortedTData.filter(t => {
-        if (!t) return false;
-        if (t.projectId || t.project) return false;
-        
-        let isUpgrade = false;
-        try {
-          const meta = parseMetadata(t.remarks);
-          if (t.category === 'Upgrade' || meta.category === 'Upgrade' || String(t.issueDescription || '').toLowerCase().includes('upgrade')) {
-            isUpgrade = true;
-          }
-        } catch(e) {
-          if (t.category === 'Upgrade' || String(t.issueDescription || '').toLowerCase().includes('upgrade')) {
-            isUpgrade = true;
-          }
-        }
-        return !isUpgrade;
-      }));
+      setTickets(sortedTData.filter(t => t && !t.projectId && !t.project));
       const fetchedUsers = Array.isArray(userRes.data) ? userRes.data : (userRes.data?.results || []);
       setUsers(fetchedUsers);
       setStaff(fetchedUsers);
@@ -1768,6 +2368,16 @@ export default function Tickets() {
             >
               Report View
             </button>
+            <button
+              onClick={() => setViewMode('chat')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'chat'
+                  ? 'bg-emerald-400 text-slate-900 shadow-lg shadow-emerald-400/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Chat View
+            </button>
           </div>
         </div>
         <div className="flex space-x-4 items-center">
@@ -1827,7 +2437,12 @@ export default function Tickets() {
         <>
           {/* Summary Dashboard */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-rose-500/30 text-left" onClick={() => setStatusFilter(statusFilter === 'Open' ? 'ALL' : 'Open')}>
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'Open' ? 'ring-2 ring-rose-500 bg-rose-500/10' : 'hover:ring-1 hover:ring-rose-500/30'
+              }`} 
+              onClick={() => setStatusFilter(statusFilter === 'Open' ? 'ALL' : 'Open')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-rose-500 tracking-widest uppercase">[OPEN TICKETS]</h3>
                 <AlertCircle size={18} className="text-slate-500" />
@@ -1837,7 +2452,12 @@ export default function Tickets() {
               </div>
             </button>
 
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-amber-500/30 text-left" onClick={() => setStatusFilter(statusFilter === 'In Progress' ? 'ALL' : 'In Progress')}>
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'In Progress' ? 'ring-2 ring-amber-500 bg-amber-500/10' : 'hover:ring-1 hover:ring-amber-500/30'
+              }`} 
+              onClick={() => setStatusFilter(statusFilter === 'In Progress' ? 'ALL' : 'In Progress')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-amber-500 tracking-widest uppercase">[IN PROGRESS]</h3>
                 <Activity size={18} className="text-slate-500" />
@@ -1847,7 +2467,12 @@ export default function Tickets() {
               </div>
             </button>
 
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30 text-left" onClick={() => setStatusFilter(statusFilter === 'Completed' ? 'ALL' : 'Completed')}>
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'Completed' ? 'ring-2 ring-green-500 bg-green-500/10' : 'hover:ring-1 hover:ring-green-500/30'
+              }`} 
+              onClick={() => setStatusFilter(statusFilter === 'Completed' ? 'ALL' : 'Completed')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[COMPLETED]</h3>
                 <CheckCircle size={18} className="text-slate-500" />
@@ -1857,7 +2482,12 @@ export default function Tickets() {
               </div>
             </button>
 
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50 text-left" onClick={() => setStatusFilter('ALL')}>
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'ALL' ? 'ring-2 ring-cyan-500/80 bg-cyan-500/10' : 'hover:ring-1 hover:ring-cyan-500/30'
+              }`} 
+              onClick={() => setStatusFilter('ALL')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL MANAGED]</h3>
                 <Briefcase size={18} className="text-slate-500" />
@@ -1922,7 +2552,7 @@ export default function Tickets() {
                 onChange={(e) => setFilterDivision(e.target.value)} 
                 className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[150px]"
               >
-                <option value="">All Divisions ({Array.isArray(tickets) ? tickets.length : 0})</option>
+                <option value="">All Divisions ({regularTickets.length})</option>
                 {Array.isArray(divisions) && Array.from(new Set(divisions.map(d => d.name))).filter(Boolean).map(d => (
                   <option key={d} value={d}>{d} ({filterCounts.division[d] || 0})</option>
                 ))}
@@ -1932,7 +2562,7 @@ export default function Tickets() {
                 onChange={(e) => setFilterCategory(e.target.value)} 
                 className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[150px]"
               >
-                <option value="">All Categories ({Array.isArray(tickets) ? tickets.length : 0})</option>
+                <option value="">All Categories ({regularTickets.length})</option>
                 <option value="Issue">Issue ({filterCounts.category['Issue'] || 0})</option>
                 <option value="Service">Service ({filterCounts.category['Service'] || 0})</option>
                 <option value="Maintenance">Maintenance ({filterCounts.category['Maintenance'] || 0})</option>
@@ -1944,10 +2574,22 @@ export default function Tickets() {
                 onChange={(e) => setFilterDevice(e.target.value)} 
                 className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[150px]"
               >
-                <option value="">All Devices ({Array.isArray(tickets) ? tickets.length : 0})</option>
+                <option value="">All Devices ({regularTickets.length})</option>
                 <option value="Camera">Camera ({filterCounts.device['Camera'] || 0})</option>
                 <option value="Biometrics">Biometrics ({filterCounts.device['Biometrics'] || 0})</option>
                 <option value="Flap Barrier">Flap Barrier ({filterCounts.device['Flap Barrier'] || 0})</option>
+              </select>
+              <select 
+                value={staffFilter} 
+                onChange={(e) => setStaffFilter(e.target.value)} 
+                className="bg-slate-800 text-slate-200 text-xs font-bold rounded px-3 py-2 outline-none border border-slate-700 focus:border-cyan-500 cursor-pointer min-w-[160px]"
+              >
+                <option value="ALL">All Staff ({regularTickets.length})</option>
+                {uniqueTechnicians.map(techName => (
+                  <option key={techName} value={techName}>
+                    {techName} ({(filterCounts?.technician && filterCounts.technician[techName]) || 0})
+                  </option>
+                ))}
               </select>
               <button 
                 onClick={handleDownload}
@@ -2007,6 +2649,7 @@ export default function Tickets() {
                 onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                 className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
               >
+                <option value={5}>5</option>
                 <option value={10}>10</option>
                 <option value={15}>15</option>
                 <option value={20}>20</option>
@@ -2019,9 +2662,9 @@ export default function Tickets() {
                 <ChevronLeft size={14} />
               </button>
               <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
-                {filteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredTickets.length)}-${Math.min(currentPage * itemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`}
+                {registryFilteredTickets.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, registryFilteredTickets.length)}-${Math.min(currentPage * itemsPerPage, registryFilteredTickets.length)} of ${registryFilteredTickets.length}`}
               </span>
-              <button disabled={currentPage >= Math.ceil(filteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
+              <button disabled={currentPage >= Math.ceil(registryFilteredTickets.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors">
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -2034,18 +2677,44 @@ export default function Tickets() {
           <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-panel border-b border-main">
-                {columnVisibility.sno && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">S.No</th>}
-                {columnVisibility.date && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>}
-                {columnVisibility.receivedAt && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Received At</th>}
-                {columnVisibility.division && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Division</th>}
-                {columnVisibility.blockLocation && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Block / Location</th>}
-                {columnVisibility.category && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</th>}
-                {columnVisibility.instructionBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>}
-                {columnVisibility.raisedBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Raised By</th>}
-                {columnVisibility.timeRET && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>}
-                {columnVisibility.responsibility && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsibility</th>}
-                {columnVisibility.status && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>}
-                {columnVisibility.actions && canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>}
+                {columnVisibility.sno && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12 whitespace-nowrap">S.No</th>}
+                {columnVisibility.date && (
+                  <th 
+                    className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-cyan-400 transition-colors whitespace-nowrap"
+                    onClick={() => setDateSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                    title={`Click to sort by Date (${dateSortOrder === 'desc' ? 'Newest First' : 'Oldest First'})`}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Date</span>
+                      <span className="text-cyan-400 text-xs font-mono font-bold">
+                        {dateSortOrder === 'desc' ? '↓' : '↑'}
+                      </span>
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.receivedAt && (
+                  <th 
+                    className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-cyan-400 transition-colors whitespace-nowrap"
+                    onClick={() => setDateSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                    title={`Click to sort by Received At (${dateSortOrder === 'desc' ? 'Newest First' : 'Oldest First'})`}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Received At</span>
+                      <span className="text-cyan-400 text-xs font-mono font-bold">
+                        {dateSortOrder === 'desc' ? '↓' : '↑'}
+                      </span>
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.division && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Division</th>}
+                {columnVisibility.blockLocation && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Block / Location</th>}
+                {columnVisibility.category && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Category</th>}
+                {columnVisibility.instructionBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Instruction By</th>}
+                {columnVisibility.raisedBy && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Raised By</th>}
+                {columnVisibility.timeRET && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center whitespace-nowrap">Time (R/E/T)</th>}
+                {columnVisibility.responsibility && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Responsibility</th>}
+                {columnVisibility.status && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Status</th>}
+                {columnVisibility.actions && canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-main">
@@ -2055,14 +2724,14 @@ export default function Tickets() {
                     Loading tickets...
                   </td>
                 </tr>
-              ) : filteredTickets.length === 0 ? (
+              ) : registryFilteredTickets.length === 0 ? (
                 <tr>
                   <td colSpan="13" className="p-20 text-center text-dim">
                     No tickets found.
                   </td>
                 </tr>
               ) : (
-                filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((ticket, index) => {
+                registryFilteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((ticket, index) => {
                   const meta = parseMetadata(ticket.remarks);
                   const assignedId = ticket.assignedTo?.id || ticket.assignedTo?._id || ticket.assignedTo;
                   const assignedUser = ticket.assignedTo && typeof ticket.assignedTo === 'object'
@@ -2078,27 +2747,27 @@ export default function Tickets() {
                           navigate(`/tickets/${ticket.id || ticket._id}`);
                         }}
                       >
-                      {columnVisibility.sno && <td className="p-4 text-center font-mono text-[10px] text-slate-400">{(currentPage - 1) * itemsPerPage + index + 1}</td>}
+                      {columnVisibility.sno && <td className="p-4 text-center font-mono text-[10px] text-slate-400 whitespace-nowrap">{(currentPage - 1) * itemsPerPage + index + 1}</td>}
                       
                       {columnVisibility.date && (
-                        <td className="p-4">
-                          <div className="flex items-center text-slate-400 font-mono text-xs">
-                            <Calendar size={12} className="mr-2 text-slate-500" />
-                            {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                        <td className="p-4 whitespace-nowrap">
+                          <div className="flex items-center text-slate-400 font-mono text-xs whitespace-nowrap">
+                            <Calendar size={12} className="mr-2 text-slate-500 shrink-0" />
+                            <span className="whitespace-nowrap">{ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}</span>
                           </div>
                         </td>
                       )}
 
                       {columnVisibility.receivedAt && (
-                        <td className="p-4">
-                          <div className="flex flex-col text-slate-400 font-mono text-[10px] space-y-0.5">
-                            <div className="flex items-center text-cyan-400">
-                              <Calendar size={10} className="mr-1" />
-                              {ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                        <td className="p-4 whitespace-nowrap">
+                          <div className="flex flex-col text-slate-400 font-mono text-[10px] space-y-0.5 whitespace-nowrap">
+                            <div className="flex items-center text-cyan-400 whitespace-nowrap">
+                              <Calendar size={10} className="mr-1 shrink-0" />
+                              <span className="whitespace-nowrap">{ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}</span>
                             </div>
-                            <div className="flex items-center text-cyan-400/80">
-                              <Clock size={10} className="mr-1" />
-                              {ticket.receivedTime || '--:--'}
+                            <div className="flex items-center text-cyan-400/80 whitespace-nowrap">
+                              <Clock size={10} className="mr-1 shrink-0" />
+                              <span className="whitespace-nowrap">{ticket.receivedTime || '--:--'}</span>
                             </div>
                           </div>
                         </td>
@@ -2224,7 +2893,7 @@ export default function Tickets() {
         </div>
       </div>
     </>
-  ) : (
+  ) : viewMode === 'report' ? (
     <div className="space-y-8 animate-fade-in max-w-7xl mx-auto pb-10">
       {/* Detailed Ticket Report View */}
       <div className="bg-panel border border-main rounded-md p-8 flex flex-col justify-between overflow-hidden relative transition-all group shadow-2xl">
@@ -2401,12 +3070,23 @@ export default function Tickets() {
       </div>
 
       <div className="bg-panel border border-main rounded-md p-6">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Technician Load & Productivity Matrix</h3>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Technician Load & Productivity Matrix</h3>
+          <button
+            type="button"
+            onClick={() => downloadStaffPDF(staffFilter !== 'ALL' ? staffFilter : 'ALL')}
+            className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 rounded-xl text-xs font-bold uppercase transition-all flex items-center space-x-2 shadow-sm"
+          >
+            <Printer size={14} />
+            <span>Print {staffFilter !== 'ALL' ? `${staffFilter} Report` : 'All Staff PDF'}</span>
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-panel border-b border-main">
                 <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician</th>
+                <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Work Split</th>
                 <th className="p-4 text-[10px] font-bold text-rose-500 uppercase tracking-widest text-center">Open</th>
                 <th className="p-4 text-[10px] font-bold text-amber-500 uppercase tracking-widest text-center">In Progress</th>
                 <th className="p-4 text-[10px] font-bold text-green-500 uppercase tracking-widest text-center">Completed</th>
@@ -2414,6 +3094,7 @@ export default function Tickets() {
                 <th className="p-4 text-[10px] font-bold text-cyan-400 uppercase tracking-widest text-center">Completion Rate</th>
                 <th className="p-4 text-[10px] font-bold text-indigo-400 uppercase tracking-widest text-center">Avg Time</th>
                 <th className="p-4 text-[10px] font-bold text-purple-400 uppercase tracking-widest text-center">Total Time</th>
+                <th className="p-4 text-[10px] font-bold text-purple-400 uppercase tracking-widest text-center">Export PDF</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-400">
@@ -2427,25 +3108,37 @@ export default function Tickets() {
                   return `${h}h ${m}m`;
                 };
 
+                const isUpgradeTicket = (t) => {
+                  if (!t) return false;
+                  let meta = {};
+                  try {
+                    meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : (typeof t.remarks === 'object' && t.remarks ? t.remarks : {});
+                  } catch(e) {}
+                  const cat = String(t.category || meta.category || '').toLowerCase();
+                  const desc = String(t.issueDescription || '').toLowerCase();
+                  return cat.includes('upgrade') || desc.includes('upgrade') || meta.isUpgrade === true || meta.category === 'Upgrade';
+                };
+
+                const getTicketAssignees = (t) => {
+                  let assignees = [];
+                  if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
+                    assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+                  }
+                  if (assignees.length === 0) {
+                    const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+                    if (typeof rawAssign === 'string') {
+                      assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+                    } else {
+                      assignees = ['Unassigned'];
+                    }
+                  }
+                  return assignees.length > 0 ? assignees : ['Unassigned'];
+                };
+
                 const techReportMap = {};
                 filteredTickets.forEach(t => {
-                  let assignees = [];
-                  
-                  if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
-                     assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
-                  }
-                  
-                  if (assignees.length === 0) {
-                     const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
-                     if (typeof rawAssign === 'string') {
-                        assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
-                     } else {
-                        assignees = ['Unassigned'];
-                     }
-                  }
-                  
-                  if (assignees.length === 0) assignees = ['Unassigned'];
-
+                  const assignees = getTicketAssignees(t);
+                  const isUp = isUpgradeTicket(t);
                   let timeTaken = 0;
                   let normalizedStatus = 'Open';
                   const sLow = String(t.status || 'Open').toLowerCase();
@@ -2465,7 +3158,19 @@ export default function Tickets() {
 
                   assignees.forEach(name => {
                     if (!techReportMap[name]) {
-                       techReportMap[name] = { Open: 0, 'In Progress': 0, Completed: 0, totalTime: 0 };
+                       techReportMap[name] = { 
+                         Open: 0, 
+                         'In Progress': 0, 
+                         Completed: 0, 
+                         totalTime: 0, 
+                         ticketsCount: 0, 
+                         upgradesCount: 0 
+                       };
+                    }
+                    if (isUp) {
+                      techReportMap[name].upgradesCount++;
+                    } else {
+                      techReportMap[name].ticketsCount++;
                     }
                     techReportMap[name][normalizedStatus]++;
                     if (timeTaken > 0) {
@@ -2483,7 +3188,7 @@ export default function Tickets() {
                 if (data.length === 0) {
                   return (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-xs">No technician load data found.</td>
+                      <td colSpan={10} className="p-8 text-center text-xs">No technician load data found.</td>
                     </tr>
                   );
                 }
@@ -2502,6 +3207,16 @@ export default function Tickets() {
                           {name.charAt(0).toUpperCase()}
                         </div>
                         <span>{name}</span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap" title="Regular Tickets">
+                            Tickets: {counts.ticketsCount}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 whitespace-nowrap" title="Upgrades">
+                            Upgrades: {counts.upgradesCount}
+                          </span>
+                        </div>
                       </td>
                       <td className="p-4 font-mono text-center text-rose-400 font-bold">{counts.Open}</td>
                       <td className="p-4 font-mono text-center text-amber-400 font-bold">{counts['In Progress']}</td>
@@ -2522,6 +3237,17 @@ export default function Tickets() {
                           {totalTimeStr}
                         </span>
                       </td>
+                      <td className="p-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => downloadStaffPDF(name)}
+                          className="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 rounded text-[9px] font-bold uppercase transition-all flex items-center justify-center mx-auto"
+                          title={`Download PDF Report for ${name}`}
+                        >
+                          <Printer size={10} className="mr-1" />
+                          <span>PDF</span>
+                        </button>
+                      </td>
                     </tr>
                   );
                 });
@@ -2532,8 +3258,49 @@ export default function Tickets() {
       </div>
 
       <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
-        <div className="p-4 bg-panel border-b border-main flex justify-between items-center">
+        <div className="p-4 bg-panel border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Report Registry ({filteredTickets.length} Records)</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
+              <select
+                value={reportItemsPerPage}
+                onChange={(e) => { setReportItemsPerPage(Number(e.target.value)); setReportCurrentPage(1); }}
+                className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors cursor-pointer"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button
+                disabled={reportCurrentPage === 1}
+                onClick={() => setReportCurrentPage(prev => Math.max(1, prev - 1))}
+                className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors"
+                title="Previous Page"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
+                {filteredTickets.length === 0
+                  ? '0-0 of 0'
+                  : `${Math.min((reportCurrentPage - 1) * reportItemsPerPage + 1, filteredTickets.length)}-${Math.min(reportCurrentPage * reportItemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`
+                }
+              </span>
+              <button
+                disabled={reportCurrentPage >= Math.ceil(filteredTickets.length / reportItemsPerPage)}
+                onClick={() => setReportCurrentPage(prev => prev + 1)}
+                className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors"
+                title="Next Page"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -2549,45 +3316,63 @@ export default function Tickets() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-main">
-              {filteredTickets.map((ticket, idx) => {
-                const meta = parseMetadata(ticket.remarks);
-                return (
-                  <tr key={ticket.id || ticket._id} className="hover:bg-slate-700/30 transition-colors">
-                    <td className="p-4 text-center font-mono text-[10px] text-slate-500">{idx + 1}</td>
-                    <td className="p-4 font-mono text-[10px] text-slate-400">
-                      {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
-                    </td>
-                    <td className="p-4 text-xs font-bold text-blue-400">
-                      {ticket.divisionName || 'N/A'}
-                    </td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border border-blue-500/50 text-blue-400 bg-blue-500/10">
-                        {ticket.category || meta.category || 'Issue'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-xs text-slate-400">
-                      {ticket.instructionBy || meta.instructionBy || 'N/A'}
-                    </td>
-                    <td className="p-4 text-xs text-slate-400">
-                      {ticket.raisedByName || (ticket.raisedBy && (ticket.raisedBy.name || ticket.raisedBy.username)) || 'N/A'}
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                        ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
-                        ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
-                        'text-red-500 border-red-500/50'
-                      }`}>
-                        {ticket.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredTickets.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="p-8 text-center text-xs text-slate-500">No records found.</td>
+                </tr>
+              ) : (
+                filteredTickets
+                  .slice((reportCurrentPage - 1) * reportItemsPerPage, reportCurrentPage * reportItemsPerPage)
+                  .map((ticket, idx) => {
+                    const meta = parseMetadata(ticket.remarks);
+                    const sNo = (reportCurrentPage - 1) * reportItemsPerPage + idx + 1;
+                    return (
+                      <tr key={ticket.id || ticket._id} className="hover:bg-slate-700/30 transition-colors">
+                        <td className="p-4 text-center font-mono text-[10px] text-slate-500">{sNo}</td>
+                        <td className="p-4 font-mono text-[10px] text-slate-400">
+                          {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                        </td>
+                        <td className="p-4 text-xs font-bold text-blue-400">
+                          {ticket.divisionName || 'N/A'}
+                        </td>
+                        <td className="p-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border border-blue-500/50 text-blue-400 bg-blue-500/10">
+                            {ticket.category || meta.category || 'Issue'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-xs text-slate-400">
+                          {ticket.instructionBy || meta.instructionBy || 'N/A'}
+                        </td>
+                        <td className="p-4 text-xs text-slate-400">
+                          {ticket.raisedByName || (ticket.raisedBy && (ticket.raisedBy.name || ticket.raisedBy.username)) || 'N/A'}
+                        </td>
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                            ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                            ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                            'text-red-500 border-red-500/50'
+                          }`}>
+                            {ticket.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+              )}
             </tbody>
           </table>
         </div>
       </div>
     </div>
+  ) : (
+    <TicketChatView 
+      tickets={regularTickets} 
+      onTicketUpdate={handleTicketRemarkAdded}
+      divisions={divisions}
+      startMonth={startMonth}
+      endMonth={endMonth}
+      globalSearch={searchQuery}
+    />
   )}
 
       {showModal && (

@@ -136,7 +136,7 @@ export default function LocationDetail() {
   const filteredCameras = useMemo(() => {
     let filtered = cameras;
     if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(c => c.status === statusFilter);
+      filtered = filtered.filter(c => (c.status || '').toUpperCase() === statusFilter.toUpperCase());
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
