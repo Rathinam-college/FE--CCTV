@@ -65,40 +65,92 @@ export default function Upgrades() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [reportCurrentPage, setReportCurrentPage] = useState(1);
+  const [reportItemsPerPage, setReportItemsPerPage] = useState(10);
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [dateSortOrder, setDateSortOrder] = useState('desc');
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [isAddingStaff, setIsAddingStaff] = useState(false);
+  const [staff, setStaff] = useState([]);
   const { allLocations, fetchAllLocations, divisions, fetchDivisions } = useSiteStore();
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Maintenance:EDIT');
 
+  const isUpgradeTicket = (t) => {
+    if (!t) return false;
+    let meta = {};
+    try {
+      meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : (typeof t.remarks === 'object' && t.remarks ? t.remarks : {});
+    } catch(e) {}
+    const cat = String(t.category || meta.category || '').toLowerCase();
+    const desc = String(t.issueDescription || '').toLowerCase();
+    return cat.includes('upgrade') || desc.includes('upgrade') || meta.isUpgrade === true || meta.category === 'Upgrade';
+  };
+
+  const getTicketSortTimestamp = (ticket) => {
+    if (!ticket) return 0;
+    let meta = {};
+    try {
+      if (typeof ticket.remarks === 'string' && ticket.remarks.startsWith('{')) {
+        meta = JSON.parse(ticket.remarks);
+      } else if (typeof ticket.remarks === 'object' && ticket.remarks) {
+        meta = ticket.remarks;
+      }
+    } catch (e) {}
+
+    const dateStr = ticket.operationDate || meta.manualDate || ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+    let timeStr = ticket.receivedTime || meta.receivedTime || ticket.createdTime || '';
+    if (!timeStr && ticket.createdAt && String(ticket.createdAt).includes('T')) {
+      timeStr = String(ticket.createdAt).split('T')[1]?.substring(0, 5) || '';
+    }
+
+    let hour = 0;
+    let minute = 0;
+    if (timeStr) {
+      const match24 = String(timeStr).match(/^(\d{1,2}):(\d{2})/);
+      if (match24) {
+        hour = parseInt(match24[1], 10);
+        minute = parseInt(match24[2], 10);
+      }
+    }
+
+    if (!dateStr) return (ticket.id || 0);
+
+    const dateParts = String(dateStr).split('-');
+    if (dateParts.length === 3) {
+      const y = parseInt(dateParts[0], 10);
+      const m = parseInt(dateParts[1], 10) - 1;
+      const d = parseInt(dateParts[2], 10);
+      const dt = new Date(y, m, d, hour, minute, 0, 0);
+      const timeMs = dt.getTime();
+      if (!isNaN(timeMs)) return timeMs;
+    }
+
+    const fallback = new Date(dateStr).getTime();
+    return isNaN(fallback) ? (ticket.id || 0) : fallback;
+  };
+
   // Filter for upgrades category or metadata
   const upgradeTickets = useMemo(() => {
-    return tickets.filter(t => {
-      try {
-        const meta = JSON.parse(t.remarks || '{}');
-        return t.category === 'Upgrade' || meta.category === 'Upgrade' || t.issueDescription?.toLowerCase().includes('upgrade');
-      } catch(e) {
-        return t.category === 'Upgrade' || t.issueDescription?.toLowerCase().includes('upgrade');
-      }
-    });
+    return (Array.isArray(tickets) ? tickets : []).filter(t => isUpgradeTicket(t));
   }, [tickets]);
 
   const baseFilteredTickets = useMemo(() => {
     return upgradeTickets.filter(ticket => {
-      const ticketDate = ticket.operationDate || '';
+      const meta = parseMetadata(ticket.remarks);
+      const ticketDate = ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
       
       if (startMonth || endMonth) {
         if (!ticketDate) return false;
-        const tMonth = ticketDate.substring(0, 7); // 'YYYY-MM'
+        const tMonth = String(ticketDate).substring(0, 7); // 'YYYY-MM'
         const inRange = (!startMonth || tMonth >= startMonth) && (!endMonth || tMonth <= endMonth);
         const isOldUnresolved = startMonth && tMonth < startMonth && ticket.status !== 'Completed';
         if (!inRange && !isOldUnresolved) return false;
       }
       
-      const searchStr = `${ticket.issueDescription} ${ticket.location}`.toLowerCase();
+      const searchStr = `${ticket.issueDescription} ${ticket.location || meta.location || ''} ${ticket.divisionName || ''} ${ticket.block || ''}`.toLowerCase();
       if (searchQuery && !searchStr.includes(searchQuery.toLowerCase())) return false;
       
       return true;
@@ -106,11 +158,22 @@ export default function Upgrades() {
   }, [upgradeTickets, startMonth, endMonth, searchQuery]);
 
   const filteredTickets = useMemo(() => {
-    return baseFilteredTickets.filter(ticket => {
+    const list = baseFilteredTickets.filter(ticket => {
       if (statusFilter !== 'ALL' && ticket.status !== statusFilter) return false;
       return true;
     });
-  }, [baseFilteredTickets, statusFilter]);
+
+    return [...list].sort((a, b) => {
+      const timeA = getTicketSortTimestamp(a);
+      const timeB = getTicketSortTimestamp(b);
+      if (timeA !== timeB) {
+        return dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+      const idA = a.id || 0;
+      const idB = b.id || 0;
+      return dateSortOrder === 'asc' ? idA - idB : idB - idA;
+    });
+  }, [baseFilteredTickets, statusFilter, dateSortOrder]);
 
   const summaryStats = useMemo(() => ({
     total: baseFilteredTickets.length,
@@ -236,7 +299,7 @@ export default function Upgrades() {
         api.get('/tickets/'),
         api.get('/users/')
       ]);
-      const allTickets = ticketRes.data || [];
+      const allTickets = Array.isArray(ticketRes.data) ? ticketRes.data : (ticketRes.data?.results || []);
       const sortedTickets = [...allTickets].sort((a, b) => (b.id || 0) - (a.id || 0));
       setTickets(sortedTickets);
       const fetchedUsers = Array.isArray(userRes.data) ? userRes.data : (userRes.data?.results || []);
@@ -321,7 +384,7 @@ export default function Upgrades() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    const shouldUppercase = typeof value === 'string' && !['date', 'status', 'receivedTime', 'endTime', 'raisedByName', 'instructionBy'].includes(name);
+    const shouldUppercase = typeof value === 'string' && !['date', 'status', 'receivedTime', 'endTime', 'totalTime', 'raisedByName', 'instructionBy'].includes(name);
     const finalValue = shouldUppercase ? value.toUpperCase() : value;
     
     setFormData(prev => {
@@ -340,25 +403,33 @@ export default function Upgrades() {
     e.preventDefault();
     try {
       setSubmitting(true);
+      const computedTotal = calculateTotalTime(formData.receivedTime, formData.endTime) || formData.totalTime || '';
       const payload = {
         issueDescription: formData.issueDescription,
         status: formData.status,
         assignedTo: formData.assignedTo || null,
-        operationDate: formData.date,
+        operationDate: formData.date || new Date().toISOString().split('T')[0],
         divisionName: formData.divisionName,
         block: formData.block,
         floor: formData.floor,
         room: formData.room,
-        location: `${formData.divisionName} | ${formData.block} | ${formData.floor} | ${formData.room}`,
+        location: `${formData.divisionName || ''} | ${formData.block || ''} | ${formData.floor || ''} | ${formData.room || ''}`.trim(),
         category: 'Upgrade',
         actionTaken: formData.actionTaken,
         instructionBy: formData.instructionBy,
         assignedStaff: formData.assignedStaff || [],
+        receivedDate: formData.date || new Date().toISOString().split('T')[0],
         receivedTime: formData.receivedTime || '',
         endTime: formData.endTime || '',
-        totalTime: calculateTotalTime(formData.receivedTime, formData.endTime),
-        remarks: JSON.stringify({ category: 'Upgrade', isUpgrade: true, receivedTime: formData.receivedTime, endTime: formData.endTime, totalTime: calculateTotalTime(formData.receivedTime, formData.endTime) }),
-        raisedBy: user._id || user.id,
+        totalTime: computedTotal,
+        remarks: JSON.stringify({ 
+          category: 'Upgrade', 
+          isUpgrade: true, 
+          receivedTime: formData.receivedTime, 
+          endTime: formData.endTime, 
+          totalTime: computedTotal 
+        }),
+        raisedBy: user?._id || user?.id,
         raisedByName: formData.raisedByName || '',
       };
 
@@ -397,6 +468,7 @@ export default function Upgrades() {
       assignedStaff: [],
       receivedTime: '',
       endTime: '',
+      totalTime: '',
       status: 'Open',
       raisedBy: user?._id || user?.id || '',
       raisedByName: ''
@@ -405,8 +477,10 @@ export default function Upgrades() {
   };
 
   const handleEdit = (ticket) => {
+    const rawDate = ticket.operationDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : new Date().toISOString().split('T')[0]);
+    const computedTotal = ticket.totalTime || calculateTotalTime(ticket.receivedTime, ticket.endTime);
     setFormData({
-      date: ticket.operationDate || new Date().toISOString().split('T')[0],
+      date: rawDate,
       divisionName: ticket.divisionName || '',
       block: ticket.block || '',
       floor: ticket.floor || '',
@@ -427,6 +501,7 @@ export default function Upgrades() {
       })(),
       receivedTime: ticket.receivedTime || '',
       endTime: ticket.endTime || '',
+      totalTime: computedTotal || '',
       status: ticket.status || 'Open',
       raisedBy: ticket.raisedBy?.id || ticket.raisedBy?._id || (typeof ticket.raisedBy !== 'object' ? ticket.raisedBy : '') || '',
       raisedByName: ticket.raisedByName || ''
@@ -587,6 +662,474 @@ export default function Upgrades() {
     }, 250);
   };
 
+  const downloadStaffPDF = (staffTarget = 'ALL') => {
+    const isUpgradeTicket = (t) => {
+      let meta = {};
+      try {
+        meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+      } catch(e) {}
+      const cat = String(t.category || meta.category || '').toLowerCase();
+      const desc = String(t.issueDescription || '').toLowerCase();
+      return cat.includes('upgrade') || desc.includes('upgrade') || meta.isUpgrade === true;
+    };
+
+    const getTicketAssignees = (t) => {
+      let assignees = [];
+      if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
+        assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+      }
+      if (assignees.length === 0) {
+        const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+        if (typeof rawAssign === 'string') {
+          assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+        } else {
+          assignees = ['Unassigned'];
+        }
+      }
+      return assignees.length > 0 ? assignees : ['Unassigned'];
+    };
+
+    const getTicketWorkMinutes = (t) => {
+      if (t.totalTime && typeof t.totalTime === 'string') {
+        const hMatch = t.totalTime.match(/(\d+)\s*h/i);
+        const mMatch = t.totalTime.match(/(\d+)\s*m/i);
+        if (hMatch || mMatch) {
+          const hours = hMatch ? parseInt(hMatch[1], 10) : 0;
+          const mins = mMatch ? parseInt(mMatch[1], 10) : 0;
+          const total = hours * 60 + mins;
+          if (total > 0) return total;
+        }
+      }
+
+      if (t.receivedTime && t.endTime) {
+        const [sH, sM] = String(t.receivedTime).split(':').map(Number);
+        const [eH, eM] = String(t.endTime).split(':').map(Number);
+        if (!isNaN(sH) && !isNaN(sM) && !isNaN(eH) && !isNaN(eM)) {
+          let diff = (eH * 60 + eM) - (sH * 60 + sM);
+          if (diff < 0) diff += 24 * 60;
+          if (diff > 0) return diff;
+        }
+      }
+
+      const sLow = String(t.status || '').toLowerCase();
+      if ((sLow.includes('completed') || sLow.includes('finished')) && t.createdAt && t.updatedAt) {
+        const s = new Date(t.createdAt);
+        const e = new Date(t.updatedAt);
+        if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+          const diff = Math.max(0, Math.floor((e - s) / 60000));
+          if (diff > 0) return diff;
+        }
+      }
+
+      return 0;
+    };
+
+    const formatTimeMins = (totalMins) => {
+      if (!totalMins || totalMins <= 0) return '0m';
+      const t = Math.floor(totalMins);
+      if (t < 60) return `${t}m`;
+      const h = Math.floor(t / 60);
+      const m = t % 60;
+      return `${h}h ${m}m`;
+    };
+
+    const sourceTickets = (tickets || []).filter(t => {
+      const ticketDate = t.operationDate || (t.createdAt ? String(t.createdAt).split('T')[0] : '');
+      if (startMonth || endMonth) {
+        if (!ticketDate) return false;
+        const tMonth = String(ticketDate).substring(0, 7);
+        const inRange = (!startMonth || tMonth >= startMonth) && (!endMonth || tMonth <= endMonth);
+        const isOldUnresolved = startMonth && tMonth < startMonth && t.status !== 'Completed';
+        if (!inRange && !isOldUnresolved) return false;
+      }
+      if (staffTarget === 'ALL') return true;
+      const assignees = getTicketAssignees(t);
+      return assignees.some(a => a.toUpperCase() === staffTarget.toUpperCase());
+    });
+
+    const techMap = {};
+    sourceTickets.forEach(t => {
+      const assignees = getTicketAssignees(t);
+      const isUp = isUpgradeTicket(t);
+      const mins = getTicketWorkMinutes(t);
+      const shareMins = mins > 0 ? mins / assignees.length : 0;
+      const sLow = String(t.status || 'Open').toLowerCase();
+      const normStatus = (sLow.includes('completed') || sLow.includes('finished')) ? 'Completed' : (sLow.includes('progress') ? 'In Progress' : 'Open');
+
+      assignees.forEach(name => {
+        if (staffTarget !== 'ALL' && name.toUpperCase() !== staffTarget.toUpperCase()) return;
+        if (!techMap[name]) {
+          techMap[name] = {
+            name,
+            tickets: [],
+            upgrades: [],
+            openCount: 0,
+            inProgressCount: 0,
+            completedCount: 0,
+            ticketsTime: 0,
+            upgradesTime: 0,
+            totalTime: 0
+          };
+        }
+
+        if (isUp) {
+          techMap[name].upgrades.push(t);
+          techMap[name].upgradesTime += shareMins;
+        } else {
+          techMap[name].tickets.push(t);
+          techMap[name].ticketsTime += shareMins;
+        }
+
+        if (normStatus === 'Completed') techMap[name].completedCount++;
+        else if (normStatus === 'In Progress') techMap[name].inProgressCount++;
+        else techMap[name].openCount++;
+
+        techMap[name].totalTime += shareMins;
+      });
+    });
+
+    const technicianList = Object.values(techMap).sort((a, b) => {
+      const sumA = a.tickets.length + a.upgrades.length;
+      const sumB = b.tickets.length + b.upgrades.length;
+      return sumB - sumA;
+    });
+
+    let totalAllTickets = 0;
+    let totalAllUpgrades = 0;
+    let totalAllOpen = 0;
+    let totalAllInProgress = 0;
+    let totalAllCompleted = 0;
+    let totalAllTimeMins = 0;
+
+    technicianList.forEach(tech => {
+      totalAllTickets += tech.tickets.length;
+      totalAllUpgrades += tech.upgrades.length;
+      totalAllOpen += tech.openCount;
+      totalAllInProgress += tech.inProgressCount;
+      totalAllCompleted += tech.completedCount;
+      totalAllTimeMins += tech.totalTime;
+    });
+
+    const totalAllWork = totalAllTickets + totalAllUpgrades;
+    const overallRate = totalAllWork > 0 ? ((totalAllCompleted / totalAllWork) * 100).toFixed(0) : 0;
+    const overallTimeStr = formatTimeMins(totalAllTimeMins);
+
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Technician Load & Productivity Comparison Report - ${staffTarget}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 25px; color: #0f172a; line-height: 1.4; background: #ffffff; margin: 0; }
+            .header-banner { border-bottom: 3px solid #0284c7; padding-bottom: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .header-title h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; font-weight: 900; }
+            .header-title h2 { margin: 4px 0 0 0; font-size: 13px; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+            .header-meta { text-align: right; font-size: 10px; color: #64748b; font-weight: 600; }
+            
+            .overview-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 25px; }
+            .overview-title { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #334155; margin-bottom: 10px; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+            .matrix-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 6px; }
+            .matrix-table th, .matrix-table td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: center; }
+            .matrix-table th { background-color: #f1f5f9; font-weight: 800; text-transform: uppercase; color: #334155; }
+            .matrix-table td.tech-name { text-align: left; font-weight: 800; color: #0f172a; }
+            .matrix-table tr.total-row { background-color: #e2e8f0; font-weight: 900; }
+            
+            .tech-block { border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; margin-bottom: 30px; background: #ffffff; page-break-inside: avoid; }
+            .tech-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 14px; }
+            .tech-profile { display: flex; align-items: center; gap: 10px; }
+            .tech-avatar { width: 32px; height: 32px; border-radius: 50%; background: #0284c7; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 900; }
+            .tech-name-large { font-size: 16px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 0; }
+            .tech-pill { display: inline-block; padding: 3px 8px; background: #e0f2fe; color: #0369a1; border-radius: 6px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+
+            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+            .kpi-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; text-align: center; }
+            .kpi-label { font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+            .kpi-val { font-size: 15px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+            .val-tickets { color: #0284c7; }
+            .val-upgrades { color: #9333ea; }
+            .val-completed { color: #16a34a; }
+            .val-progress { color: #d97706; }
+            .val-open { color: #e11d48; }
+
+            .section-subhead { font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 16px 0 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; border-radius: 6px; }
+            .subhead-tickets { background: #e0f2fe; color: #0369a1; border-left: 4px solid #0284c7; }
+            .subhead-upgrades { background: #f3e8ff; color: #7e22ce; border-left: 4px solid #9333ea; }
+
+            .data-table { width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 12px; }
+            .data-table th, .data-table td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: left; }
+            .data-table th { background-color: #f8fafc; font-weight: 800; text-transform: uppercase; color: #475569; font-size: 8.5px; }
+            .data-table tr:nth-child(even) { background-color: #fafafa; }
+            
+            .badge { padding: 2px 6px; border-radius: 8px; font-size: 8px; font-weight: 800; text-transform: uppercase; display: inline-block; }
+            .badge-open { background-color: #ffe4e6; color: #be123c; border: 1px solid #fda4af; }
+            .badge-progress { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+            .badge-completed { background-color: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+            .time-tag { font-family: monospace; font-weight: 700; font-size: 9px; }
+
+            .footer-note { margin-top: 30px; font-size: 9px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+
+            @media print {
+              body { padding: 10px; font-size: 9px; }
+              .tech-block { page-break-inside: avoid; margin-bottom: 20px; }
+              .page-break { page-break-before: always; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header-banner">
+            <div class="header-title">
+              <h1>Rathinam Group of Institutions</h1>
+              <h2>Technician Load, Productivity & Work Comparison Report</h2>
+            </div>
+            <div class="header-meta">
+              <div>Target: <strong>${staffTarget === 'ALL' ? 'ALL TECHNICIANS' : staffTarget}</strong></div>
+              <div>Generated: ${new Date().toLocaleString()}</div>
+              <div>Period: ${startMonth || 'ALL'} to ${endMonth || 'ALL'}</div>
+            </div>
+          </div>
+
+          <div class="overview-card">
+            <div class="overview-title">
+              <span>Executive Work Comparison Matrix (${technicianList.length} Technicians)</span>
+              <span>Total Work Logged: <strong>${totalAllWork} Tasks</strong> &bull; Total Time: <strong>${overallTimeStr}</strong></span>
+            </div>
+            <table class="matrix-table">
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Technician</th>
+                  <th style="color: #0284c7;">Regular Tickets</th>
+                  <th style="color: #0284c7;">Ticket Time</th>
+                  <th style="color: #9333ea;">Upgrades</th>
+                  <th style="color: #9333ea;">Upgrade Time</th>
+                  <th style="color: #e11d48;">Open</th>
+                  <th style="color: #d97706;">In Progress</th>
+                  <th style="color: #16a34a;">Completed</th>
+                  <th>Total Assigned</th>
+                  <th>Completion Rate</th>
+                  <th>Total Work Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${technicianList.length === 0 ? `
+                  <tr><td colspan="11" style="padding: 15px; color: #94a3b8;">No technician records found matching current filters.</td></tr>
+                ` : technicianList.map(tech => {
+                  const techTotal = tech.tickets.length + tech.upgrades.length;
+                  const techRate = techTotal > 0 ? ((tech.completedCount / techTotal) * 100).toFixed(0) : 0;
+                  return `
+                    <tr>
+                      <td class="tech-name">${tech.name}</td>
+                      <td style="font-weight: 800; color: #0284c7;">${tech.tickets.length}</td>
+                      <td class="time-tag">${formatTimeMins(tech.ticketsTime)}</td>
+                      <td style="font-weight: 800; color: #9333ea;">${tech.upgrades.length}</td>
+                      <td class="time-tag">${formatTimeMins(tech.upgradesTime)}</td>
+                      <td style="color: #e11d48; font-weight: 700;">${tech.openCount}</td>
+                      <td style="color: #d97706; font-weight: 700;">${tech.inProgressCount}</td>
+                      <td style="color: #16a34a; font-weight: 700;">${tech.completedCount}</td>
+                      <td style="font-weight: 900;">${techTotal}</td>
+                      <td><strong>${techRate}%</strong></td>
+                      <td class="time-tag" style="font-weight: 900; color: #7e22ce;">${formatTimeMins(tech.totalTime)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+                <tr class="total-row">
+                  <td style="text-align: left;">OVERALL TOTAL</td>
+                  <td style="color: #0284c7;">${totalAllTickets}</td>
+                  <td>${formatTimeMins(technicianList.reduce((acc, t) => acc + t.ticketsTime, 0))}</td>
+                  <td style="color: #9333ea;">${totalAllUpgrades}</td>
+                  <td>${formatTimeMins(technicianList.reduce((acc, t) => acc + t.upgradesTime, 0))}</td>
+                  <td style="color: #e11d48;">${totalAllOpen}</td>
+                  <td style="color: #d97706;">${totalAllInProgress}</td>
+                  <td style="color: #16a34a;">${totalAllCompleted}</td>
+                  <td>${totalAllWork}</td>
+                  <td>${overallRate}%</td>
+                  <td style="color: #7e22ce;">${overallTimeStr}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          ${technicianList.map((tech, techIdx) => {
+            const techTotalAssigned = tech.tickets.length + tech.upgrades.length;
+            const techRate = techTotalAssigned > 0 ? ((tech.completedCount / techTotalAssigned) * 100).toFixed(0) : 0;
+            const techAvgMins = tech.completedCount > 0 ? tech.totalTime / tech.completedCount : 0;
+
+            return `
+              <div class="tech-block ${techIdx > 0 && staffTarget === 'ALL' ? 'page-break' : ''}">
+                <div class="tech-header">
+                  <div class="tech-profile">
+                    <div class="tech-avatar">${tech.name.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <h3 class="tech-name-large">${tech.name}</h3>
+                      <span class="tech-pill">Technician Productivity Profile</span>
+                    </div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-size: 11px; font-weight: 800; color: #0f172a;">Completion Rate: <span style="color: #0284c7;">${techRate}%</span></div>
+                    <div style="font-size: 10px; font-weight: 700; color: #64748b;">Total Work Time: <span style="color: #7e22ce;" class="time-tag">${formatTimeMins(tech.totalTime)}</span></div>
+                  </div>
+                </div>
+
+                <div class="kpi-grid">
+                  <div class="kpi-box">
+                    <div class="kpi-label">Total Assigned</div>
+                    <div class="kpi-val">${techTotalAssigned}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Regular Tickets</div>
+                    <div class="kpi-val val-tickets">${tech.tickets.length} <span style="font-size: 10px; font-weight: normal;">(${formatTimeMins(tech.ticketsTime)})</span></div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">CCTV Upgrades</div>
+                    <div class="kpi-val val-upgrades">${tech.upgrades.length} <span style="font-size: 10px; font-weight: normal;">(${formatTimeMins(tech.upgradesTime)})</span></div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Completed</div>
+                    <div class="kpi-val val-completed">${tech.completedCount}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">In Progress</div>
+                    <div class="kpi-val val-progress">${tech.inProgressCount}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Open Tasks</div>
+                    <div class="kpi-val val-open">${tech.openCount}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Avg Time / Task</div>
+                    <div class="kpi-val">${formatTimeMins(techAvgMins)}</div>
+                  </div>
+                  <div class="kpi-box">
+                    <div class="kpi-label">Total Logged Time</div>
+                    <div class="kpi-val" style="color: #7e22ce;">${formatTimeMins(tech.totalTime)}</div>
+                  </div>
+                </div>
+
+                <!-- Section 1: Regular Maintenance & Service Tickets -->
+                <div class="section-subhead subhead-tickets">
+                  <span>🔧 Regular Maintenance, Service & Issue Tickets (${tech.tickets.length} Tasks)</span>
+                  <span class="time-tag">Time: ${formatTimeMins(tech.ticketsTime)}</span>
+                </div>
+                ${tech.tickets.length === 0 ? `
+                  <div style="padding: 10px; text-align: center; font-size: 10px; color: #94a3b8; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; margin-bottom: 12px;">No regular tickets assigned to ${tech.name}.</div>
+                ` : `
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 25px; text-align: center;">#</th>
+                        <th>Date</th>
+                        <th>Division / Location</th>
+                        <th>Category</th>
+                        <th>Issue Description</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Duration</th>
+                        <th>Instruction By</th>
+                        <th>Raised By</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${tech.tickets.map((t, idx) => {
+                        const meta = parseMetadata(t.remarks);
+                        const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
+                        const locStr = [t.divisionName, t.block, t.room || meta.location].filter(Boolean).join(' / ') || 'N/A';
+                        const catStr = t.category || meta.category || 'Issue';
+                        const st = t.status || 'Open';
+                        const badgeClass = st === 'Completed' ? 'badge-completed' : (st === 'In Progress' ? 'badge-progress' : 'badge-open');
+                        const durationStr = t.totalTime || formatTimeMins(getTicketWorkMinutes(t)) || '--';
+                        return `
+                          <tr>
+                            <td style="text-align: center; color: #64748b;">${idx + 1}</td>
+                            <td class="time-tag">${tDate}</td>
+                            <td><strong>${locStr}</strong></td>
+                            <td>${catStr}</td>
+                            <td>${t.issueDescription || 'N/A'}</td>
+                            <td class="time-tag">${t.receivedTime || '--:--'}</td>
+                            <td class="time-tag">${t.endTime || '--:--'}</td>
+                            <td class="time-tag" style="font-weight: 800; color: #0284c7;">${durationStr}</td>
+                            <td>${t.instructionBy || meta.instructionBy || 'N/A'}</td>
+                            <td>${t.raisedByName || (t.raisedBy && (t.raisedBy.name || t.raisedBy.username)) || 'N/A'}</td>
+                            <td><span class="badge ${badgeClass}">${st}</span></td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                `}
+
+                <!-- Section 2: CCTV & Hardware Upgrades -->
+                <div class="section-subhead subhead-upgrades">
+                  <span>🛡️ CCTV & Hardware Upgrades (${tech.upgrades.length} Tasks)</span>
+                  <span class="time-tag">Time: ${formatTimeMins(tech.upgradesTime)}</span>
+                </div>
+                ${tech.upgrades.length === 0 ? `
+                  <div style="padding: 10px; text-align: center; font-size: 10px; color: #94a3b8; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; margin-bottom: 12px;">No CCTV upgrades assigned to ${tech.name}.</div>
+                ` : `
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 25px; text-align: center;">#</th>
+                        <th>Date</th>
+                        <th>Division / Location</th>
+                        <th>Upgrade Description</th>
+                        <th>Action Taken</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Duration</th>
+                        <th>Instruction By</th>
+                        <th>Raised By</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${tech.upgrades.map((t, idx) => {
+                        const meta = parseMetadata(t.remarks);
+                        const tDate = t.operationDate || meta.manualDate || (t.createdAt ? String(t.createdAt).split('T')[0] : 'N/A');
+                        const locStr = [t.divisionName, t.block, t.room || meta.location].filter(Boolean).join(' / ') || 'N/A';
+                        const st = t.status || 'Open';
+                        const badgeClass = st === 'Completed' ? 'badge-completed' : (st === 'In Progress' ? 'badge-progress' : 'badge-open');
+                        const durationStr = t.totalTime || formatTimeMins(getTicketWorkMinutes(t)) || '--';
+                        return `
+                          <tr>
+                            <td style="text-align: center; color: #64748b;">${idx + 1}</td>
+                            <td class="time-tag">${tDate}</td>
+                            <td><strong>${locStr}</strong></td>
+                            <td>${t.issueDescription || 'N/A'}</td>
+                            <td>${t.actionTaken || 'N/A'}</td>
+                            <td class="time-tag">${t.receivedTime || '--:--'}</td>
+                            <td class="time-tag">${t.endTime || '--:--'}</td>
+                            <td class="time-tag" style="font-weight: 800; color: #9333ea;">${durationStr}</td>
+                            <td>${t.instructionBy || meta.instructionBy || 'N/A'}</td>
+                            <td>${t.raisedByName || (t.raisedBy && (t.raisedBy.name || t.raisedBy.username)) || 'N/A'}</td>
+                            <td><span class="badge ${badgeClass}">${st}</span></td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                `}
+              </div>
+            `;
+          }).join('')}
+
+          <div class="footer-note">
+            Rathinam CCTV Management & Surveillance System &bull; Confidential Performance Report &bull; Page Generated on ${new Date().toLocaleString()}
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 300);
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       {/* Header Section */}
@@ -689,7 +1232,12 @@ export default function Upgrades() {
         <>
           {/* Summary Dashboard */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-slide-up delay-100">
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-red-500/30 text-left">
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'Open' ? 'ring-2 ring-rose-500 bg-rose-500/10' : 'hover:ring-1 hover:ring-rose-500/30'
+              }`}
+              onClick={() => setStatusFilter(statusFilter === 'Open' ? 'ALL' : 'Open')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-rose-500 tracking-widest uppercase">[OPEN UPGRADES]</h3>
                 <Clock size={18} className="text-slate-500" />
@@ -699,7 +1247,12 @@ export default function Upgrades() {
               </div>
             </button>
 
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-amber-500/30 text-left">
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'In Progress' ? 'ring-2 ring-amber-500 bg-amber-500/10' : 'hover:ring-1 hover:ring-amber-500/30'
+              }`}
+              onClick={() => setStatusFilter(statusFilter === 'In Progress' ? 'ALL' : 'In Progress')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-amber-500 tracking-widest uppercase">[IN PROGRESS]</h3>
                 <Shield size={18} className="text-slate-500" />
@@ -709,7 +1262,12 @@ export default function Upgrades() {
               </div>
             </button>
 
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group hover:ring-1 hover:ring-green-500/30 text-left">
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'Completed' ? 'ring-2 ring-green-500 bg-green-500/10' : 'hover:ring-1 hover:ring-green-500/30'
+              }`}
+              onClick={() => setStatusFilter(statusFilter === 'Completed' ? 'ALL' : 'Completed')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-green-500 tracking-widest uppercase">[COMPLETED]</h3>
                 <CheckCircle size={18} className="text-slate-500" />
@@ -719,7 +1277,12 @@ export default function Upgrades() {
               </div>
             </button>
 
-            <button className="bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group ring-1 ring-cyan-500/50 text-left">
+            <button 
+              className={`bg-panel rounded-md p-5 flex flex-col justify-between overflow-hidden relative transition-all group text-left cursor-pointer ${
+                statusFilter === 'ALL' ? 'ring-2 ring-cyan-500/80 bg-cyan-500/10' : 'hover:ring-1 hover:ring-cyan-500/30'
+              }`}
+              onClick={() => setStatusFilter('ALL')}
+            >
               <div className="flex justify-between items-start w-full">
                 <h3 className="text-[11px] font-bold text-cyan-400 tracking-widest uppercase">[TOTAL UPGRADES]</h3>
                 <Briefcase size={18} className="text-slate-500" />
@@ -769,6 +1332,7 @@ export default function Upgrades() {
                   onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                   className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors"
                 >
+                  <option value={5}>5</option>
                   <option value={10}>10</option>
                   <option value={15}>15</option>
                   <option value={20}>20</option>
@@ -795,16 +1359,27 @@ export default function Upgrades() {
               <table className="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
                   <tr className="bg-panel border-b border-main">
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">S.No</th>
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Location</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12 whitespace-nowrap">S.No</th>
+                    <th 
+                      className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-cyan-400 transition-colors whitespace-nowrap"
+                      onClick={() => setDateSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                      title={`Click to sort by Date (${dateSortOrder === 'desc' ? 'Newest First' : 'Oldest First'})`}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Date</span>
+                        <span className="text-cyan-400 text-xs font-mono font-bold">
+                          {dateSortOrder === 'desc' ? '↓' : '↑'}
+                        </span>
+                      </div>
+                    </th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Location</th>
                     <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upgrade Description</th>
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Action Taken</th>
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instruction By</th>
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work By</th>
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Time (R/E/T)</th>
-                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
-                    {canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>}
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Action Taken</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Instruction By</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Work By</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center whitespace-nowrap">Time (R/E/T)</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Status</th>
+                    {canEdit && <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-main">
@@ -823,8 +1398,8 @@ export default function Upgrades() {
                           }
                         }}
                       >
-                        <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                        <td className="p-4 text-xs font-mono text-slate-300">{ticket.operationDate || new Date().toISOString().split('T')[0]}</td>
+                        <td className="p-4 text-center font-mono text-[10px] text-dim whitespace-nowrap">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                        <td className="p-4 text-xs font-mono text-slate-300 whitespace-nowrap">{ticket.operationDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}</td>
                         <td className="p-4 text-xs font-semibold text-main uppercase">{ticket.divisionName || 'N/A'} - {ticket.block}</td>
                         <td className="p-4 text-xs text-slate-400 uppercase">{ticket.issueDescription}</td>
                         <td className="p-4 text-xs text-slate-400 uppercase">{ticket.actionTaken || 'Pending'}</td>
@@ -1018,12 +1593,23 @@ export default function Upgrades() {
           </div>
 
           <div className="bg-panel border border-main rounded-md p-6">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Technician Load & Productivity Matrix</h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Technician Load & Productivity Matrix</h3>
+              <button
+                type="button"
+                onClick={() => downloadStaffPDF('ALL')}
+                className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 rounded-xl text-xs font-bold uppercase transition-all flex items-center space-x-2 shadow-sm"
+              >
+                <Printer size={14} />
+                <span>Print All Staff PDF</span>
+              </button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-panel border-b border-main">
                     <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician</th>
+                    <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Work Split</th>
                     <th className="p-4 text-[10px] font-bold text-rose-500 uppercase tracking-widest text-center">Open</th>
                     <th className="p-4 text-[10px] font-bold text-amber-500 uppercase tracking-widest text-center">In Progress</th>
                     <th className="p-4 text-[10px] font-bold text-green-500 uppercase tracking-widest text-center">Completed</th>
@@ -1031,6 +1617,7 @@ export default function Upgrades() {
                     <th className="p-4 text-[10px] font-bold text-cyan-400 uppercase tracking-widest text-center">Completion Rate</th>
                     <th className="p-4 text-[10px] font-bold text-indigo-400 uppercase tracking-widest text-center">Avg Time</th>
                     <th className="p-4 text-[10px] font-bold text-purple-400 uppercase tracking-widest text-center">Total Time</th>
+                    <th className="p-4 text-[10px] font-bold text-purple-400 uppercase tracking-widest text-center">Export PDF</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-slate-400">
@@ -1044,25 +1631,36 @@ export default function Upgrades() {
                       return `${h}h ${m}m`;
                     };
 
+                    const isUpgradeTicket = (t) => {
+                      let meta = {};
+                      try {
+                        meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : {};
+                      } catch(e) {}
+                      const cat = String(t.category || meta.category || '').toLowerCase();
+                      const desc = String(t.issueDescription || '').toLowerCase();
+                      return cat.includes('upgrade') || desc.includes('upgrade') || meta.isUpgrade === true;
+                    };
+
+                    const getTicketAssignees = (t) => {
+                      let assignees = [];
+                      if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
+                        assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
+                      }
+                      if (assignees.length === 0) {
+                        const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
+                        if (typeof rawAssign === 'string') {
+                          assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+                        } else {
+                          assignees = ['Unassigned'];
+                        }
+                      }
+                      return assignees.length > 0 ? assignees : ['Unassigned'];
+                    };
+
                     const techReportMap = {};
                     filteredTickets.forEach(t => {
-                      let assignees = [];
-                      
-                      if (t.assignedStaff && Array.isArray(t.assignedStaff) && t.assignedStaff.length > 0) {
-                         assignees = t.assignedStaff.map(s => s.name || s.username || s).filter(Boolean);
-                      }
-                      
-                      if (assignees.length === 0) {
-                         const rawAssign = t.assignedTo?.name || t.assignedTo?.username || t.assignedTo || 'Unassigned';
-                         if (typeof rawAssign === 'string') {
-                            assignees = rawAssign.split(/[,&]/).map(s => s.trim()).filter(Boolean);
-                         } else {
-                            assignees = ['Unassigned'];
-                         }
-                      }
-                      
-                      if (assignees.length === 0) assignees = ['Unassigned'];
-
+                      const assignees = getTicketAssignees(t);
+                      const isUp = isUpgradeTicket(t);
                       let timeTaken = 0;
                       let normalizedStatus = 'Open';
                       const sLow = String(t.status || 'Open').toLowerCase();
@@ -1082,7 +1680,19 @@ export default function Upgrades() {
 
                       assignees.forEach(name => {
                         if (!techReportMap[name]) {
-                           techReportMap[name] = { Open: 0, 'In Progress': 0, Completed: 0, totalTime: 0 };
+                           techReportMap[name] = { 
+                             Open: 0, 
+                             'In Progress': 0, 
+                             Completed: 0, 
+                             totalTime: 0,
+                             ticketsCount: 0,
+                             upgradesCount: 0
+                           };
+                        }
+                        if (isUp) {
+                          techReportMap[name].upgradesCount++;
+                        } else {
+                          techReportMap[name].ticketsCount++;
                         }
                         techReportMap[name][normalizedStatus]++;
                         if (timeTaken > 0) {
@@ -1100,7 +1710,7 @@ export default function Upgrades() {
                     if (data.length === 0) {
                       return (
                         <tr>
-                          <td colSpan={8} className="p-8 text-center text-xs">No technician load data found.</td>
+                          <td colSpan={10} className="p-8 text-center text-xs">No technician load data found.</td>
                         </tr>
                       );
                     }
@@ -1119,6 +1729,16 @@ export default function Upgrades() {
                               {name.charAt(0).toUpperCase()}
                             </div>
                             <span>{name}</span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap" title="Regular Tickets">
+                                Tickets: {counts.ticketsCount}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 whitespace-nowrap" title="Upgrades">
+                                Upgrades: {counts.upgradesCount}
+                              </span>
+                            </div>
                           </td>
                           <td className="p-4 font-mono text-center text-rose-400 font-bold">{counts.Open}</td>
                           <td className="p-4 font-mono text-center text-amber-400 font-bold">{counts['In Progress']}</td>
@@ -1139,6 +1759,17 @@ export default function Upgrades() {
                               {totalTimeStr}
                             </span>
                           </td>
+                          <td className="p-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => downloadStaffPDF(name)}
+                              className="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 rounded text-[9px] font-bold uppercase transition-all flex items-center justify-center mx-auto"
+                              title={`Download PDF Report for ${name}`}
+                            >
+                              <Printer size={10} className="mr-1" />
+                              <span>PDF</span>
+                            </button>
+                          </td>
                         </tr>
                       );
                     });
@@ -1149,8 +1780,49 @@ export default function Upgrades() {
           </div>
 
           <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
-            <div className="p-4 bg-panel border-b border-main flex justify-between items-center">
+            <div className="p-4 bg-panel border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Report Registry ({filteredTickets.length} Records)</span>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] font-black text-dim uppercase tracking-widest">Show</span>
+                  <select
+                    value={reportItemsPerPage}
+                    onChange={(e) => { setReportItemsPerPage(Number(e.target.value)); setReportCurrentPage(1); }}
+                    className="bg-panel border border-white/10 rounded px-2 py-0.5 text-[10px] font-black text-main outline-none focus:border-teal-500 transition-colors cursor-pointer"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <button
+                    disabled={reportCurrentPage === 1}
+                    onClick={() => setReportCurrentPage(prev => Math.max(1, prev - 1))}
+                    className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="text-[10px] font-bold text-dim uppercase tracking-tighter whitespace-nowrap">
+                    {filteredTickets.length === 0
+                      ? '0-0 of 0'
+                      : `${Math.min((reportCurrentPage - 1) * reportItemsPerPage + 1, filteredTickets.length)}-${Math.min(reportCurrentPage * reportItemsPerPage, filteredTickets.length)} of ${filteredTickets.length}`
+                    }
+                  </span>
+                  <button
+                    disabled={reportCurrentPage >= Math.ceil(filteredTickets.length / reportItemsPerPage)}
+                    onClick={() => setReportCurrentPage(prev => prev + 1)}
+                    className="p-1 text-dim hover:text-main disabled:opacity-30 transition-colors"
+                    title="Next Page"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -1166,37 +1838,46 @@ export default function Upgrades() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-main">
-                  {filteredTickets.map((ticket, idx) => {
-                    return (
-                      <tr key={ticket.id || ticket._id} className="hover:bg-slate-700/30 transition-colors">
-                        <td className="p-4 text-center font-mono text-[10px] text-slate-500">{idx + 1}</td>
-                        <td className="p-4 font-mono text-[10px] text-slate-400">
-                          {ticket.operationDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
-                        </td>
-                        <td className="p-4 text-xs font-bold text-blue-400">
-                          {ticket.divisionName || 'N/A'} - {ticket.block || ''}
-                        </td>
-                        <td className="p-4 text-xs text-slate-200">
-                          {ticket.issueDescription || 'N/A'}
-                        </td>
-                        <td className="p-4 text-xs text-slate-400">
-                          {ticket.actionTaken || 'N/A'}
-                        </td>
-                        <td className="p-4 text-xs text-slate-400">
-                          {ticket.instructionBy || 'N/A'}
-                        </td>
-                        <td className="p-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                            ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
-                            ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
-                            'text-red-500 border-red-500/50'
-                          }`}>
-                            {ticket.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {filteredTickets.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="p-8 text-center text-xs text-slate-500">No records found.</td>
+                    </tr>
+                  ) : (
+                    filteredTickets
+                      .slice((reportCurrentPage - 1) * reportItemsPerPage, reportCurrentPage * reportItemsPerPage)
+                      .map((ticket, idx) => {
+                        const sNo = (reportCurrentPage - 1) * reportItemsPerPage + idx + 1;
+                        return (
+                          <tr key={ticket.id || ticket._id} className="hover:bg-slate-700/30 transition-colors">
+                            <td className="p-4 text-center font-mono text-[10px] text-slate-500">{sNo}</td>
+                            <td className="p-4 font-mono text-[10px] text-slate-400">
+                              {ticket.operationDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
+                            </td>
+                            <td className="p-4 text-xs font-bold text-blue-400">
+                              {ticket.divisionName || 'N/A'} - {ticket.block || ''}
+                            </td>
+                            <td className="p-4 text-xs text-slate-200">
+                              {ticket.issueDescription || 'N/A'}
+                            </td>
+                            <td className="p-4 text-xs text-slate-400">
+                              {ticket.actionTaken || 'N/A'}
+                            </td>
+                            <td className="p-4 text-xs text-slate-400">
+                              {ticket.instructionBy || 'N/A'}
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                                ticket.status === 'Completed' ? 'text-green-500 border-green-500/50' :
+                                ticket.status === 'In Progress' ? 'text-amber-500 border-amber-500/50' :
+                                'text-red-500 border-red-500/50'
+                              }`}>
+                                {ticket.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1250,14 +1931,48 @@ export default function Upgrades() {
                 <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Upgrade Description</label>
                 <textarea required name="issueDescription" value={formData.issueDescription} onChange={handleInputChange} className="glass-input w-full p-3 text-xs min-h-[90px] bg-panel border-main" placeholder="Hardware to be upgraded..." />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Date</label>
+                  <input 
+                    required 
+                    type="date" 
+                    name="date" 
+                    value={formData.date} 
+                    onChange={handleInputChange} 
+                    className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" 
+                  />
+                </div>
                 <div>
                   <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Start Time</label>
-                  <input type="time" name="receivedTime" value={formData.receivedTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" />
+                  <input 
+                    type="time" 
+                    name="receivedTime" 
+                    value={formData.receivedTime} 
+                    onChange={handleInputChange} 
+                    className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" 
+                  />
                 </div>
                 <div>
                   <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">End Time</label>
-                  <input type="time" name="endTime" value={formData.endTime} onChange={handleInputChange} className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" />
+                  <input 
+                    type="time" 
+                    name="endTime" 
+                    value={formData.endTime} 
+                    onChange={handleInputChange} 
+                    className="glass-input w-full p-3 text-xs bg-panel border-main cursor-pointer" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2">Total Time</label>
+                  <input 
+                    type="text" 
+                    readOnly 
+                    name="totalTime" 
+                    value={formData.totalTime || calculateTotalTime(formData.receivedTime, formData.endTime) || '--'} 
+                    className="glass-input w-full p-3 text-xs bg-panel/50 border-main text-cyan-400 font-mono font-bold cursor-not-allowed" 
+                    placeholder="--:--" 
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">

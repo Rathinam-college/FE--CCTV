@@ -60,6 +60,17 @@ export default function Maintenance() {
 
 
 
+  const isUpgradeTicket = (t) => {
+    if (!t) return false;
+    let meta = {};
+    try {
+      meta = typeof t.remarks === 'string' && t.remarks.startsWith('{') ? JSON.parse(t.remarks) : (typeof t.remarks === 'object' && t.remarks ? t.remarks : {});
+    } catch(e) {}
+    const cat = String(t.category || meta.category || '').toLowerCase();
+    const desc = String(t.issueDescription || '').toLowerCase();
+    return cat.includes('upgrade') || desc.includes('upgrade') || meta.isUpgrade === true || meta.category === 'Upgrade';
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -69,7 +80,7 @@ export default function Maintenance() {
       ]);
       const allTickets = ticketRes.data || [];
       const sortedTickets = [...allTickets].sort((a, b) => (b.id || 0) - (a.id || 0));
-      setTickets(sortedTickets.filter(t => !t.projectId && !t.project));
+      setTickets(sortedTickets.filter(t => !t.projectId && !t.project && !isUpgradeTicket(t)));
       setUsers(userRes.data || []);
     } catch (err) {
       console.error(err);

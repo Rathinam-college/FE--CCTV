@@ -4,7 +4,7 @@ import {
   Search, Filter, Plus, Server, Hash, Cpu, X,
   Edit2, Trash2, Building, Activity, ShieldCheck,
   ShieldAlert, Download, Network, Database, Upload,
-  Info, ChevronRight, ChevronLeft, Printer
+  Info, ChevronRight, ChevronLeft, Printer, RefreshCw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
@@ -26,6 +26,8 @@ export default function Racks() {
   const [itemsPerPage, setItemsPerPage] = useState(15);
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
+  const [viewMode, setViewMode] = useState('registry');
+  const [remarkStatusFilter, setRemarkStatusFilter] = useState('ALL');
   
   // Advanced Filter State
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -42,6 +44,14 @@ export default function Racks() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  
+  // Status Change & Remark Modal State
+  const [statusModalDevice, setStatusModalDevice] = useState(null);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusFormData, setStatusFormData] = useState({
+    status: 'Online',
+    remark: ''
+  });
   
   const [isAddingNewDivision, setIsAddingNewDivision] = useState(false);
   const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
@@ -217,6 +227,49 @@ export default function Racks() {
     });
   };
 
+  const openStatusModal = (rack) => {
+    setStatusModalDevice(rack);
+    setStatusFormData({
+      status: rack.status || 'Online',
+      remark: ''
+    });
+  };
+
+  const handleSaveStatusChange = async (e) => {
+    e.preventDefault();
+    if (!statusModalDevice || statusSubmitting) return;
+
+    if (!statusFormData.remark.trim()) {
+      showNotification('Please enter a remark / reason for the status change.', 'error');
+      return;
+    }
+
+    setStatusSubmitting(true);
+    try {
+      const id = statusModalDevice._id || statusModalDevice.id;
+
+      await api.patch(`/cameras/racks/${id}/`, {
+        status: statusFormData.status,
+        remarks: statusFormData.remark,
+        remark: statusFormData.remark
+      });
+
+      await api.post(`/cameras/racks/${id}/add_remark/`, {
+        remark: statusFormData.remark,
+        device_status: statusFormData.status
+      });
+
+      showNotification(`Rack status updated to "${statusFormData.status}" & remark saved.`);
+      setStatusModalDevice(null);
+      fetchRacks();
+    } catch (err) {
+      console.error("Status change error:", err);
+      showNotification(err.response?.data?.message || 'Failed to update status & save remark.', 'error');
+    } finally {
+      setStatusSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
@@ -232,6 +285,30 @@ export default function Racks() {
       }
 
       if (editingId) {
+        const oldRack = racks.find(r => (r._id || r.id) === editingId);
+        const oldLocStr = oldRack ? [oldRack.divisionName, oldRack.block, oldRack.floor, oldRack.room].filter(Boolean).join(' / ') : '';
+        const newLocStr = [submitData.divisionName, submitData.block, submitData.floor, submitData.room].filter(Boolean).join(' / ');
+
+        if (oldLocStr && newLocStr && oldLocStr !== newLocStr) {
+          const locChangeRemark = `Relocated from [${oldLocStr}] to [${newLocStr}]`;
+          submitData.remarks = locChangeRemark;
+
+          try {
+            await api.post(`/cameras/racks/${editingId}/add_relocation/`, {
+              old_location: oldLocStr,
+              new_location: newLocStr,
+              remark: `Location updated via edit`
+            });
+          } catch (relocErr) {}
+
+          try {
+            await api.post(`/cameras/racks/${editingId}/add_remark/`, {
+              remark: locChangeRemark,
+              device_status: submitData.status
+            });
+          } catch (remErr) {}
+        }
+
         await api.put(`/cameras/racks/${editingId}/`, submitData);
         showNotification('Rack updated successfully');
       } else {
@@ -383,10 +460,18 @@ export default function Racks() {
 
   const filteredRacks = useMemo(() => {
     return baseFilteredRacks.filter(r => {
-      if (statusFilter !== 'ALL' && (r.status || 'Online') !== statusFilter) return false;
+      if (statusFilter !== 'ALL' && (r.status || 'Online').toUpperCase() !== statusFilter.toUpperCase()) return false;
       return true;
     });
   }, [baseFilteredRacks, statusFilter]);
+
+  const filteredRacksByRemarkStatus = useMemo(() => {
+    return baseFilteredRacks.filter(r => {
+      if (remarkStatusFilter === 'ALL') return true;
+      const st = String(r.status || 'Online').toUpperCase();
+      return st === remarkStatusFilter.toUpperCase();
+    });
+  }, [baseFilteredRacks, remarkStatusFilter]);
 
   const handleDownload = () => {
     if (filteredRacks.length === 0) {
@@ -442,14 +527,15 @@ export default function Racks() {
 
   const printToPDF = () => {
     const printWindow = window.open('', '_blank');
+    const recordsToPrint = viewMode === 'report' ? filteredRacksByRemarkStatus : filteredRacks;
     const htmlContent = `
       <html>
         <head>
-          <title>Rack Infrastructure Export</title>
+          <title>Rack Infrastructure Report View</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
             h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 20px; text-align: center; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px; }
             th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
             th { background-color: #f3f4f6; font-weight: bold; text-transform: uppercase; color: #4b5563; }
             tr:nth-child(even) { background-color: #f9fafb; }
@@ -461,33 +547,39 @@ export default function Racks() {
           </style>
         </head>
         <body>
-          <h1>Rack Infrastructure Report</h1>
+          <h1>Rack Infrastructure Report (${viewMode === 'report' ? remarkStatusFilter : statusFilter})</h1>
           <table>
             <thead>
               <tr>
                 <th>S.No</th>
                 <th>Asset Number</th>
                 <th>Rack Name</th>
-                <th>U Space</th>
+                <th>Brand / Model</th>
                 <th>Location</th>
+                <th>Remarks / Location Changes</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              ${filteredRacks.map((r, idx) => `
-                <tr>
-                  <td>${idx + 1}</td>
-                  <td>${r.serialNumber || 'N/A'}</td>
-                  <td>${r.name || 'N/A'}</td>
-                  <td>${r.uSpace || 'N/A'}</td>
-                  <td>${[r.divisionName, r.block, r.room].filter(Boolean).join(' / ') || 'N/A'}</td>
-                  <td><span class="badge ${r.status === 'Online' ? 'status-online' : r.status === 'Maintenance' ? 'status-maintenance' : 'status-offline'}">${r.status || 'N/A'}</span></td>
-                </tr>
-              `).join('')}
+              ${recordsToPrint.map((r, idx) => {
+                const lastRemarkObj = r.message_history && r.message_history.length > 0 ? r.message_history[r.message_history.length - 1] : null;
+                const remText = r.remarks || r.remark || lastRemarkObj?.remark || 'N/A';
+                return `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td>${r.serialNumber || 'N/A'}</td>
+                    <td>${r.name || 'N/A'}</td>
+                    <td>${r.brand || 'N/A'} ${r.model ? `- ${r.model}` : ''}</td>
+                    <td>${[r.divisionName, r.block, r.floor, r.room].filter(Boolean).join(' / ') || 'N/A'}</td>
+                    <td>${remText}</td>
+                    <td><span class="badge ${r.status === 'Online' ? 'status-online' : r.status === 'Maintenance' ? 'status-maintenance' : 'status-offline'}">${r.status || 'N/A'}</span></td>
+                  </tr>
+                `;
+              }).join('')}
             </tbody>
           </table>
           <div class="footer">
-            Generated from CCTV System on ${new Date().toLocaleString()} &bull; Total Records: ${filteredRacks.length}
+            Generated from CCTV System on ${new Date().toLocaleString()} &bull; Total Records: ${recordsToPrint.length}
           </div>
         </body>
       </html>
@@ -517,11 +609,33 @@ export default function Racks() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-2">
-        <div>
+        <div className="flex items-center space-x-4">
           <h1 className="text-3xl font-bold text-main tracking-tight flex items-center uppercase">
             <Server className="mr-3 text-cyan-400" size={28} />
             Racks
           </h1>
+          <div className="flex bg-panel border border-main rounded-xl p-0.5 ml-4">
+            <button
+              onClick={() => setViewMode('registry')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'registry'
+                  ? 'bg-cyan-400 text-slate-900 shadow-lg shadow-cyan-400/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Rack List
+            </button>
+            <button
+              onClick={() => setViewMode('report')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'report'
+                  ? 'bg-purple-500 text-main shadow-lg shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-main'
+              }`}
+            >
+              Report View
+            </button>
+          </div>
         </div>
         <div className="flex space-x-4 items-center">
           <button onClick={handleDownload} className="flex items-center text-[12px] font-bold text-secondary hover:text-main transition-colors">
@@ -599,227 +713,355 @@ export default function Racks() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-dim" size={16} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Deep search by Rack Name, Asset Number, Location, Brand..."
-            className="bg-panel text-sm text-main border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-dim"
-          />
-        </div>
-        <button
-          onClick={() => setShowFilterPanel(!showFilterPanel)}
-          className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-secondary hover:text-main transition-colors uppercase tracking-wide shrink-0"
-        >
-          <Filter size={16} className="mr-2" />
-          {showFilterPanel ? 'HIDE FILTERS' : 'SHOW ADVANCED FILTERS'}
-        </button>
-      </div>
+      {viewMode === 'report' ? (
+        <div className="space-y-6 animate-slide-up">
+          {/* Status Filter Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-panel p-4 rounded-md border border-main">
+            <div className="flex p-1 bg-slate-800 rounded-lg border border-slate-700">
+              {['ALL', 'ONLINE', 'OFFLINE', 'MAINTENANCE', 'SCRAP'].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setRemarkStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${
+                    remarkStatusFilter === st
+                      ? 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50'
+                      : 'text-slate-400 hover:text-main'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
 
-      {showFilterPanel && (
-        <div className="bg-panel border border-main rounded-md p-6 mb-6 flex flex-wrap gap-8 animate-slide-up">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date Added Range</label>
-            <div className="flex items-center space-x-2">
-              <input 
-                type="month" 
-                value={startMonth}
-                onChange={(e) => setStartMonth(e.target.value)}
-                className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
-                title="From Month"
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Showing <span className="text-purple-400 font-mono font-black">{filteredRacksByRemarkStatus.length}</span> Records
+            </div>
+          </div>
+
+          {/* Report View Table */}
+          <div className="bg-panel border border-main rounded-md overflow-hidden">
+            <div className="p-4 border-b border-main flex justify-between items-center bg-card/40">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Rack Infrastructure Audit & Location Report
+              </span>
+              <button
+                onClick={printToPDF}
+                className="flex items-center text-[11px] font-bold text-slate-300 hover:text-main border border-slate-700 px-3 py-1.5 bg-slate-800 rounded transition-colors"
+              >
+                <Printer size={12} className="mr-1.5" />
+                Export Filtered PDF
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-panel border-b border-main text-slate-400">
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-center w-12">S.No</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Asset Number</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Rack Name</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Location</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Remarks / Location Changes</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-center">Status</th>
+                    {canEdit && <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-right">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-slate-400">
+                  {filteredRacksByRemarkStatus.length === 0 ? (
+                    <tr>
+                      <td colSpan={canEdit ? "7" : "6"} className="p-8 text-center text-xs text-slate-500">
+                        No rack records found matching "{remarkStatusFilter}" status.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRacksByRemarkStatus.map((r, idx) => (
+                      <tr key={r._id || r.id || idx} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                        <td className="p-4 font-mono text-xs text-amber-400 font-bold">{r.serialNumber || '—'}</td>
+                        <td className="p-4 font-bold text-main">{r.name || '—'}</td>
+                        <td className="p-4 text-slate-300">
+                          <div>{r.divisionName || '—'}</div>
+                          <div className="text-[10px] text-dim">{[r.block, r.floor, r.room].filter(Boolean).join(' / ')}</div>
+                        </td>
+                        <td className="p-4 text-slate-300 max-w-xs font-medium">
+                          {(() => {
+                            const lastRemarkObj = r.message_history && r.message_history.length > 0 ? r.message_history[r.message_history.length - 1] : null;
+                            const text = r.remarks || r.remark || lastRemarkObj?.remark || '—';
+                            return (
+                              <div className="flex flex-col space-y-0.5">
+                                <span className="text-main font-semibold text-xs">{text}</span>
+                                {lastRemarkObj?.createdAt && (
+                                  <span className="text-[10px] text-cyan-400 font-mono">
+                                    {new Date(lastRemarkObj.createdAt).toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex flex-col items-center space-y-1">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                              r.status === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                              r.status === 'Maintenance' ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' :
+                              'text-red-400 border-red-500/50 bg-red-500/10'
+                            }`}>
+                              {r.status || 'Online'}
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => openStatusModal(r)}
+                                className="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 uppercase tracking-wider transition-colors pt-0.5"
+                              >
+                                <RefreshCw size={9} />
+                                <span>STATUS CHANGE</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        {canEdit && (
+                          <td className="p-4 text-right">
+                            <button
+                              onClick={() => editRack(r)}
+                              className="px-3 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded text-[10px] font-bold uppercase transition-all"
+                            >
+                              Edit / Relocate
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row gap-4 animate-slide-up delay-200 mt-6 mb-6">
+            <div className="relative flex-1 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-dim" size={16} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Deep search by Rack Name, Asset Number, Location, Brand..."
+                className="bg-panel text-sm text-main border border-main rounded-md w-full pl-10 pr-4 py-3 outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-dim"
               />
-              <span className="text-secondary text-xs">to</span>
-              <input 
-                type="month" 
-                value={endMonth}
-                onChange={(e) => setEndMonth(e.target.value)}
-                className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
-                title="To Month"
-              />
             </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Occupation Filter</label>
-            <select value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]">
-              <option value="ALL">ALL Occupation ({racks.length})</option>
-              {uniqueColleges.map(college => {
-                const count = filterCounts.college[college] || 0;
-                return <option key={college} value={college}>{college?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-              })}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Block Filter</label>
-            <select value={blockFilter} onChange={(e) => setBlockFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]">
-              <option value="ALL">ALL BLOCKS ({racks.length})</option>
-              {uniqueBlocks.map(block => {
-                const count = filterCounts.block[block] || 0;
-                return <option key={block} value={block}>{block?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-              })}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Floor Filter</label>
-            <select value={floorFilter} onChange={(e) => setFloorFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[150px]">
-              <option value="ALL">ALL FLOORS ({racks.length})</option>
-              {uniqueFloors.map(floor => {
-                const count = filterCounts.floor[floor] || 0;
-                return <option key={floor} value={floor}>{floor?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-              })}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Room Filter</label>
-            <select value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]">
-              <option value="ALL">ALL ROOMS ({racks.length})</option>
-              {uniqueRooms.map(room => {
-                const count = filterCounts.room[room] || 0;
-                return <option key={room} value={room}>{room?.toUpperCase() || 'UNKNOWN'} ({count})</option>
-              })}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Device Status</label>
-            <div className="flex gap-2">
-              {['ALL', 'Online', 'Offline', 'Maintenance'].map((s) => (
-                <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${statusFilter === s ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'}`}>{s}</button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Campus Zone</label>
-            <div className="flex gap-2">
-              {['ALL', 'INSIDE', 'OUTSIDE'].map((z) => (
-                <button key={z} onClick={() => setFilterType(z)} className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${filterType === z ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'}`}>{z}</button>
-              ))}
-            </div>
-          </div>
-          <div className="flex-1 flex justify-end items-end space-x-4">
-            <button onClick={() => { setStatusFilter('ALL'); setFilterType('ALL'); setSearchQuery(''); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); setStartMonth(''); setEndMonth(''); }} className="text-xs font-bold text-secondary hover:text-cyan-400 transition-colors uppercase tracking-widest underline underline-offset-4">
-              Reset Filters
+            <button
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className="flex items-center px-6 py-3 rounded-md bg-panel border border-main text-sm font-bold text-secondary hover:text-main transition-colors uppercase tracking-wide shrink-0"
+            >
+              <Filter size={16} className="mr-2" />
+              {showFilterPanel ? 'HIDE FILTERS' : 'SHOW ADVANCED FILTERS'}
             </button>
           </div>
-        </div>
-      )}
 
-      <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
-        <div className="p-4 border-b border-main flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-bold text-dim uppercase tracking-widest">Rows per page</span>
-            <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="bg-panel border border-main rounded px-2 py-1 text-[11px] font-bold text-main outline-none focus:border-cyan-500 transition-colors">
-              <option value={10}>10</option>
-              <option value={15}>15</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-          <div className="flex items-center space-x-3">
-            <span className="text-[11px] font-bold text-secondary uppercase tracking-tighter">
-              {filteredRacks.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredRacks.length)}-${Math.min(currentPage * itemsPerPage, filteredRacks.length)} of ${filteredRacks.length}`}
-            </span>
-            <div className="flex space-x-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-secondary hover:text-main disabled:opacity-30 transition-colors bg-panel rounded">
-                <ChevronLeft size={14} />
-              </button>
-              <button disabled={currentPage >= Math.ceil(filteredRacks.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-secondary hover:text-main disabled:opacity-30 transition-colors bg-panel rounded">
-                <ChevronRight size={14} />
-              </button>
+          {showFilterPanel && (
+            <div className="bg-panel border border-main rounded-md p-6 mb-6 flex flex-wrap gap-8 animate-slide-up">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date Added Range</label>
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="month" 
+                    value={startMonth}
+                    onChange={(e) => setStartMonth(e.target.value)}
+                    className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
+                    title="From Month"
+                  />
+                  <span className="text-secondary text-xs">to</span>
+                  <input 
+                    type="month" 
+                    value={endMonth}
+                    onChange={(e) => setEndMonth(e.target.value)}
+                    className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 w-36 cursor-pointer"
+                    title="To Month"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Occupation Filter</label>
+                <select value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]">
+                  <option value="ALL">ALL Occupation ({racks.length})</option>
+                  {uniqueColleges.map(college => {
+                    const count = filterCounts.college[college] || 0;
+                    return <option key={college} value={college}>{college?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+                  })}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Block Filter</label>
+                <select value={blockFilter} onChange={(e) => setBlockFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]">
+                  <option value="ALL">ALL BLOCKS ({racks.length})</option>
+                  {uniqueBlocks.map(block => {
+                    const count = filterCounts.block[block] || 0;
+                    return <option key={block} value={block}>{block?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+                  })}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Floor Filter</label>
+                <select value={floorFilter} onChange={(e) => setFloorFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[150px]">
+                  <option value="ALL">ALL FLOORS ({racks.length})</option>
+                  {uniqueFloors.map(floor => {
+                    const count = filterCounts.floor[floor] || 0;
+                    return <option key={floor} value={floor}>{floor?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+                  })}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Room Filter</label>
+                <select value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]">
+                  <option value="ALL">ALL ROOMS ({racks.length})</option>
+                  {uniqueRooms.map(room => {
+                    const count = filterCounts.room[room] || 0;
+                    return <option key={room} value={room}>{room?.toUpperCase() || 'UNKNOWN'} ({count})</option>
+                  })}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Device Status</label>
+                <div className="flex gap-2">
+                  {['ALL', 'Online', 'Offline', 'Maintenance'].map((s) => (
+                    <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${statusFilter === s ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'}`}>{s}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Campus Zone</label>
+                <div className="flex gap-2">
+                  {['ALL', 'INSIDE', 'OUTSIDE'].map((z) => (
+                    <button key={z} onClick={() => setFilterType(z)} className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${filterType === z ? 'bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'}`}>{z}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 flex justify-end items-end space-x-4">
+                <button onClick={() => { setStatusFilter('ALL'); setFilterType('ALL'); setSearchQuery(''); setCollegeFilter('ALL'); setBlockFilter('ALL'); setFloorFilter('ALL'); setRoomFilter('ALL'); setStartMonth(''); setEndMonth(''); }} className="text-xs font-bold text-secondary hover:text-cyan-400 transition-colors uppercase tracking-widest underline underline-offset-4">
+                  Reset Filters
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-panel border border-main rounded-md overflow-hidden animate-slide-up delay-300">
+            <div className="p-4 border-b border-main flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-bold text-dim uppercase tracking-widest">Rows per page</span>
+                <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="bg-panel border border-main rounded px-2 py-1 text-[11px] font-bold text-main outline-none focus:border-cyan-500 transition-colors">
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+              <div className="flex items-center space-x-3">
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-tighter">
+                  {filteredRacks.length === 0 ? '0-0 of 0' : `${Math.min((currentPage - 1) * itemsPerPage + 1, filteredRacks.length)}-${Math.min(currentPage * itemsPerPage, filteredRacks.length)} of ${filteredRacks.length}`}
+                </span>
+                <div className="flex space-x-1">
+                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} className="p-1 text-secondary hover:text-main disabled:opacity-30 transition-colors bg-panel rounded">
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button disabled={currentPage >= Math.ceil(filteredRacks.length / itemsPerPage)} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 text-secondary hover:text-main disabled:opacity-30 transition-colors bg-panel rounded">
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-panel border-b border-main">
+                  <tr className="text-secondary">
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center w-12">S.No</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Asset Number</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Device Info</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">U Space</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">Status</th>
+                    {canEdit && <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-right">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-main">
+                  {filteredRacks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((r, index) => (
+                    <tr
+                      key={r._id || r.id}
+                      className="hover:bg-slate-700/30 transition-colors group cursor-pointer text-main"
+                      onClick={() => navigate(`/devices/racks/${r._id || r.id}`)}
+                    >
+                      <td className="px-5 py-4 text-[11px] font-bold text-secondary text-center">{((currentPage - 1) * itemsPerPage) + index + 1}</td>
+                      <td className="px-5 py-4">
+                        <span className="text-sm font-mono text-cyan-400 font-bold">{r.serialNumber || '—'}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-yellow-500/10 rounded-md border border-yellow-500/20">
+                            <Server size={16} className="text-yellow-500" />
+                          </div>
+                          <div>
+                            <div className="text-[12px] font-bold text-main">{r.name}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col space-y-1">
+                          <div className="flex items-center space-x-2 text-[11px] text-main font-bold">
+                            <Building size={12} className="text-cyan-500" />
+                            <span>{r.block || '—'}</span>
+                          </div>
+                          <div className="text-[9px] text-dim font-bold uppercase tracking-wider pl-5">
+                            {r.divisionName || '—'}
+                          </div>
+                          <div className="text-[9px] text-dim font-bold pl-5">
+                            {r.brand} {r.model ? `- ${r.model}` : ''}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className="text-[11px] font-bold text-main">{r.uSpace || '—'}</span>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                          r.status === 'Online' ? 'text-green-500 border-green-500/50' :
+                          r.status === 'Offline' ? 'text-red-500 border-red-500/50' :
+                          'text-amber-500 border-amber-500/50'}`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      {canEdit && (
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/racks/${r._id || r.id}`) }} className="text-secondary hover:text-cyan-400 transition-colors">
+                              <Info size={14} />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); editRack(r) }} className="text-secondary hover:text-cyan-400 transition-colors">
+                              <Edit2 size={14} />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); deleteRack(r._id || r.id) }} className="text-secondary hover:text-red-500 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                  {filteredRacks.length === 0 && (
+                    <tr>
+                      <td colSpan={canEdit ? "7" : "6"} className="px-5 py-8 text-center text-slate-500">
+                        <Server size={32} className="mx-auto mb-3 opacity-50" />
+                        <p className="text-[12px] font-bold">No racks found matching this filter.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-panel border-b border-main">
-              <tr className="text-secondary">
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center w-12">S.No</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Asset Number</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Device Info</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider">Location</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">U Space</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-center">Status</th>
-                {canEdit && <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-main">
-              {filteredRacks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((r, index) => (
-                <tr
-                  key={r._id || r.id}
-                  className="hover:bg-slate-700/30 transition-colors group cursor-pointer text-main"
-                  onClick={() => navigate(`/devices/racks/${r._id || r.id}`)}
-                >
-                  <td className="px-5 py-4 text-[11px] font-bold text-secondary text-center">{((currentPage - 1) * itemsPerPage) + index + 1}</td>
-                  <td className="px-5 py-4">
-                    <span className="text-sm font-mono text-cyan-400 font-bold">{r.serialNumber || '—'}</span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-yellow-500/10 rounded-md border border-yellow-500/20">
-                        <Server size={16} className="text-yellow-500" />
-                      </div>
-                      <div>
-                        <div className="text-[12px] font-bold text-main">{r.name}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex flex-col space-y-1">
-                      <div className="flex items-center space-x-2 text-[11px] text-main font-bold">
-                        <Building size={12} className="text-cyan-500" />
-                        <span>{r.block || '—'}</span>
-                      </div>
-                      <div className="text-[9px] text-dim font-bold uppercase tracking-wider pl-5">
-                        {r.divisionName || '—'}
-                      </div>
-                      <div className="text-[9px] text-dim font-bold pl-5">
-                        {r.brand} {r.model ? `- ${r.model}` : ''}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-center">
-                    <span className="text-[11px] font-bold text-main">{r.uSpace || '—'}</span>
-                  </td>
-                  <td className="px-5 py-4 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                      r.status === 'Online' ? 'text-green-500 border-green-500/50' :
-                      r.status === 'Offline' ? 'text-red-500 border-red-500/50' :
-                      'text-amber-500 border-amber-500/50'}`}>
-                      {r.status}
-                    </span>
-                  </td>
-                  {canEdit && (
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/racks/${r._id || r.id}`) }} className="text-secondary hover:text-cyan-400 transition-colors">
-                          <Info size={14} />
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); editRack(r) }} className="text-secondary hover:text-cyan-400 transition-colors">
-                          <Edit2 size={14} />
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); deleteRack(r._id || r.id) }} className="text-secondary hover:text-red-500 transition-colors">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {filteredRacks.length === 0 && (
-                <tr>
-                  <td colSpan={canEdit ? "7" : "6"} className="px-5 py-8 text-center text-slate-500">
-                    <Server size={32} className="mx-auto mb-3 opacity-50" />
-                    <p className="text-[12px] font-bold">No racks found matching this filter.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
@@ -989,6 +1231,81 @@ export default function Racks() {
                   className={`glass-button px-12 py-4 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {submitting ? 'Saving...' : (editingId ? 'Update' : 'Save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Status Change & Remark Modal */}
+      {statusModalDevice && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[999] animate-fade-in">
+          <div className="bg-panel border border-main rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 relative">
+            <div className="flex justify-between items-center border-b border-main pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-main uppercase tracking-wider">Status Change & Remark Log</h3>
+                <p className="text-[11px] text-cyan-400 font-mono mt-0.5">Rack: {statusModalDevice.name}</p>
+              </div>
+              <button
+                onClick={() => setStatusModalDevice(null)}
+                className="text-slate-400 hover:text-main p-1 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStatusChange} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                  Select Status
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setStatusFormData({ ...statusFormData, status: s })}
+                      className={`px-3 py-2 text-xs font-bold uppercase rounded-lg border transition-all ${
+                        statusFormData.status === s
+                          ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-400 shadow-sm'
+                          : 'border-main text-slate-400 hover:text-main hover:bg-white/5'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                  Reason / Remark <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={statusFormData.remark}
+                  onChange={(e) => setStatusFormData({ ...statusFormData, remark: e.target.value })}
+                  placeholder="Enter reason for status change or location update..."
+                  className="w-full bg-slate-900 border border-main rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 placeholder:text-slate-600 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t border-main">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalDevice(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-main uppercase tracking-wider transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={statusSubmitting}
+                  className="px-5 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-500 text-slate-900 text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                >
+                  {statusSubmitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

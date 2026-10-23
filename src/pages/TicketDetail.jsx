@@ -34,11 +34,44 @@ const getImageUrl = (path) => {
   return `${baseUrl}${cleanPath}`;
 };
 
-const getFileName = (path) => {
-  if (!path) return '';
-  const parts = path.split('/');
-  const name = parts[parts.length - 1];
-  return name.length > 20 ? name.substring(0, 10) + '...' + name.substring(name.length - 7) : name;
+const ImageCard = ({ src, alt, label, isCompleted = false }) => {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!src || hasError) {
+    return (
+      <div className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex flex-col items-center justify-center">
+        <ImageIcon size={24} className="text-white/10 mb-2" />
+        {hasError && (
+          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-4">Image Unavailable</span>
+        )}
+        <span className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border border-white/10 tracking-widest">
+          {label}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`group relative aspect-[4/3] rounded-2xl overflow-hidden border ${isCompleted ? 'border-emerald-500/30 shadow-lg shadow-emerald-500/5' : 'border-white/10'} bg-black/40 flex flex-col items-center justify-center cursor-pointer`}>
+      <img 
+        src={getImageUrl(src)} 
+        onError={() => setHasError(true)}
+        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+        alt={alt} 
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+      <a href={getImageUrl(src)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="bg-white/10 backdrop-blur-md p-3 rounded-full"><Eye size={20} className="text-white" /></div>
+      </a>
+      <span className={`absolute bottom-3 left-3 ${isCompleted ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/30' : 'bg-black/60 text-white border-white/10'} backdrop-blur-md text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border tracking-widest`}>
+        {label}
+      </span>
+    </div>
+  );
 };
 
 export default function TicketDetail() {
@@ -146,6 +179,38 @@ export default function TicketDetail() {
     } catch (e) {
       return 'N/A';
     }
+  };
+
+  const getCompletedImagesList = (t) => {
+    if (!t) return [];
+    const list = [];
+    const addImg = (img) => {
+      if (!img) return;
+      const path = typeof img === 'string' ? img : (img.image || img.file || img.url);
+      if (path && !list.includes(path)) {
+        list.push(path);
+      }
+    };
+
+    if (Array.isArray(t.completed_images)) {
+      t.completed_images.forEach(addImg);
+    }
+    if (Array.isArray(t.completedImages)) {
+      t.completedImages.forEach(addImg);
+    }
+    addImg(t.completedImage);
+    addImg(t.serviceImage);
+
+    if (Array.isArray(t.remarks_history)) {
+      t.remarks_history.forEach(r => addImg(r.image));
+    }
+    if (Array.isArray(t.remarks)) {
+      t.remarks.forEach(r => {
+        if (typeof r === 'object') addImg(r.image);
+      });
+    }
+
+    return list;
   };
 
   const calculateTotalTime = (start, end) => {
@@ -787,54 +852,43 @@ export default function TicketDetail() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {/* Open Image */}
-              <div className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex flex-col items-center justify-center cursor-pointer">
-                {ticket.createdImage ? (
-                  <>
-                    <img src={getImageUrl(ticket.createdImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Open" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                    <a href={getImageUrl(ticket.createdImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="bg-white/10 backdrop-blur-md p-3 rounded-full"><Eye size={20} className="text-white" /></div>
-                    </a>
-                  </>
-                ) : (
-                  <ImageIcon size={24} className="text-white/10 mb-2" />
-                )}
-                <span className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border border-white/10 tracking-widest">1. Logged</span>
-              </div>
+              <ImageCard 
+                src={ticket.createdImage} 
+                alt="Open" 
+                label="1. Logged" 
+              />
               
               {/* In Progress Image */}
-              <div className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex flex-col items-center justify-center cursor-pointer">
-                {ticket.inProgressImage || ticket.workImage ? (
-                  <>
-                    <img src={getImageUrl(ticket.inProgressImage || ticket.workImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="In Progress" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                    <a href={getImageUrl(ticket.inProgressImage || ticket.workImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="bg-white/10 backdrop-blur-md p-3 rounded-full"><Eye size={20} className="text-white" /></div>
-                    </a>
-                  </>
-                ) : (
-                  <ImageIcon size={24} className="text-white/10 mb-2" />
-                )}
-                <span className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border border-white/10 tracking-widest">2. Active</span>
-              </div>
+              <ImageCard 
+                src={ticket.inProgressImage || ticket.workImage} 
+                alt="In Progress" 
+                label="2. Active" 
+              />
 
-              {/* Completed Image */}
-              <div className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex flex-col items-center justify-center cursor-pointer">
-                {ticket.completedImage || (ticket.completed_images && ticket.completed_images[0]?.image) || ticket.serviceImage ? (
-                  <>
-                    <img src={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Completed" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                    <a href={getImageUrl(ticket.completedImage || ticket.completed_images[0]?.image || ticket.serviceImage)} target="_blank" rel="noopener noreferrer" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="bg-white/10 backdrop-blur-md p-3 rounded-full"><Eye size={20} className="text-white" /></div>
-                    </a>
-                  </>
-                ) : (
-                  <ImageIcon size={24} className="text-white/10 mb-2" />
-                )}
-                <span className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border border-white/10 tracking-widest">3. Completed</span>
-              </div>
+              {/* Completed Images - Render ALL completed images */}
+              {(() => {
+                const completedList = getCompletedImagesList(ticket);
+                if (completedList.length === 0) {
+                  return (
+                    <ImageCard 
+                      src={null} 
+                      alt="Completed" 
+                      label="3. Completed" 
+                    />
+                  );
+                }
+                return completedList.map((imgUrl, idx) => (
+                  <ImageCard 
+                    key={idx}
+                    src={imgUrl} 
+                    alt={`Completed ${idx + 1}`} 
+                    label={`3. Completed ${completedList.length > 1 ? `(${idx + 1}/${completedList.length})` : ''}`}
+                    isCompleted={true}
+                  />
+                ));
+              })()}
             </div>
           </div>
         </div>
@@ -920,7 +974,12 @@ export default function TicketDetail() {
                       {msg.image && (
                         <div className="mt-3 rounded-xl overflow-hidden border border-white/10 max-w-[200px]">
                           <a href={getImageUrl(msg.image)} target="_blank" rel="noopener noreferrer">
-                            <img src={getImageUrl(msg.image)} alt="attached" className="w-full h-auto object-cover hover:scale-105 transition-transform" />
+                            <img 
+                              src={getImageUrl(msg.image)} 
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              alt="attached" 
+                              className="w-full h-auto object-cover hover:scale-105 transition-transform" 
+                            />
                           </a>
                         </div>
                       )}

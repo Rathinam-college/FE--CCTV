@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { Search, Filter, Plus, Server, HardDrive, Cpu, X, Edit2, Trash2, Building, Activity, ShieldCheck, ShieldAlert, Download, Upload, Info, ChevronRight, ChevronLeft, Network, Printer } from 'lucide-react';
+import { Search, Filter, Plus, Server, HardDrive, Cpu, X, Edit2, Trash2, Building, Activity, ShieldCheck, ShieldAlert, Download, Upload, Info, ChevronRight, ChevronLeft, Network, Printer, RefreshCw, FileText, CheckCircle2, MessageSquare, AlertCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -30,8 +30,15 @@ export default function NVR() {
   const [filterType, setFilterType] = useState('ALL'); // Campus zone
 
   const [viewMode, setViewMode] = useState('registry'); // 'registry' or 'report'
+  const [reportTab, setReportTab] = useState('modified_only'); // 'modified_only' or 'all_units'
   const canEdit = user?.role === 'Super Admin' || user?.permissions?.includes('Storage:EDIT');
   
+  // Status Change Modal State
+  const [statusModalNvr, setStatusModalNvr] = useState(null);
+  const [statusFormData, setStatusFormData] = useState({ status: 'Online', remark: '' });
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [backendRemarksLog, setBackendRemarksLog] = useState([]);
+
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -63,7 +70,19 @@ export default function NVR() {
     fetchAllLocations();
     fetchDivisions();
     fetchBrands();
+    fetchRemarksLog();
   }, []);
+
+  const fetchRemarksLog = async () => {
+    try {
+      const res = await api.get('/cameras/nvrs/all_remarks/');
+      if (Array.isArray(res.data)) {
+        setBackendRemarksLog(res.data);
+      }
+    } catch (err) {
+      console.warn("NVR all_remarks fetch failed, fallback to embedded message_history", err);
+    }
+  };
 
   useEffect(() => {
     if (showModal && !editingId) {
@@ -474,17 +493,145 @@ export default function NVR() {
 
   const filteredNVRs = useMemo(() => {
     return baseFilteredNVRs.filter(nvr => {
-      if (statusFilter !== 'ALL' && (nvr.status || 'Online') !== statusFilter) return false;
+      if (statusFilter !== 'ALL' && (nvr.status || 'Online').toUpperCase() !== statusFilter.toUpperCase()) return false;
       return true;
     });
   }, [baseFilteredNVRs, statusFilter]);
 
-  const exportToExcel = () => {
-    const headers = [
-      'S.No', 'NVR Name', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Brand', 'Model/Serial number',
-      'Hard Disk', 'Channels', 'Asset Number', 'Status', 'Date Added'
-    ];
+  // Combine status change remarks from API and embedded message_history
+  const statusChangeLogs = useMemo(() => {
+    const map = new Map();
 
+    const parseStatusFromRemark = (remarkText, fallbackStatus) => {
+      if (!remarkText) return fallbackStatus || 'Online';
+      const matchTo = remarkText.match(/Status changed (?:from .* )?to "?(Online|Offline|Maintenance|Scrap)"?/i);
+      if (matchTo && matchTo[1]) {
+        const parsed = matchTo[1];
+        return parsed.charAt(0).toUpperCase() + parsed.slice(1).toLowerCase();
+      }
+      return fallbackStatus || 'Online';
+    };
+
+    // 1. From backend all_remarks
+    backendRemarksLog.forEach(item => {
+      const key = `remark_${item.id || item._id}`;
+      const status = item.device_status || parseStatusFromRemark(item.remark, null);
+      map.set(key, {
+        id: item.id || item._id,
+        nvrId: item.nvr,
+        nvrName: item.nvr_name || 'Storage Unit',
+        serialNumber: item.nvr_serial || '—',
+        ipAddress: item.nvr_ip || '—',
+        divisionName: item.nvr_division || '—',
+        block: item.nvr_block || '—',
+        floor: item.nvr_floor || '—',
+        room: item.nvr_room || '—',
+        remark: item.remark || 'Status updated',
+        device_status: status || 'Online',
+        userName: item.userName || 'System Admin',
+        date: item.date,
+        time: item.time,
+        createdAt: item.createdAt || new Date().toISOString()
+      });
+    });
+
+    // 2. From embedded message_history of NVRs
+    nvrs.forEach(nvr => {
+      if (Array.isArray(nvr.message_history)) {
+        nvr.message_history.forEach(m => {
+          const key = `remark_${m.id || m._id}`;
+          if (!map.has(key)) {
+            const status = m.device_status || parseStatusFromRemark(m.remark, nvr.status);
+            map.set(key, {
+              id: m.id || m._id,
+              nvrId: nvr.id || nvr._id,
+              nvrName: nvr.nvrName,
+              serialNumber: nvr.serialNumber,
+              ipAddress: nvr.ipAddress,
+              divisionName: nvr.divisionName,
+              block: nvr.block,
+              floor: nvr.floor,
+              room: nvr.room,
+              remark: m.remark,
+              device_status: status || 'Online',
+              userName: m.userName || 'System Admin',
+              date: m.date,
+              time: m.time,
+              createdAt: m.createdAt || new Date().toISOString()
+            });
+          }
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [backendRemarksLog, nvrs]);
+
+  const filteredStatusLogs = useMemo(() => {
+    return statusChangeLogs.filter(log => {
+      if (statusFilter !== 'ALL' && (log.device_status || 'Online').toUpperCase() !== statusFilter.toUpperCase()) return false;
+      if (collegeFilter !== 'ALL' && (log.divisionName || '').toUpperCase() !== collegeFilter.toUpperCase()) return false;
+      if (blockFilter !== 'ALL' && (log.block || '').toUpperCase() !== blockFilter.toUpperCase()) return false;
+
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (log.nvrName || '').toLowerCase().includes(q) ||
+        (log.serialNumber || '').toLowerCase().includes(q) ||
+        (log.ipAddress || '').toLowerCase().includes(q) ||
+        (log.remark || '').toLowerCase().includes(q) ||
+        (log.divisionName || '').toLowerCase().includes(q) ||
+        (log.block || '').toLowerCase().includes(q) ||
+        (log.userName || '').toLowerCase().includes(q)
+      );
+    });
+  }, [statusChangeLogs, searchQuery, statusFilter, collegeFilter, blockFilter]);
+
+  const openStatusModal = (nvr) => {
+    setStatusModalNvr(nvr);
+    setStatusFormData({
+      status: nvr.status || 'Online',
+      remark: ''
+    });
+  };
+
+  const handleSaveStatusChange = async (e) => {
+    e.preventDefault();
+    if (!statusModalNvr || statusSubmitting) return;
+
+    if (!statusFormData.remark.trim()) {
+      showNotification('Please enter a remark / reason for the status change.', 'error');
+      return;
+    }
+
+    setStatusSubmitting(true);
+    try {
+      const id = statusModalNvr._id || statusModalNvr.id;
+
+      // Update NVR status and save remark
+      await api.patch(`/cameras/nvrs/${id}/`, {
+        status: statusFormData.status,
+        remark: statusFormData.remark
+      });
+
+      await api.post(`/cameras/nvrs/${id}/add_remark/`, {
+        remark: statusFormData.remark,
+        device_status: statusFormData.status
+      });
+
+      showNotification(`NVR Status updated to "${statusFormData.status}" & remark saved.`);
+      setStatusModalNvr(null);
+      fetchNVRs();
+      fetchRemarksLog();
+    } catch (err) {
+      console.error("Status change error:", err);
+      showNotification(err.response?.data?.message || 'Failed to update status & save remark.', 'error');
+    } finally {
+      setStatusSubmitting(false);
+    }
+  };
+
+  const exportToExcel = () => {
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
       const str = String(val);
@@ -493,6 +640,41 @@ export default function NVR() {
       }
       return str;
     };
+
+    if (viewMode === 'report' && reportTab === 'modified_only') {
+      const headers = ['S.No', 'Date & Time', 'Asset Number', 'Device Name', 'IP Address', 'Location', 'Status', 'Remark / Reason Saved', 'Updated By'];
+      const dataRows = filteredStatusLogs.map((log, idx) => [
+        idx + 1,
+        escapeCSV(log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A'),
+        escapeCSV(log.serialNumber || 'N/A'),
+        escapeCSV(log.nvrName || 'N/A'),
+        escapeCSV(log.ipAddress || 'N/A'),
+        escapeCSV([log.divisionName, log.block, log.floor, log.room].filter(Boolean).join(' / ') || 'N/A'),
+        escapeCSV(log.device_status || 'N/A'),
+        escapeCSV(log.remark || 'N/A'),
+        escapeCSV(log.userName || 'N/A')
+      ]);
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...dataRows.map(row => row.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      let fileName = 'NVR_Status_Changes_Report';
+      if (statusFilter !== 'ALL') fileName += `_${statusFilter}`;
+      fileName += `_${new Date().toISOString().split('T')[0]}.csv`;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showNotification(`Exported ${filteredStatusLogs.length} status change records (${statusFilter === 'ALL' ? 'All Statuses' : statusFilter})`);
+      return;
+    }
+
+    const headers = [
+      'S.No', 'NVR Name', 'IP Address', 'College', 'Block', 'Floor', 'Room', 'Brand', 'Model/Serial number',
+      'Hard Disk', 'Channels', 'Asset Number', 'Status', 'Date Added'
+    ];
 
     const dataRows = filteredNVRs.map((nvr, idx) => [
       idx + 1,
@@ -529,53 +711,86 @@ export default function NVR() {
 
   const printToPDF = () => {
     const printWindow = window.open('', '_blank');
+    const isStatusReport = viewMode === 'report' && reportTab === 'modified_only';
+    
     const htmlContent = `
       <html>
         <head>
-          <title>NVR Inventory Export</title>
+          <title>${isStatusReport ? 'NVR Status Changes & Remarks Report' : 'NVR Inventory Export'}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.4; }
-            h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 20px; text-align: center; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
-            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+            h1 { color: #0f172a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; font-size: 18px; text-align: center; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px; }
+            th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; }
             th { background-color: #f3f4f6; font-weight: bold; text-transform: uppercase; color: #4b5563; }
             tr:nth-child(even) { background-color: #f9fafb; }
-            .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            .badge { padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
             .status-online { background-color: #d1fae5; color: #047857; }
             .status-offline { background-color: #fee2e2; color: #b91c1c; }
-            .footer { margin-top: 30px; font-size: 10px; color: #9ca3af; text-align: center; }
+            .status-maint { background-color: #fef3c7; color: #b45309; }
+            .footer { margin-top: 25px; font-size: 10px; color: #9ca3af; text-align: center; }
+            .remark-box { background: #f8fafc; border-left: 3px solid #0284c7; padding: 4px 8px; font-style: italic; }
           </style>
         </head>
         <body>
-          <h1>NVR Inventory Report</h1>
+          <h1>${isStatusReport ? 'NVR Status Changes & Saved Remarks Audit Report' : 'NVR Storage Units Inventory Report'}</h1>
           <table>
             <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Asset Number</th>
-                <th>NVR Name</th>
-                <th>IP Address</th>
-                <th>Location</th>
-                <th>Specs (Disk/Chan)</th>
-                <th>Status</th>
-              </tr>
+              ${isStatusReport ? `
+                <tr>
+                  <th>#</th>
+                  <th>Date & Time</th>
+                  <th>Asset #</th>
+                  <th>Device Designation</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Saved Remark / Reason</th>
+                  <th>Changed By</th>
+                </tr>
+              ` : `
+                <tr>
+                  <th>S.No</th>
+                  <th>Asset Number</th>
+                  <th>NVR Name</th>
+                  <th>IP Address</th>
+                  <th>Location</th>
+                  <th>Specs (Disk/Chan)</th>
+                  <th>Status</th>
+                </tr>
+              `}
             </thead>
             <tbody>
-              ${filteredNVRs.map((nvr, idx) => `
-                <tr>
-                  <td>${idx + 1}</td>
-                  <td>${nvr.serialNumber || 'N/A'}</td>
-                  <td>${nvr.nvrName || 'N/A'}</td>
-                  <td>${nvr.ipAddress || 'N/A'}</td>
-                  <td>${[nvr.divisionName, nvr.block, nvr.room].filter(Boolean).join(' / ') || 'N/A'}</td>
-                  <td>${nvr.hardDisk || 'N/A'} / ${nvr.channel || 'N/A'} Ch</td>
-                  <td><span class="badge ${nvr.status === 'Online' ? 'status-online' : 'status-offline'}">${nvr.status || 'N/A'}</span></td>
-                </tr>
-              `).join('')}
+              ${isStatusReport ? (
+                filteredStatusLogs.length === 0 ? '<tr><td colSpan="8" style="text-align:center;">No status change logs found.</td></tr>' :
+                filteredStatusLogs.map((log, idx) => `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td>${log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A'}</td>
+                    <td><b>${log.serialNumber || 'N/A'}</b></td>
+                    <td>${log.nvrName || 'N/A'}</td>
+                    <td>${[log.divisionName, log.block, log.room].filter(Boolean).join(' / ') || 'N/A'}</td>
+                    <td><span class="badge ${log.device_status === 'Online' ? 'status-online' : log.device_status === 'Offline' ? 'status-offline' : 'status-maint'}">${log.device_status || 'N/A'}</span></td>
+                    <td><div class="remark-box">${log.remark || '—'}</div></td>
+                    <td>${log.userName || 'System'}</td>
+                  </tr>
+                `).join('')
+              ) : (
+                filteredNVRs.map((nvr, idx) => `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td>${nvr.serialNumber || 'N/A'}</td>
+                    <td>${nvr.nvrName || 'N/A'}</td>
+                    <td>${nvr.ipAddress || 'N/A'}</td>
+                    <td>${[nvr.divisionName, nvr.block, nvr.room].filter(Boolean).join(' / ') || 'N/A'}</td>
+                    <td>${nvr.hardDisk || 'N/A'} / ${nvr.channel || 'N/A'} Ch</td>
+                    <td><span class="badge ${nvr.status === 'Online' ? 'status-online' : 'status-offline'}">${nvr.status || 'N/A'}</span></td>
+                  </tr>
+                `).join('')
+              )}
             </tbody>
           </table>
           <div class="footer">
-            Generated from CCTV System on ${new Date().toLocaleString()} &bull; Total Records: ${filteredNVRs.length}
+            Generated from CCTV System on ${new Date().toLocaleString()} &bull; Total Records: ${isStatusReport ? filteredStatusLogs.length : filteredNVRs.length}
           </div>
         </body>
       </html>
@@ -944,23 +1159,38 @@ export default function NVR() {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                      nvr.status === 'Online' ? 'text-green-500 border-green-500/50' : 
-                      nvr.status === 'Offline' ? 'text-red-500 border-red-500/50' :
-                      'text-amber-500 border-amber-500/50'}`}>
-                      {nvr.status}
-                    </span>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                        nvr.status === 'Online' ? 'text-green-500 border-green-500/50 bg-green-500/10' : 
+                        nvr.status === 'Offline' ? 'text-red-500 border-red-500/50 bg-red-500/10' :
+                        'text-amber-500 border-amber-500/50 bg-amber-500/10'}`}>
+                        {nvr.status}
+                      </span>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openStatusModal(nvr); }}
+                          className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded transition-all flex items-center shadow-sm"
+                        >
+                          <RefreshCw size={10} className="mr-1" />
+                          Status Change
+                        </button>
+                      )}
+                    </div>
                   </td>
                   {canEdit && (
                     <td className="px-5 py-4 text-right">
                       <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/nvr/${nvr._id || nvr.id}`) }} className="text-secondary hover:text-cyan-400 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); openStatusModal(nvr); }} title="Status Change & Remark" className="text-secondary hover:text-cyan-400 transition-colors p-1 bg-cyan-500/10 rounded">
+                          <RefreshCw size={14} />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/devices/nvr/${nvr._id || nvr.id}`) }} title="View Details" className="text-secondary hover:text-cyan-400 transition-colors">
                           <Info size={14} />
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); editNVR(nvr) }} className="text-secondary hover:text-cyan-400 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); editNVR(nvr) }} title="Edit Asset" className="text-secondary hover:text-cyan-400 transition-colors">
                           <Edit2 size={14} />
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); deleteNVR(nvr._id || nvr.id) }} className="text-secondary hover:text-red-500 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); deleteNVR(nvr._id || nvr.id) }} title="Delete Asset" className="text-secondary hover:text-red-500 transition-colors">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -984,109 +1214,186 @@ export default function NVR() {
       ) : (
         /* NVR Status & Remarks History Log Report View */
         <div className="space-y-6 animate-fade-in">
-          {/* Status Summary Count Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Online Units</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-emerald-400">{stats.online}</span>
-                <span className="text-[10px] text-dim font-mono">
-                  {nvrs.length ? ((stats.online / nvrs.length) * 100).toFixed(0) : 0}%
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Offline Units</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-red-400">{stats.offline}</span>
-                <span className="text-[10px] text-dim font-mono">
-                  {nvrs.length ? ((stats.offline / nvrs.length) * 100).toFixed(0) : 0}%
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Total NVRs Registered</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-cyan-400">{nvrs.length}</span>
-                <span className="text-[10px] text-dim font-mono">Units</span>
-              </div>
-            </div>
-
-            <div className="bg-panel border border-main rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Total Channels</span>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-3xl font-black text-amber-400">
-                  {nvrs.reduce((acc, n) => acc + (parseInt(n.channel) || 0), 0)}
-                </span>
-                <span className="text-[10px] text-dim font-mono">Channels</span>
-              </div>
-            </div>
-          </div>
-
           {/* Remarks Table & Audit Log */}
           <div className="glass-panel overflow-hidden bg-panel border border-main rounded-2xl shadow-2xl">
             <div className="p-6 border-b border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40">
               <div className="flex items-center space-x-3">
-                <Server className="text-cyan-400" size={20} />
-                <h3 className="text-sm font-black uppercase tracking-widest text-main">
-                  NVR Storage Units Status & Audit Log Report
-                </h3>
+                {reportTab === 'modified_only' ? (
+                  <MessageSquare className="text-cyan-400" size={20} />
+                ) : (
+                  <Server className="text-purple-400" size={20} />
+                )}
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-main">
+                    {reportTab === 'modified_only' 
+                      ? 'NVR Status Changes & Saved Remarks Audit Report (Changed & Saved Only)' 
+                      : 'All Registered NVR Storage Units Summary Report'}
+                  </h3>
+                  <p className="text-[10px] text-dim">
+                    {reportTab === 'modified_only'
+                      ? 'Showing records where status was changed and remarks saved'
+                      : 'Complete list of all registered storage devices'}
+                  </p>
+                </div>
               </div>
-              <button onClick={printToPDF} className="flex items-center px-4 py-2 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-purple-500/30 transition-all">
-                <Printer size={14} className="mr-2" /> Print NVR Report
-              </button>
+              <div className="flex space-x-2">
+                <button onClick={exportToExcel} className="flex items-center px-4 py-2 bg-panel border border-main text-secondary rounded-xl text-xs font-bold uppercase tracking-wider hover:text-main transition-all">
+                  <Download size={14} className="mr-2" /> Export CSV
+                </button>
+                <button onClick={printToPDF} className="flex items-center px-4 py-2 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-purple-500/30 transition-all">
+                  <Printer size={14} className="mr-2" /> Print PDF Report
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-card border-b border-main text-[10px] font-bold text-dim uppercase tracking-widest">
-                    <th className="p-4 text-center">#</th>
-                    <th className="p-4">NVR Designation</th>
-                    <th className="p-4">Asset Number</th>
-                    <th className="p-4">IP Address</th>
-                    <th className="p-4">Location</th>
-                    <th className="p-4">Specs (Disk / Channels)</th>
-                    <th className="p-4 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-main text-xs font-medium">
-                  {filteredNVRs.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="p-12 text-center text-dim">
-                        No NVR records found.
-                      </td>
+            {reportTab === 'modified_only' && (
+              <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-card/60 border-b border-main">
+                <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+                  <span className="text-[10px] font-black text-secondary uppercase tracking-widest mr-2">Filter Log By Status:</span>
+                  {['ALL', 'Online', 'Offline', 'Maintenance', 'Scrap'].map((st) => {
+                    const count = st === 'ALL'
+                      ? statusChangeLogs.length
+                      : statusChangeLogs.filter(l => (l.device_status || 'Online').toUpperCase() === st.toUpperCase()).length;
+                    const isActive = statusFilter.toUpperCase() === st.toUpperCase();
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setStatusFilter(st)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+                          isActive
+                            ? st.toUpperCase() === 'ONLINE' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-sm' :
+                              st.toUpperCase() === 'OFFLINE' ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-sm' :
+                              st.toUpperCase() === 'MAINTENANCE' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm' :
+                              'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-sm'
+                            : 'bg-panel text-secondary border border-main hover:border-cyan-500/30'
+                        }`}
+                      >
+                        {st} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="text-[11px] font-bold text-cyan-400">
+                  Showing {filteredStatusLogs.length} of {statusChangeLogs.length} Status Logs
+                </div>
+              </div>
+            )}
+
+            {reportTab === 'modified_only' ? (
+              /* Modified & Saved Remarks Only Table */
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-card border-b border-main text-[10px] font-bold text-dim uppercase tracking-widest">
+                      <th className="p-4 text-center">#</th>
+                      <th className="p-4">Date & Time</th>
+                      <th className="p-4">Asset Number</th>
+                      <th className="p-4">Device Designation</th>
+                      <th className="p-4">IP Address</th>
+                      <th className="p-4">Location</th>
+                      <th className="p-4 text-center">Status Changed To</th>
+                      <th className="p-4">Saved Remark / Reason</th>
+                      <th className="p-4">Changed By</th>
                     </tr>
-                  ) : (
-                    filteredNVRs.map((nvr, idx) => (
-                      <tr key={nvr.id || nvr._id || idx} className="hover:bg-slate-700/20 transition-colors">
-                        <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
-                        <td className="p-4 font-bold text-main">{nvr.nvrName || '—'}</td>
-                        <td className="p-4 font-mono text-xs text-amber-400">{nvr.serialNumber || '—'}</td>
-                        <td className="p-4 font-mono text-cyan-400">{nvr.ipAddress || '—'}</td>
-                        <td className="p-4 text-slate-300">
-                          <div>{nvr.divisionName || '—'}</div>
-                          <div className="text-[10px] text-dim">{[nvr.block, nvr.floor, nvr.room].filter(Boolean).join(' / ')}</div>
-                        </td>
-                        <td className="p-4 font-mono text-slate-300">
-                          {nvr.hardDisk || '—'} / {nvr.channel || '—'} Ch
-                        </td>
-                        <td className="p-4 text-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                            nvr.status === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
-                            'text-red-400 border-red-500/50 bg-red-500/10'
-                          }`}>
-                            {nvr.status || 'Online'}
-                          </span>
+                  </thead>
+                  <tbody className="divide-y divide-main text-xs font-medium">
+                    {filteredStatusLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan="9" className="p-12 text-center text-dim">
+                          <AlertCircle size={32} className="mx-auto mb-3 opacity-40 text-cyan-400" />
+                          <p className="text-sm font-bold text-main">No status changes or remarks recorded yet.</p>
+                          <p className="text-xs text-dim mt-1">Use the "Status Change" button on any device row in the Device List tab to modify status and save remarks.</p>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : (
+                      filteredStatusLogs.map((log, idx) => (
+                        <tr key={log.id || idx} className="hover:bg-slate-700/20 transition-colors">
+                          <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                          <td className="p-4 font-mono text-[11px] text-dim">
+                            {log.createdAt ? new Date(log.createdAt).toLocaleString() : (log.date || '—')}
+                          </td>
+                          <td className="p-4 font-mono text-xs text-cyan-400 font-bold">{log.serialNumber || '—'}</td>
+                          <td className="p-4 font-bold text-main">{log.nvrName || '—'}</td>
+                          <td className="p-4 font-mono text-cyan-300">{log.ipAddress || '—'}</td>
+                          <td className="p-4 text-slate-300">
+                            <div className="font-bold">{log.divisionName || '—'}</div>
+                            <div className="text-[10px] text-dim">{[log.block, log.floor, log.room].filter(Boolean).join(' / ')}</div>
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                              (log.device_status || '').toUpperCase() === 'ONLINE' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                              (log.device_status || '').toUpperCase() === 'OFFLINE' ? 'text-red-400 border-red-500/50 bg-red-500/10' :
+                              (log.device_status || '').toUpperCase() === 'MAINTENANCE' ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' :
+                              'text-cyan-400 border-cyan-500/50 bg-cyan-500/10'
+                            }`}>
+                              {log.device_status || 'Online'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <div className="p-2.5 bg-slate-900/60 border border-main rounded-lg text-slate-200 text-xs shadow-inner">
+                              <span className="text-cyan-400 font-mono text-[10px] block mb-0.5 font-bold">[REMARK SAVED]</span>
+                              {log.remark}
+                            </div>
+                          </td>
+                          <td className="p-4 text-xs font-bold text-secondary">{log.userName || 'System Admin'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              /* All Units Registry Table */
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-card border-b border-main text-[10px] font-bold text-dim uppercase tracking-widest">
+                      <th className="p-4 text-center">#</th>
+                      <th className="p-4">NVR Designation</th>
+                      <th className="p-4">Asset Number</th>
+                      <th className="p-4">IP Address</th>
+                      <th className="p-4">Location</th>
+                      <th className="p-4">Specs (Disk / Channels)</th>
+                      <th className="p-4 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-main text-xs font-medium">
+                    {filteredNVRs.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="p-12 text-center text-dim">
+                          No NVR records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredNVRs.map((nvr, idx) => (
+                        <tr key={nvr.id || nvr._id || idx} className="hover:bg-slate-700/20 transition-colors">
+                          <td className="p-4 text-center font-mono text-[10px] text-dim">{idx + 1}</td>
+                          <td className="p-4 font-bold text-main">{nvr.nvrName || '—'}</td>
+                          <td className="p-4 font-mono text-xs text-amber-400">{nvr.serialNumber || '—'}</td>
+                          <td className="p-4 font-mono text-cyan-400">{nvr.ipAddress || '—'}</td>
+                          <td className="p-4 text-slate-300">
+                            <div>{nvr.divisionName || '—'}</div>
+                            <div className="text-[10px] text-dim">{[nvr.block, nvr.floor, nvr.room].filter(Boolean).join(' / ')}</div>
+                          </td>
+                          <td className="p-4 font-mono text-slate-300">
+                            {nvr.hardDisk || '—'} / {nvr.channel || '—'} Ch
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                              nvr.status === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                              'text-red-400 border-red-500/50 bg-red-500/10'
+                            }`}>
+                              {nvr.status || 'Online'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1401,6 +1708,138 @@ export default function NVR() {
                   className={`glass-button px-12 py-4 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {submitting ? 'Saving...' : (editingId ? 'Update' : 'Save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* STATUS CHANGE & REMARK MODAL */}
+      {statusModalNvr && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-card rounded-[2rem] w-full max-w-lg overflow-hidden border border-main shadow-2xl relative my-8">
+            <div className="p-6 border-b border-main bg-panel flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-cyan-500/10 rounded-xl border border-cyan-500/30">
+                  <RefreshCw className="text-cyan-400" size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-main uppercase tracking-tight">
+                    Update NVR Status & Remark
+                  </h2>
+                  <p className="text-[11px] text-dim font-mono">
+                    {statusModalNvr.nvrName} ({statusModalNvr.serialNumber || 'No Asset #'})
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setStatusModalNvr(null)}
+                className="p-2 hover:bg-panel rounded-xl text-secondary hover:text-main transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStatusChange} className="p-6 space-y-6">
+              {/* Target Device Summary */}
+              <div className="p-4 bg-panel border border-main rounded-xl flex justify-between items-center text-xs">
+                <div>
+                  <div className="font-bold text-main">{statusModalNvr.nvrName}</div>
+                  <div className="text-[11px] text-dim font-mono">IP: {statusModalNvr.ipAddress || '—'} | Loc: {[statusModalNvr.divisionName, statusModalNvr.block].filter(Boolean).join(' / ')}</div>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${
+                  statusModalNvr.status === 'Online' ? 'text-green-400 border-green-500/50 bg-green-500/10' :
+                  statusModalNvr.status === 'Offline' ? 'text-red-400 border-red-500/50 bg-red-500/10' :
+                  'text-amber-400 border-amber-500/50 bg-amber-500/10'
+                }`}>
+                  Current: {statusModalNvr.status || 'Online'}
+                </span>
+              </div>
+
+              {/* Status Select */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
+                  Select New Status *
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {['Online', 'Offline', 'Maintenance', 'Scrap'].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setStatusFormData({ ...statusFormData, status: s })}
+                      className={`py-2.5 px-2 text-[10px] font-black uppercase rounded-xl border transition-all ${
+                        statusFormData.status === s
+                          ? s === 'Online' ? 'bg-green-500/20 border-green-500/60 text-green-400 shadow-md' :
+                            s === 'Offline' ? 'bg-red-500/20 border-red-500/60 text-red-400 shadow-md' :
+                            s === 'Maintenance' ? 'bg-amber-500/20 border-amber-500/60 text-amber-400 shadow-md' :
+                            'bg-slate-500/20 border-slate-500/60 text-slate-300 shadow-md'
+                          : 'border-main text-secondary hover:text-main hover:bg-white/5'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quick Remark Chips */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
+                  Quick Reason Presets
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Power Failure / Outage",
+                    "Network Switch Fault",
+                    "HDD Capacity Full",
+                    "Scheduled Maintenance",
+                    "Hardware Replacement",
+                    "Device Relocated",
+                    "Firmware Upgrade"
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setStatusFormData({ ...statusFormData, remark: preset })}
+                      className="px-2.5 py-1 bg-panel border border-main hover:border-cyan-500/40 text-secondary hover:text-cyan-400 text-[10px] font-bold rounded-lg transition-all"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mandatory Remark Input */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-secondary uppercase tracking-widest ml-1">
+                  Remark / Reason for Change *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={statusFormData.remark}
+                  onChange={(e) => setStatusFormData({ ...statusFormData, remark: e.target.value })}
+                  placeholder="Enter specific remark or reason for changing status (e.g., Power supply issue fixed, scheduled restart...)"
+                  className="glass-input w-full p-3.5 text-xs bg-panel border-main rounded-xl shadow-inner outline-none focus:ring-1 focus:ring-cyan-500 text-main"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end space-x-4 pt-4 border-t border-main">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalNvr(null)}
+                  className="px-5 py-2.5 text-xs font-bold text-secondary hover:text-main uppercase tracking-wider transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={statusSubmitting}
+                  className="px-6 py-2.5 bg-cyan-400 hover:bg-cyan-500 text-slate-900 text-xs font-black uppercase tracking-wider rounded-xl shadow-lg shadow-cyan-400/20 transition-all disabled:opacity-50 flex items-center font-bold"
+                >
+                  {statusSubmitting ? 'Saving Status...' : 'Save Status & Remark'}
                 </button>
               </div>
             </form>

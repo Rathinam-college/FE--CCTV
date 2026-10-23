@@ -55,6 +55,7 @@ export default function ProjectTickets() {
   const [itemsPerPage, setItemsPerPage] = useState(15);
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
+  const [dateSortOrder, setDateSortOrder] = useState('desc');
   const [showInProgressModal, setShowInProgressModal] = useState(false);
   const [inProgressTicket, setInProgressTicket] = useState(null);
   const [inProgressData, setInProgressData] = useState({
@@ -424,18 +425,75 @@ export default function ProjectTickets() {
     });
   };
 
-  const filteredTickets = Array.isArray(tickets) ? tickets.filter(ticket => {
-    const meta = parseMetadata(ticket.remarks);
-    const ticketDate = meta.manualDate || (ticket.createdAt ? ticket.createdAt.split('T')[0] : '');
-    if (startMonth || endMonth) {
-      if (!ticketDate) return false;
-      const tMonth = ticketDate.substring(0, 7); // 'YYYY-MM'
-      if (startMonth && tMonth < startMonth) return false;
-      if (endMonth && tMonth > endMonth) return false;
+  const getTicketSortTimestamp = (ticket) => {
+    if (!ticket) return 0;
+    let meta = {};
+    try {
+      if (typeof ticket.remarks === 'string' && ticket.remarks.startsWith('{')) {
+        meta = JSON.parse(ticket.remarks);
+      } else if (typeof ticket.remarks === 'object' && ticket.remarks) {
+        meta = ticket.remarks;
+      }
+    } catch (e) {}
+
+    const dateStr = ticket.operationDate || meta.manualDate || ticket.receivedDate || ticket.createdDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+    let timeStr = ticket.receivedTime || meta.receivedTime || ticket.createdTime || '';
+    if (!timeStr && ticket.createdAt && String(ticket.createdAt).includes('T')) {
+      timeStr = String(ticket.createdAt).split('T')[1]?.substring(0, 5) || '';
     }
-    const searchStr = `${ticket.issueDescription} ${meta.location} ${meta.category}`.toLowerCase();
-    return searchStr.includes(searchQuery.toLowerCase());
-  }) : [];
+
+    let hour = 0;
+    let minute = 0;
+    if (timeStr) {
+      const match24 = String(timeStr).match(/^(\d{1,2}):(\d{2})/);
+      if (match24) {
+        hour = parseInt(match24[1], 10);
+        minute = parseInt(match24[2], 10);
+      }
+    }
+
+    if (!dateStr) return (ticket.id || 0);
+
+    const dateParts = String(dateStr).split('-');
+    if (dateParts.length === 3) {
+      const y = parseInt(dateParts[0], 10);
+      const m = parseInt(dateParts[1], 10) - 1;
+      const d = parseInt(dateParts[2], 10);
+      const dt = new Date(y, m, d, hour, minute, 0, 0);
+      const timeMs = dt.getTime();
+      if (!isNaN(timeMs)) return timeMs;
+    }
+
+    const fallback = new Date(dateStr).getTime();
+    return isNaN(fallback) ? (ticket.id || 0) : fallback;
+  };
+
+  const filteredTickets = useMemo(() => {
+    if (!Array.isArray(tickets)) return [];
+    const list = tickets.filter(ticket => {
+      const meta = parseMetadata(ticket.remarks);
+      const ticketDate = ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : '');
+      if (startMonth || endMonth) {
+        if (!ticketDate) return false;
+        const tMonth = String(ticketDate).substring(0, 7); // 'YYYY-MM'
+        if (startMonth && tMonth < startMonth) return false;
+        if (endMonth && tMonth > endMonth) return false;
+      }
+      const searchStr = `${ticket.issueDescription} ${meta.location || ''} ${ticket.category || meta.category || ''} ${ticket.divisionName || ''}`.toLowerCase();
+      return searchStr.includes(searchQuery.toLowerCase());
+    });
+
+    return [...list].sort((a, b) => {
+      const timeA = getTicketSortTimestamp(a);
+      const timeB = getTicketSortTimestamp(b);
+      if (timeA !== timeB) {
+        return dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+      const idA = a.id || 0;
+      const idB = b.id || 0;
+      return dateSortOrder === 'asc' ? idA - idB : idB - idA;
+    });
+  }, [tickets, startMonth, endMonth, searchQuery, dateSortOrder]);
 
   const handleDownload = () => {
     if (filteredTickets.length === 0) return;
@@ -702,14 +760,25 @@ export default function ProjectTickets() {
           <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-panel border-b border-main">
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center w-12">S.No</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Date</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Type of Work</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center w-12 whitespace-nowrap">S.No</th>
+                <th 
+                  className="p-4 text-[11px] font-bold text-main uppercase tracking-widest cursor-pointer select-none hover:text-teal-400 transition-colors whitespace-nowrap"
+                  onClick={() => setDateSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                  title={`Click to sort by Date (${dateSortOrder === 'desc' ? 'Newest First' : 'Oldest First'})`}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Date</span>
+                    <span className="text-teal-400 text-xs font-mono font-bold">
+                      {dateSortOrder === 'desc' ? '↓' : '↑'}
+                    </span>
+                  </div>
+                </th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest whitespace-nowrap">Type of Work</th>
                 <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest w-[40%]">Working Details / Progress</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center">Time (Start/End/Total)</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Done By</th>
-                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest">Status</th>
-                {canEdit && <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-right">Actions</th>}
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-center whitespace-nowrap">Time (Start/End/Total)</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest whitespace-nowrap">Done By</th>
+                <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest whitespace-nowrap">Status</th>
+                {canEdit && <th className="p-4 text-[11px] font-bold text-main uppercase tracking-widest text-right whitespace-nowrap">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y border-main text-main">
@@ -729,9 +798,9 @@ export default function ProjectTickets() {
                     className="hover:bg-panel transition-colors group cursor-pointer"
                     onClick={() => navigate(`/tickets/${ticket.id || ticket._id}`)}
                   >
-                    <td className="p-4 text-center font-mono text-[10px] text-dim">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                    <td className="p-4 text-[11px] text-secondary font-mono">
-                      {ticket.operationDate || meta.manualDate || ticket.createdAt?.split('T')[0]}
+                    <td className="p-4 text-center font-mono text-[10px] text-dim whitespace-nowrap">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                    <td className="p-4 text-[11px] text-secondary font-mono whitespace-nowrap">
+                      {ticket.operationDate || meta.manualDate || (ticket.createdAt ? String(ticket.createdAt).split('T')[0] : 'N/A')}
                     </td>
                     <td className="p-4">
                       <span className="px-2 py-0.5 rounded bg-teal-500/10 text-teal-600 border border-teal-500/20 text-[9px] font-bold uppercase tracking-wider">
