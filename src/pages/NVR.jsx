@@ -154,6 +154,140 @@ export default function NVR() {
     return Array.from(rooms).sort();
   }, [currentSite, allLocations, formData.block, formData.floor]);
 
+  // Dynamic cascading filters for SHOW ADVANCED FILTERS
+  const filterBlocks = useMemo(() => {
+    const blocks = new Set();
+    const targetCollege = collegeFilter !== 'ALL' ? collegeFilter.toUpperCase().trim() : null;
+
+    allLocations.forEach(loc => {
+      const c = (loc.divisionName || '').toUpperCase().trim();
+      const b = (loc.block || '').toUpperCase().trim();
+      if (b && (!targetCollege || c === targetCollege)) blocks.add(b);
+    });
+
+    nvrs.forEach(nvr => {
+      const c = (nvr.divisionName || '').toUpperCase().trim();
+      const b = (nvr.block || '').toUpperCase().trim();
+      if (b && (!targetCollege || c === targetCollege)) blocks.add(b);
+    });
+
+    if (currentSite?.block) {
+      const b = currentSite.block.toUpperCase().trim();
+      const c = (currentSite.divisionName || '').toUpperCase().trim();
+      if (b && (!targetCollege || c === targetCollege)) blocks.add(b);
+    }
+
+    return Array.from(blocks).sort();
+  }, [currentSite, allLocations, nvrs, collegeFilter]);
+
+  const filterFloors = useMemo(() => {
+    const floors = new Set();
+    const targetCollege = collegeFilter !== 'ALL' ? collegeFilter.toUpperCase().trim() : null;
+    const targetBlock = blockFilter !== 'ALL' ? blockFilter.toUpperCase().trim() : null;
+
+    allLocations.forEach(loc => {
+      const c = (loc.divisionName || '').toUpperCase().trim();
+      const b = (loc.block || '').toUpperCase().trim();
+      const f = (loc.floor || '').toUpperCase().trim();
+      if (!f) return;
+      if (targetCollege && c !== targetCollege) return;
+      if (targetBlock && b !== targetBlock) return;
+      floors.add(f);
+    });
+
+    nvrs.forEach(nvr => {
+      const c = (nvr.divisionName || '').toUpperCase().trim();
+      const b = (nvr.block || '').toUpperCase().trim();
+      const f = (nvr.floor || '').toUpperCase().trim();
+      if (!f) return;
+      if (targetCollege && c !== targetCollege) return;
+      if (targetBlock && b !== targetBlock) return;
+      floors.add(f);
+    });
+
+    if (currentSite?.floor) {
+      const c = (currentSite.divisionName || '').toUpperCase().trim();
+      const b = (currentSite.block || '').toUpperCase().trim();
+      const f = currentSite.floor.toUpperCase().trim();
+      if (f && (!targetCollege || c === targetCollege) && (!targetBlock || b === targetBlock)) {
+        floors.add(f);
+      }
+    }
+
+    return Array.from(floors).sort();
+  }, [currentSite, allLocations, nvrs, collegeFilter, blockFilter]);
+
+  const filterRooms = useMemo(() => {
+    const rooms = new Set();
+    const targetCollege = collegeFilter !== 'ALL' ? collegeFilter.toUpperCase().trim() : null;
+    const targetBlock = blockFilter !== 'ALL' ? blockFilter.toUpperCase().trim() : null;
+    const targetFloor = floorFilter !== 'ALL' ? floorFilter.toUpperCase().trim() : null;
+
+    allLocations.forEach(loc => {
+      const c = (loc.divisionName || '').toUpperCase().trim();
+      const b = (loc.block || '').toUpperCase().trim();
+      const f = (loc.floor || '').toUpperCase().trim();
+      const r = (loc.room || '').toUpperCase().trim();
+      if (!r) return;
+      if (targetCollege && c !== targetCollege) return;
+      if (targetBlock && b !== targetBlock) return;
+      if (targetFloor && f !== targetFloor) return;
+      rooms.add(r);
+    });
+
+    nvrs.forEach(nvr => {
+      const c = (nvr.divisionName || '').toUpperCase().trim();
+      const b = (nvr.block || '').toUpperCase().trim();
+      const f = (nvr.floor || '').toUpperCase().trim();
+      const r = (nvr.room || '').toUpperCase().trim();
+      if (!r) return;
+      if (targetCollege && c !== targetCollege) return;
+      if (targetBlock && b !== targetBlock) return;
+      if (targetFloor && f !== targetFloor) return;
+      rooms.add(r);
+    });
+
+    if (currentSite?.room) {
+      const c = (currentSite.divisionName || '').toUpperCase().trim();
+      const b = (currentSite.block || '').toUpperCase().trim();
+      const f = (currentSite.floor || '').toUpperCase().trim();
+      const r = currentSite.room.toUpperCase().trim();
+      if (r && (!targetCollege || c === targetCollege) && (!targetBlock || b === targetBlock) && (!targetFloor || f === targetFloor)) {
+        rooms.add(r);
+      }
+    }
+
+    return Array.from(rooms).sort();
+  }, [currentSite, allLocations, nvrs, collegeFilter, blockFilter, floorFilter]);
+
+  // Keep filter selections in sync when higher-level filter changes
+  useEffect(() => {
+    if (collegeFilter !== 'ALL' && blockFilter !== 'ALL') {
+      if (!filterBlocks.includes(blockFilter.toUpperCase().trim())) {
+        setBlockFilter('ALL');
+        setFloorFilter('ALL');
+        setRoomFilter('ALL');
+      }
+    }
+  }, [collegeFilter, filterBlocks, blockFilter]);
+
+  useEffect(() => {
+    if (blockFilter !== 'ALL' && floorFilter !== 'ALL') {
+      if (!filterFloors.includes(floorFilter.toUpperCase().trim())) {
+        setFloorFilter('ALL');
+        setRoomFilter('ALL');
+      }
+    }
+  }, [blockFilter, filterFloors, floorFilter]);
+
+  useEffect(() => {
+    if (roomFilter !== 'ALL') {
+      if (!filterRooms.includes(roomFilter.toUpperCase().trim())) {
+        setRoomFilter('ALL');
+      }
+    }
+  }, [blockFilter, floorFilter, filterRooms, roomFilter]);
+
   const uniqueBrands = useMemo(() => {
     const brandsSet = new Set();
     if (brands) brands.forEach(b => b.name && brandsSet.add(b.name.toUpperCase()));
@@ -161,20 +295,49 @@ export default function NVR() {
   }, [brands]);
 
   const filterCounts = useMemo(() => {
-    const counts = { college: {}, block: {}, floor: {}, room: {} };
+    const counts = {
+      college: {},
+      block: {},
+      floor: {},
+      room: {},
+      totalCollege: 0,
+      totalBlock: 0,
+      totalFloor: 0,
+      totalRoom: 0
+    };
+
     nvrs.forEach(nvr => {
-      const college = String(nvr.divisionName || '').toUpperCase();
-      const block = String(nvr.block || '').toUpperCase();
-      const floor = String(nvr.floor || '').toUpperCase();
-      const room = String(nvr.room || '').toUpperCase();
-      
-      counts.college[college] = (counts.college[college] || 0) + 1;
-      counts.block[block] = (counts.block[block] || 0) + 1;
-      counts.floor[floor] = (counts.floor[floor] || 0) + 1;
-      counts.room[room] = (counts.room[room] || 0) + 1;
+      const college = String(nvr.divisionName || '').toUpperCase().trim();
+      const block = String(nvr.block || '').toUpperCase().trim();
+      const floor = String(nvr.floor || '').toUpperCase().trim();
+      const room = String(nvr.room || '').toUpperCase().trim();
+
+      if (college) {
+        counts.college[college] = (counts.college[college] || 0) + 1;
+        counts.totalCollege++;
+      }
+
+      const matchCollege = collegeFilter === 'ALL' || college === collegeFilter.toUpperCase().trim();
+      if (matchCollege && block) {
+        counts.block[block] = (counts.block[block] || 0) + 1;
+        counts.totalBlock++;
+      }
+
+      const matchBlock = matchCollege && (blockFilter === 'ALL' || block === blockFilter.toUpperCase().trim());
+      if (matchBlock && floor) {
+        counts.floor[floor] = (counts.floor[floor] || 0) + 1;
+        counts.totalFloor++;
+      }
+
+      const matchFloor = matchBlock && (floorFilter === 'ALL' || floor === floorFilter.toUpperCase().trim());
+      if (matchFloor && room) {
+        counts.room[room] = (counts.room[room] || 0) + 1;
+        counts.totalRoom++;
+      }
     });
+
     return counts;
-  }, [nvrs]);
+  }, [nvrs, collegeFilter, blockFilter, floorFilter]);
 
 
   const handleInputChange = (e) => {
@@ -962,7 +1125,12 @@ export default function NVR() {
             <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Occupation Filter</label>
             <select
               value={collegeFilter}
-              onChange={(e) => setCollegeFilter(e.target.value)}
+              onChange={(e) => {
+                setCollegeFilter(e.target.value);
+                setBlockFilter('ALL');
+                setFloorFilter('ALL');
+                setRoomFilter('ALL');
+              }}
               className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]"
             >
               <option value="ALL">ALL Occupation ({nvrs.length})</option>
@@ -977,11 +1145,15 @@ export default function NVR() {
             <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Block Filter</label>
             <select
               value={blockFilter}
-              onChange={(e) => setBlockFilter(e.target.value)}
+              onChange={(e) => {
+                setBlockFilter(e.target.value);
+                setFloorFilter('ALL');
+                setRoomFilter('ALL');
+              }}
               className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]"
             >
-              <option value="ALL">ALL BLOCKS ({nvrs.length})</option>
-              {uniqueBlocks.map(block => {
+              <option value="ALL">ALL BLOCKS ({collegeFilter === 'ALL' ? nvrs.length : filterCounts.totalBlock})</option>
+              {filterBlocks.map(block => {
                 const count = filterCounts.block[block] || 0;
                 return <option key={block} value={block}>{block?.toUpperCase() || 'UNKNOWN'} ({count})</option>
               })}
@@ -992,11 +1164,14 @@ export default function NVR() {
             <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Floor Filter</label>
             <select
               value={floorFilter}
-              onChange={(e) => setFloorFilter(e.target.value)}
+              onChange={(e) => {
+                setFloorFilter(e.target.value);
+                setRoomFilter('ALL');
+              }}
               className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[150px]"
             >
-              <option value="ALL">ALL FLOORS ({nvrs.length})</option>
-              {uniqueFloors.map(floor => {
+              <option value="ALL">ALL FLOORS ({blockFilter === 'ALL' && collegeFilter === 'ALL' ? nvrs.length : filterCounts.totalFloor})</option>
+              {filterFloors.map(floor => {
                 const count = filterCounts.floor[floor] || 0;
                 return <option key={floor} value={floor}>{floor?.toUpperCase() || 'UNKNOWN'} ({count})</option>
               })}
@@ -1010,8 +1185,8 @@ export default function NVR() {
               onChange={(e) => setRoomFilter(e.target.value)}
               className="bg-panel text-main text-xs font-bold rounded px-3 py-2 outline-none border border-main focus:border-cyan-500 min-w-[180px]"
             >
-              <option value="ALL">ALL ROOMS ({nvrs.length})</option>
-              {uniqueRooms.map(room => {
+              <option value="ALL">ALL ROOMS ({floorFilter === 'ALL' && blockFilter === 'ALL' && collegeFilter === 'ALL' ? nvrs.length : filterCounts.totalRoom})</option>
+              {filterRooms.map(room => {
                 const count = filterCounts.room[room] || 0;
                 return <option key={room} value={room}>{room?.toUpperCase() || 'UNKNOWN'} ({count})</option>
               })}
